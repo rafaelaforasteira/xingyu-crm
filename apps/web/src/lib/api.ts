@@ -28,7 +28,7 @@ import type {
   PipelineListQuery,
   PipelineStage,
   PipelineStageInput,
-  ReactivationLead,
+  ReactivationListQuery,
   RepurchaseLead,
   SearchResult,
   SettingsOverview,
@@ -38,6 +38,7 @@ import type {
   UserRef,
 } from "./types";
 import { normalizeMessages } from "./inbox-utils";
+import { normalizeReactivationResponse } from "./reactivation-utils";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
@@ -379,8 +380,11 @@ export const repurchaseApi = {
 };
 
 export const reactivationApi = {
-  list: (query?: Record<string, QueryValue>) =>
-    api.get<PaginatedResponse<ReactivationLead>>("/reactivation", query),
+  list: async (query: ReactivationListQuery = {}) =>
+    normalizeReactivationResponse(
+      await api.get<unknown>("/reactivation", { ...query }),
+      query,
+    ),
 };
 
 export const occurrencesApi = {

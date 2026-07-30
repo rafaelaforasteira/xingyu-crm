@@ -455,14 +455,78 @@ export interface RepurchaseLead {
   status?: string;
 }
 
+export type ReactivationStatus =
+  | "LEAD"
+  | "QUALIFIED"
+  | "ACTIVE_CUSTOMER"
+  | "INACTIVE"
+  | "ARCHIVED";
+
+export type ReactivationFilterStatus = Exclude<
+  ReactivationStatus,
+  "ARCHIVED"
+>;
+
+export type ReactivationSegment =
+  | "lead_nunca_comprou"
+  | "comprou_uma_vez"
+  | "recorrente_parou"
+  | "cliente_sem_resposta";
+
+export type ReactivationSortBy =
+  | "score"
+  | "daysInactive"
+  | "lastPurchaseAt"
+  | "lastInteractionAt"
+  | "name";
+
+export interface ReactivationContact {
+  id: string;
+  name: string;
+  firstName: string;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  instagram: string | null;
+  totalPurchased: number;
+  averageTicket: number;
+  orderCount: number;
+}
+
 export interface ReactivationLead {
   id: string;
-  contact: Contact;
+  contact: ReactivationContact | null;
   score: number;
-  lastInteractionAt?: string | null;
-  daysInactive?: number;
-  reason?: string | null;
-  status?: string;
+  reason: string;
+  status: ReactivationStatus;
+  classification: ReactivationSegment;
+  daysInactive: number;
+  lastInteractionAt: string | null;
+  lastPurchaseAt: string | null;
+  owner: UserRef | null;
+  team: Team | null;
+  existingOpenDealId: string | null;
+}
+
+export interface ReactivationListQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  scoreMin?: number;
+  scoreMax?: number;
+  inactiveDaysMin?: number;
+  inactiveDaysMax?: number;
+  status?: ReactivationFilterStatus;
+  ownerId?: string;
+  teamId?: string;
+  lastPurchaseFrom?: string;
+  lastPurchaseTo?: string;
+  lastInteractionFrom?: string;
+  lastInteractionTo?: string;
+  segment?: ReactivationSegment;
+  sortBy?: ReactivationSortBy;
+  sortOrder?: "asc" | "desc";
 }
 
 export interface Automation {

@@ -1,16 +1,11 @@
 import { Controller, Get, Query } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiHeader, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString } from "class-validator";
+import { ApiTags, ApiOperation, ApiHeader, ApiOkResponse } from "@nestjs/swagger";
 import { ReactivationService } from "./reactivation.service";
 import { OrganizationId } from "../common/decorators/organization.decorator";
-import { PaginationQueryDto } from "../common/dto/pagination.dto";
-
-class QueryReactivationDto extends PaginationQueryDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  segment?: string;
-}
+import {
+  PaginatedReactivationResponseDto,
+  QueryReactivationDto,
+} from "./dto/reactivation.dto";
 
 @ApiTags("reactivation")
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
@@ -20,7 +15,8 @@ export class ReactivationController {
 
   @Get()
   @ApiOperation({ summary: "List reactivation opportunities from inactive contacts" })
+  @ApiOkResponse({ type: PaginatedReactivationResponseDto })
   list(@OrganizationId() organizationId: string, @Query() query: QueryReactivationDto) {
-    return this.service.list(organizationId, query, query.segment);
+    return this.service.list(organizationId, query);
   }
 }
