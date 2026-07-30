@@ -1,5 +1,29 @@
 # Xingyu CRM
 
+## Desenvolvimento local no Windows
+
+Primeira execução:
+
+```powershell
+cd C:\Users\Windows\Desktop\xingyu-crm
+pnpm install
+pnpm setup:local
+pnpm dev:local
+```
+
+Nas próximas execuções, use apenas `pnpm dev:local`. O comando carrega o `.env`
+da raiz, inicia ou reutiliza o PostgreSQL embutido, aguarda o health da API e
+então inicia o Next.js. Encerre com `Ctrl+C`.
+
+- Web: http://localhost:3000
+- API: http://localhost:3333/api
+- Swagger: http://localhost:3333/docs
+- Health: http://localhost:3333/api/health
+
+Consulte [desenvolvimento local](docs/local-development.md),
+[banco de dados](docs/database.md), [arquitetura](docs/architecture.md) e
+[solução de problemas](docs/troubleshooting.md).
+
 CRM web completo para gestão comercial, atendimento, pedidos, recompra, automações e operação da Xingyu.
 
 ## Estado atual
