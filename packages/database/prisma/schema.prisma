@@ -260,6 +260,18 @@ enum ActivityType {
   OTHER
 }
 
+enum LifecycleKind {
+  REACTIVATION
+  REPURCHASE
+}
+
+enum LifecycleActionType {
+  APPROACHED
+  POSTPONED
+  DISCARDED
+  CONVERTED
+}
+
 model Organization {
   id        String    @id @default(cuid())
   name      String
@@ -295,6 +307,7 @@ model Organization {
   savedViews                 SavedView[]
   auditLogs                  AuditLog[]
   attributions               Attribution[]
+  lifecycleActions           LifecycleAction[]
 }
 
 model Role {
@@ -373,6 +386,7 @@ model User {
   auditLogs                  AuditLog[]
   defaultPipelines           Pipeline[]                  @relation("PipelineDefaultOwner")
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultOwner")
+  lifecycleActions           LifecycleAction[]           @relation("LifecycleActionActor")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -461,20 +475,21 @@ model Contact {
   updatedAt           DateTime      @updatedAt
   deletedAt           DateTime?
 
-  organization  Organization       @relation(fields: [organizationId], references: [id])
-  company       Company?           @relation(fields: [companyId], references: [id])
-  owner         User?              @relation("ContactOwner", fields: [ownerId], references: [id])
-  team          Team?              @relation(fields: [teamId], references: [id])
-  tags          ContactTag[]
-  deals         Deal[]
-  tasks         Task[]
-  conversations Conversation[]
-  orders        Order[]
-  occurrences   Occurrence[]
-  activities    Activity[]
-  notes         Note[]
-  attributions  Attribution[]
-  customValues  CustomFieldValue[]
+  organization     Organization       @relation(fields: [organizationId], references: [id])
+  company          Company?           @relation(fields: [companyId], references: [id])
+  owner            User?              @relation("ContactOwner", fields: [ownerId], references: [id])
+  team             Team?              @relation(fields: [teamId], references: [id])
+  tags             ContactTag[]
+  deals            Deal[]
+  tasks            Task[]
+  conversations    Conversation[]
+  orders           Order[]
+  occurrences      Occurrence[]
+  activities       Activity[]
+  notes            Note[]
+  attributions     Attribution[]
+  customValues     CustomFieldValue[]
+  lifecycleActions LifecycleAction[]
 
   @@index([organizationId])
   @@index([phone])
@@ -584,21 +599,22 @@ model Deal {
   updatedAt         DateTime     @updatedAt
   deletedAt         DateTime?
 
-  organization Organization       @relation(fields: [organizationId], references: [id])
-  pipeline     Pipeline           @relation(fields: [pipelineId], references: [id])
-  stage        PipelineStage      @relation(fields: [stageId], references: [id])
-  contact      Contact?           @relation(fields: [contactId], references: [id])
-  company      Company?           @relation(fields: [companyId], references: [id])
-  owner        User?              @relation("DealOwner", fields: [ownerId], references: [id])
-  team         Team?              @relation(fields: [teamId], references: [id])
-  conversation Conversation?      @relation(fields: [conversationId], references: [id])
-  tags         DealTag[]
-  stageHistory DealStageHistory[]
-  tasks        Task[]
-  orders       Order[]
-  activities   Activity[]
-  notes        Note[]
-  customValues CustomFieldValue[]
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  pipeline        Pipeline           @relation(fields: [pipelineId], references: [id])
+  stage           PipelineStage      @relation(fields: [stageId], references: [id])
+  contact         Contact?           @relation(fields: [contactId], references: [id])
+  company         Company?           @relation(fields: [companyId], references: [id])
+  owner           User?              @relation("DealOwner", fields: [ownerId], references: [id])
+  team            Team?              @relation(fields: [teamId], references: [id])
+  conversation    Conversation?      @relation(fields: [conversationId], references: [id])
+  tags            DealTag[]
+  stageHistory    DealStageHistory[]
+  tasks           Task[]
+  orders          Order[]
+  activities      Activity[]
+  notes           Note[]
+  customValues    CustomFieldValue[]
+  lifecycleAction LifecycleAction?
 
   @@index([organizationId])
   @@index([pipelineId])
@@ -708,6 +724,31 @@ model Activity {
   @@index([orderId])
   @@index([createdAt])
   @@index([type])
+}
+
+model LifecycleAction {
+  id             String              @id @default(cuid())
+  organizationId String
+  contactId      String
+  actorId        String?
+  kind           LifecycleKind
+  action         LifecycleActionType
+  reason         String?
+  snoozedUntil   DateTime?
+  dealId         String?             @unique
+  conversationId String?
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  contact      Contact       @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  actor        User?         @relation("LifecycleActionActor", fields: [actorId], references: [id], onDelete: Restrict)
+  deal         Deal?         @relation(fields: [dealId], references: [id], onDelete: Restrict)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, contactId, kind, createdAt], map: "LifecycleAction_latest_idx")
+  @@index([organizationId, kind, action, snoozedUntil], map: "LifecycleAction_queue_idx")
+  @@index([conversationId], map: "LifecycleAction_conversationId_idx")
 }
 
 model Note {
@@ -913,13 +954,14 @@ model Conversation {
   updatedAt      DateTime           @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
-  channel      Channel?     @relation(fields: [channelId], references: [id])
-  assignee     User?        @relation("ConversationAssignee", fields: [assigneeId], references: [id])
-  messages     Message[]
-  deal         Deal?
-  activities   Activity[]
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  contact          Contact?          @relation(fields: [contactId], references: [id])
+  channel          Channel?          @relation(fields: [channelId], references: [id])
+  assignee         User?             @relation("ConversationAssignee", fields: [assigneeId], references: [id])
+  messages         Message[]
+  deal             Deal?
+  activities       Activity[]
+  lifecycleActions LifecycleAction[]
 
   @@index([organizationId])
   @@index([contactId])

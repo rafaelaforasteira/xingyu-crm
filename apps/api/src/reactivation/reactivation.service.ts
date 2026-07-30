@@ -3,11 +3,17 @@ import { ContactStatus, Prisma } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import {
+  CreateReactivationActionDto,
+  CreateReactivationOpportunityDto,
   QueryReactivationDto,
   ReactivationItemDto,
   ReactivationSegment,
   ReactivationSortBy,
 } from "./dto/reactivation.dto";
+import {
+  createReactivationAction,
+  createReactivationOpportunity,
+} from "./reactivation-actions";
 
 type NumericValue = number | string | bigint | Prisma.Decimal;
 
@@ -457,9 +463,42 @@ export class ReactivationService {
         team:
           row.teamId && row.teamName ? { id: row.teamId, name: row.teamName } : null,
         existingOpenDealId: row.existingOpenDealId,
+        existingOpenDeal: null,
+        latestConversation: null,
+        workflow: null,
       };
     });
 
     return paginate(data, total, page, pageSize);
+  }
+
+  createOpportunity(
+    organizationId: string,
+    contactId: string,
+    dto: CreateReactivationOpportunityDto,
+    actorId: string,
+  ) {
+    return createReactivationOpportunity(
+      this.prisma,
+      organizationId,
+      contactId,
+      dto,
+      actorId,
+    );
+  }
+
+  createAction(
+    organizationId: string,
+    contactId: string,
+    dto: CreateReactivationActionDto,
+    actorId: string,
+  ) {
+    return createReactivationAction(
+      this.prisma,
+      organizationId,
+      contactId,
+      dto,
+      actorId,
+    );
   }
 }

@@ -2,10 +2,14 @@ import { normalizePaginatedResponse, safeDate, safeRelation } from "./normalizer
 import type {
   PaginatedResponse,
   ReactivationContact,
+  ReactivationConversation,
+  ReactivationExistingOpenDeal,
   ReactivationLead,
   ReactivationListQuery,
   ReactivationSegment,
   ReactivationStatus,
+  ReactivationWorkflow,
+  ReactivationWorkflowStatus,
   Team,
   UserRef,
 } from "./types";
@@ -25,6 +29,13 @@ const REACTIVATION_SEGMENTS = new Set<ReactivationSegment>([
   "comprou_uma_vez",
   "recorrente_parou",
   "cliente_sem_resposta",
+]);
+
+const REACTIVATION_WORKFLOW_STATUSES = new Set<ReactivationWorkflowStatus>([
+  "APPROACHED",
+  "POSTPONED",
+  "DISCARDED",
+  "CONVERTED",
 ]);
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -114,6 +125,83 @@ function normalizeContact(value: unknown): ReactivationContact | null {
   };
 }
 
+function normalizeExistingOpenDeal(
+  value: unknown,
+): ReactivationExistingOpenDeal | null {
+  const deal = safeRelation(value, isRecord, "reactivation existing open deal");
+  if (!deal) return null;
+
+  const id = stringValue(deal.id);
+  const pipelineId = stringValue(deal.pipelineId);
+  const stageId = stringValue(deal.stageId);
+  if (!id || !pipelineId || !stageId) {
+    warnInvalid("degraded an invalid existing open deal relation to null");
+    return null;
+  }
+
+  return {
+    id,
+    pipelineId,
+    stageId,
+    conversationId: nullableString(deal.conversationId),
+  };
+}
+
+function normalizeConversation(value: unknown): ReactivationConversation | null {
+  const conversation = safeRelation(
+    value,
+    isRecord,
+    "reactivation latest conversation",
+  );
+  if (!conversation) return null;
+
+  const id = stringValue(conversation.id);
+  const status = stringValue(conversation.status);
+  if (!id || !status) {
+    warnInvalid("degraded an invalid latest conversation relation to null");
+    return null;
+  }
+
+  return {
+    id,
+    status,
+    lastMessageAt: normalizedDate(
+      conversation.lastMessageAt,
+      "reactivation latest conversation lastMessageAt",
+    ),
+  };
+}
+
+function normalizeWorkflow(value: unknown): ReactivationWorkflow | null {
+  const workflow = safeRelation(value, isRecord, "reactivation workflow");
+  if (!workflow) return null;
+
+  const status = stringValue(workflow.status);
+  const actedAt = normalizedDate(
+    workflow.actedAt,
+    "reactivation workflow actedAt",
+  );
+  if (
+    !status ||
+    !REACTIVATION_WORKFLOW_STATUSES.has(status as ReactivationWorkflowStatus) ||
+    !actedAt
+  ) {
+    warnInvalid("degraded an invalid workflow to null");
+    return null;
+  }
+
+  return {
+    status: status as ReactivationWorkflowStatus,
+    actedAt,
+    snoozedUntil: normalizedDate(
+      workflow.snoozedUntil,
+      "reactivation workflow snoozedUntil",
+    ),
+    reason: nullableString(workflow.reason),
+    actor: normalizeOwner(workflow.actor),
+  };
+}
+
 function normalizeReactivationItem(
   value: UnknownRecord,
 ): ReactivationLead | null {
@@ -136,6 +224,8 @@ function normalizeReactivationItem(
     return null;
   }
 
+  const existingOpenDeal = normalizeExistingOpenDeal(value.existingOpenDeal);
+
   return {
     id,
     contact: normalizeContact(value.contact),
@@ -154,7 +244,11 @@ function normalizeReactivationItem(
     ),
     owner: normalizeOwner(value.owner),
     team: normalizeTeam(value.team),
-    existingOpenDealId: nullableString(value.existingOpenDealId),
+    existingOpenDealId:
+      nullableString(value.existingOpenDealId) ?? existingOpenDeal?.id ?? null,
+    existingOpenDeal,
+    latestConversation: normalizeConversation(value.latestConversation),
+    workflow: normalizeWorkflow(value.workflow),
   };
 }
 
