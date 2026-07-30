@@ -15,8 +15,7 @@ export class ProductsService {
     const where: Record<string, unknown> = {
       organizationId,
       ...notDeleted,
-      ...(query.category ? { category: query.category } : {}),
-      ...(query.active !== undefined ? { active: query.active } : {}),
+      ...(query.active !== undefined ? { isActive: query.active } : {}),
       ...(query.search
         ? {
             OR: [
@@ -49,17 +48,26 @@ export class ProductsService {
   async create(organizationId: string, dto: CreateProductDto) {
     return this.prisma.product.create({
       data: {
-        ...dto,
+        name: dto.name,
+        sku: dto.sku ?? `SKU-${Date.now()}`,
+        description: dto.description,
+        price: dto.price ?? 0,
         organizationId,
-        currency: dto.currency ?? "BRL",
-        active: dto.active ?? true,
+        isActive: dto.active ?? true,
       },
     });
   }
 
   async update(organizationId: string, id: string, dto: UpdateProductDto) {
     await this.findOne(organizationId, id);
-    return this.prisma.product.update({ where: { id }, data: dto });
+    const { active, currency: _c, category: _cat, ...rest } = dto;
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(active !== undefined ? { isActive: active } : {}),
+      },
+    });
   }
 
   async remove(organizationId: string, id: string) {

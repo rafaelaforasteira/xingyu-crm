@@ -40,11 +40,13 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const SETTINGS_NAV = [
-  { href: "/settings", label: "Geral" },
-  { href: "/settings/teams", label: "Equipes" },
-  { href: "/settings/users", label: "Usuários" },
+  { href: "/settings/general", label: "Geral" },
   { href: "/settings/pipelines", label: "Pipelines" },
-  { href: "/settings/channels", label: "Canais" },
+  { href: "/settings/custom-fields", label: "Campos customizados" },
+  { href: "/settings/tags", label: "Tags" },
+  { href: "/settings/users", label: "Usuários" },
   { href: "/settings/integrations", label: "Integrações" },
+  { href: "/settings/teams", label: "Equipes" },
+  { href: "/settings/channels", label: "Canais" },
   { href: "/settings/notifications", label: "Notificações" },
 ];

@@ -12,8 +12,14 @@ import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 export class CreateContactDto {
   @ApiProperty()
   @IsString()
-  @MaxLength(200)
-  name!: string;
+  @MaxLength(120)
+  firstName!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  lastName?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -55,6 +61,11 @@ export class CreateContactDto {
   @IsString()
   status?: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  type?: string;
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
@@ -94,11 +105,6 @@ export class QueryContactsDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   tagId?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsBoolean()
-  archived?: boolean;
 }
 
 export class BulkTagsDto {
@@ -135,18 +141,18 @@ export class BulkArchiveDto {
   @IsString({ each: true })
   contactIds!: string[];
 
-  @ApiPropertyOptional({ default: true })
+  @ApiPropertyOptional({ description: "INACTIVE status when true" })
   @IsOptional()
   @IsBoolean()
   archived?: boolean = true;
 }
 
 export class MergeContactsDto {
-  @ApiProperty({ description: "Contact that remains after merge" })
+  @ApiProperty()
   @IsString()
   primaryId!: string;
 
-  @ApiProperty({ description: "Contact to merge into primary" })
+  @ApiProperty()
   @IsString()
   secondaryId!: string;
 }
@@ -170,5 +176,5 @@ export class DuplicateCheckDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  name?: string;
+  firstName?: string;
 }

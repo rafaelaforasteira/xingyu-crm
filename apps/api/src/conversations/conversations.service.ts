@@ -21,7 +21,6 @@ export class ConversationsService {
       organizationId,
       ...notDeleted,
       ...(query.contactId ? { contactId: query.contactId } : {}),
-      ...(query.channel ? { channel: query.channel } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
       ...(query.search
@@ -35,8 +34,9 @@ export class ConversationsService {
         take,
         orderBy: { lastMessageAt: "desc" },
         include: {
-          contact: { select: { id: true, name: true, whatsapp: true } },
+          contact: { select: { id: true, firstName: true, lastName: true, whatsapp: true } },
           assignee: { select: { id: true, name: true } },
+          channel: true,
         },
       }),
       this.prisma.conversation.count({ where }),
@@ -50,7 +50,8 @@ export class ConversationsService {
       include: {
         contact: true,
         assignee: { select: { id: true, name: true } },
-        messages: { orderBy: { createdAt: "asc" }, take: 200 },
+        channel: true,
+        messages: { orderBy: { sentAt: "asc" }, take: 200 },
       },
     });
     if (!conversation) throw new NotFoundException(`Conversation ${id} not found`);
@@ -60,10 +61,10 @@ export class ConversationsService {
   async create(organizationId: string, dto: CreateConversationDto, userId: string) {
     return this.prisma.conversation.create({
       data: {
-        ...dto,
+        contactId: dto.contactId,
+        subject: dto.subject,
         organizationId,
-        channel: dto.channel ?? "whatsapp",
-        status: dto.status ?? "OPEN",
+        status: (dto.status as never) ?? "OPEN",
         assigneeId: dto.assigneeId ?? userId,
         lastMessageAt: new Date(),
       },
@@ -72,7 +73,15 @@ export class ConversationsService {
 
   async update(organizationId: string, id: string, dto: UpdateConversationDto) {
     await this.findOne(organizationId, id);
-    return this.prisma.conversation.update({ where: { id }, data: dto });
+    return this.prisma.conversation.update({
+      where: { id },
+      data: {
+        contactId: dto.contactId,
+        subject: dto.subject,
+        status: dto.status as never,
+        assigneeId: dto.assigneeId,
+      },
+    });
   }
 
   async remove(organizationId: string, id: string) {
@@ -92,14 +101,12 @@ export class ConversationsService {
     const message = await this.prisma.message.create({
       data: {
         conversationId,
-        organizationId,
         body: dto.body,
-        direction: dto.direction ?? "outbound",
-        channel: dto.channel ?? conversation.channel,
-        contentType: dto.contentType ?? "text",
+        direction: (dto.direction === "inbound" ? "INBOUND" : "OUTBOUND") as never,
         senderId: userId,
-        demoMode: true,
         status: "SENT",
+        sentAt: now,
+        metadata: { demoMode: true, contentType: dto.contentType ?? "text" },
       },
     });
 
@@ -116,7 +123,7 @@ export class ConversationsService {
         description: dto.body.slice(0, 200),
         contactId: conversation.contactId,
         conversationId,
-        userId,
+        actorId: userId,
       },
     });
 
@@ -128,13 +135,13 @@ export class ConversationsService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 50;
     const { skip, take } = paginationArgs(page, pageSize);
-    const where = { conversationId, organizationId, ...notDeleted };
+    const where = { conversationId, ...notDeleted };
     const [data, total] = await Promise.all([
       this.prisma.message.findMany({
         where,
         skip,
         take,
-        orderBy: { createdAt: "asc" },
+        orderBy: { sentAt: "asc" },
       }),
       this.prisma.message.count({ where }),
     ]);

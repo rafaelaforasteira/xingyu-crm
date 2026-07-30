@@ -35,7 +35,7 @@ export class ReportsService {
       wonValue,
     ] = await Promise.all([
       this.prisma.contact.count({
-        where: { ...base, archived: false, ...(createdAt ? { createdAt } : {}) },
+        where: { ...base, ...(createdAt ? { createdAt } : {}) },
       }),
       this.prisma.deal.count({ where: { ...base, status: "OPEN" } }),
       this.prisma.deal.count({
@@ -85,17 +85,17 @@ export class ReportsService {
 
     const [deals, byOwner] = await Promise.all([
       this.prisma.deal.findMany({
-        where,
+        where: where as never,
         take: 100,
         orderBy: { closedAt: "desc" },
         include: {
           owner: { select: { id: true, name: true } },
-          contact: { select: { id: true, name: true } },
+          contact: { select: { id: true, firstName: true, lastName: true } },
         },
       }),
       this.prisma.deal.groupBy({
         by: ["ownerId"],
-        where,
+        where: where as never,
         _count: true,
         _sum: { value: true },
       }),

@@ -31,6 +31,12 @@ export class PipelinesController {
     return this.pipelinesService.findAll(orgId, query);
   }
 
+  @Get(":id/board")
+  @ApiOperation({ summary: "Kanban board for pipeline" })
+  board(@OrganizationId() orgId: string, @Param("id") id: string) {
+    return this.pipelinesService.board(orgId, id);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Get pipeline with stages" })
   findOne(@OrganizationId() orgId: string, @Param("id") id: string) {

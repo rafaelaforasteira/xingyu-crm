@@ -47,6 +47,32 @@ export class PipelinesService {
     return pipeline;
   }
 
+  async board(organizationId: string, id: string) {
+    const pipeline = await this.prisma.pipeline.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      include: {
+        stages: {
+          where: notDeleted,
+          orderBy: { position: "asc" },
+          include: {
+            deals: {
+              where: { ...notDeleted, status: "OPEN" },
+              include: {
+                contact: { select: { id: true, firstName: true, lastName: true } },
+                company: { select: { id: true, legalName: true, tradeName: true } },
+                owner: { select: { id: true, name: true } },
+                tags: { include: { tag: true } },
+              },
+              orderBy: { updatedAt: "desc" },
+            },
+          },
+        },
+      },
+    });
+    if (!pipeline) throw new NotFoundException(`Pipeline ${id} not found`);
+    return pipeline;
+  }
+
   async create(organizationId: string, dto: CreatePipelineDto) {
     const { stages, ...data } = dto;
     return this.prisma.pipeline.create({
@@ -58,6 +84,7 @@ export class PipelinesService {
               stages: {
                 create: stages.map((s, i) => ({
                   ...s,
+                  organizationId,
                   position: s.position ?? i,
                 })),
               },
@@ -90,6 +117,7 @@ export class PipelinesService {
       data: {
         ...dto,
         pipelineId,
+        organizationId,
         position: dto.position ?? count,
       },
     });

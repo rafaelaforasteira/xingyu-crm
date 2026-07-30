@@ -373,7 +373,7 @@ model Company {
   totalPurchased Decimal   @default(0) @db.Decimal(14, 2)
   averageTicket  Decimal   @default(0) @db.Decimal(14, 2)
   lastPurchaseAt DateTime?
-  notes          String?
+  observations   String?
   createdById    String?
   updatedById    String?
   createdAt      DateTime  @default(now())
@@ -388,6 +388,7 @@ model Company {
   occurrences  Occurrence[]
   activities   Activity[]
   notes        Note[]
+  tasks        Task[]
 
   @@index([organizationId])
   @@index([cnpj])
@@ -418,7 +419,7 @@ model Contact {
   status            ContactStatus @default(LEAD)
   source            String?
   campaign          String?
-  notes             String?
+  observations      String?
   firstInteractionAt DateTime?
   firstPurchaseAt   DateTime?
   lastPurchaseAt    DateTime?
@@ -927,7 +928,7 @@ model Order {
   status         OrderStatus @default(ORDER_PLACED)
   expectedAt     DateTime?
   trackingCode   String?
-  notes          String?
+  observations   String?
   createdById    String?
   updatedById    String?
   createdAt      DateTime    @default(now())

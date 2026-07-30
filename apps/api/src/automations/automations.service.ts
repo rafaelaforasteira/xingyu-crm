@@ -21,7 +21,9 @@ export class AutomationsService {
     const where: Record<string, unknown> = {
       organizationId,
       ...notDeleted,
-      ...(query.enabled !== undefined ? { enabled: query.enabled } : {}),
+      ...(query.enabled !== undefined
+        ? { status: query.enabled ? "ACTIVE" : "INACTIVE" }
+        : {}),
       ...(query.triggerType ? { triggerType: query.triggerType } : {}),
       ...(query.search
         ? { name: { contains: query.search, mode: "insensitive" } }
@@ -50,18 +52,34 @@ export class AutomationsService {
   async create(organizationId: string, dto: CreateAutomationDto) {
     return this.prisma.automation.create({
       data: {
-        ...dto,
+        name: dto.name,
+        description: dto.description,
+        triggerType: dto.triggerType,
         organizationId,
-        enabled: dto.enabled ?? false,
-        triggerConfig: dto.triggerConfig ?? {},
-        actions: dto.actions ?? {},
-      },
+        status: dto.enabled ? "ACTIVE" : "INACTIVE",
+        config: {
+          triggerConfig: dto.triggerConfig ?? {},
+          actions: dto.actions ?? {},
+        } as never,
+      } as never,
     });
   }
 
   async update(organizationId: string, id: string, dto: UpdateAutomationDto) {
     await this.findOne(organizationId, id);
-    return this.prisma.automation.update({ where: { id }, data: dto });
+    const { enabled, triggerConfig, actions, ...rest } = dto;
+    return this.prisma.automation.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(enabled !== undefined
+          ? { status: enabled ? "ACTIVE" : "INACTIVE" }
+          : {}),
+        ...(triggerConfig || actions
+          ? { config: { triggerConfig: triggerConfig ?? {}, actions: actions ?? {} } as never }
+          : {}),
+      } as never,
+    });
   }
 
   async remove(organizationId: string, id: string) {
@@ -73,7 +91,7 @@ export class AutomationsService {
     await this.findOne(organizationId, id);
     return this.prisma.automation.update({
       where: { id },
-      data: { enabled: dto.enabled },
+      data: { status: dto.enabled ? "ACTIVE" : "INACTIVE" },
     });
   }
 
@@ -82,13 +100,13 @@ export class AutomationsService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
-    const where = { automationId, organizationId };
+    const where = { automationId };
     const [data, total] = await Promise.all([
       this.prisma.automationExecution.findMany({
         where,
         skip,
         take,
-        orderBy: { createdAt: "desc" },
+        orderBy: { startedAt: "desc" },
       }),
       this.prisma.automationExecution.count({ where }),
     ]);

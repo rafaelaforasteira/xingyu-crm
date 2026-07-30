@@ -40,8 +40,8 @@ export class TasksService {
         orderBy: { dueAt: "asc" },
         include: {
           assignee: { select: { id: true, name: true } },
-          contact: { select: { id: true, name: true } },
-          deal: { select: { id: true, title: true } },
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          deal: { select: { id: true, name: true } },
         },
       }),
       this.prisma.task.count({ where }),
@@ -68,11 +68,12 @@ export class TasksService {
       data: {
         ...dto,
         organizationId,
-        status: dto.status ?? "PENDING",
-        type: dto.type ?? "FOLLOW_UP",
+        status: (dto.status as never) ?? "PENDING",
+        type: (dto.type as never) ?? "FOLLOW_UP",
+        priority: dto.priority as never,
         assigneeId: dto.assigneeId ?? userId,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
-      },
+      } as never,
     });
   }
 
@@ -82,8 +83,11 @@ export class TasksService {
       where: { id },
       data: {
         ...dto,
+        status: dto.status as never,
+        type: dto.type as never,
+        priority: dto.priority as never,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
-      },
+      } as never,
     });
   }
 
@@ -106,7 +110,7 @@ export class TasksService {
         taskId: id,
         contactId: task.contactId,
         dealId: task.dealId,
-        userId,
+        actorId: userId,
       },
     });
     return task;

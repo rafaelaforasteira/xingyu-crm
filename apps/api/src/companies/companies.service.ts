@@ -16,13 +16,13 @@ export class CompaniesService {
       organizationId,
       ...notDeleted,
       ...(query.ownerId ? { ownerId: query.ownerId } : {}),
-      ...(query.industry ? { industry: query.industry } : {}),
+      ...(query.segment ? { segment: query.segment } : {}),
       ...(query.search
         ? {
             OR: [
-              { name: { contains: query.search, mode: "insensitive" } },
+              { legalName: { contains: query.search, mode: "insensitive" } },
               { tradeName: { contains: query.search, mode: "insensitive" } },
-              { document: { contains: query.search, mode: "insensitive" } },
+              { cnpj: { contains: query.search, mode: "insensitive" } },
             ],
           }
         : {}),
@@ -57,14 +57,24 @@ export class CompaniesService {
   }
 
   async create(organizationId: string, dto: CreateCompanyDto, userId: string) {
+    const { notes, ...rest } = dto as CreateCompanyDto & { notes?: string };
     return this.prisma.company.create({
-      data: { ...dto, organizationId, ownerId: dto.ownerId ?? userId },
+      data: {
+        ...rest,
+        observations: notes,
+        organizationId,
+        ownerId: dto.ownerId ?? userId,
+      } as never,
     });
   }
 
   async update(organizationId: string, id: string, dto: UpdateCompanyDto) {
     await this.findOne(organizationId, id);
-    return this.prisma.company.update({ where: { id }, data: dto });
+    const { notes, ...rest } = dto as UpdateCompanyDto & { notes?: string };
+    return this.prisma.company.update({
+      where: { id },
+      data: { ...rest, ...(notes !== undefined ? { observations: notes } : {}) } as never,
+    });
   }
 
   async remove(organizationId: string, id: string) {

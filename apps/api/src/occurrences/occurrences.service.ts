@@ -23,9 +23,14 @@ export class OccurrencesService {
       ...(query.type ? { type: query.type } : {}),
       ...(query.orderId ? { orderId: query.orderId } : {}),
       ...(query.contactId ? { contactId: query.contactId } : {}),
-      ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
+      ...(query.assigneeId ? { ownerId: query.assigneeId } : {}),
       ...(query.search
-        ? { title: { contains: query.search, mode: "insensitive" } }
+        ? {
+            OR: [
+              { protocol: { contains: query.search, mode: "insensitive" } },
+              { description: { contains: query.search, mode: "insensitive" } },
+            ],
+          }
         : {}),
     };
     const [data, total] = await Promise.all([
@@ -35,9 +40,9 @@ export class OccurrencesService {
         take,
         orderBy: { updatedAt: "desc" },
         include: {
-          contact: { select: { id: true, name: true } },
-          order: { select: { id: true, orderNumber: true } },
-          assignee: { select: { id: true, name: true } },
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          order: { select: { id: true, number: true } },
+          owner: { select: { id: true, name: true } },
         },
       }),
       this.prisma.occurrence.count({ where }),
@@ -48,7 +53,11 @@ export class OccurrencesService {
   async findOne(organizationId: string, id: string) {
     const item = await this.prisma.occurrence.findFirst({
       where: { id, organizationId, ...notDeleted },
-      include: { contact: true, order: true, assignee: { select: { id: true, name: true } } },
+      include: {
+        contact: true,
+        order: true,
+        owner: { select: { id: true, name: true } },
+      },
     });
     if (!item) throw new NotFoundException(`Occurrence ${id} not found`);
     return item;
@@ -57,18 +66,33 @@ export class OccurrencesService {
   async create(organizationId: string, dto: CreateOccurrenceDto, userId: string) {
     return this.prisma.occurrence.create({
       data: {
-        ...dto,
         organizationId,
-        status: dto.status ?? "OPEN",
-        type: dto.type ?? "AFTER_SALES",
-        assigneeId: dto.assigneeId ?? userId,
+        protocol: `OC-${Date.now()}`,
+        type: (dto.type as never) ?? "GENERAL_COMPLAINT",
+        status: (dto.status as never) ?? "OPEN",
+        priority: (dto.priority as never) ?? "MEDIUM",
+        description: dto.description ?? dto.title,
+        orderId: dto.orderId,
+        contactId: dto.contactId,
+        ownerId: dto.assigneeId ?? userId,
       },
     });
   }
 
   async update(organizationId: string, id: string, dto: UpdateOccurrenceDto) {
     await this.findOne(organizationId, id);
-    return this.prisma.occurrence.update({ where: { id }, data: dto });
+    return this.prisma.occurrence.update({
+      where: { id },
+      data: {
+        description: dto.description ?? dto.title,
+        type: dto.type as never,
+        status: dto.status as never,
+        priority: dto.priority as never,
+        orderId: dto.orderId,
+        contactId: dto.contactId,
+        ownerId: dto.assigneeId,
+      },
+    });
   }
 
   async remove(organizationId: string, id: string) {

@@ -131,9 +131,13 @@ export interface Message {
 
 export interface Note {
   id: string;
-  body: string;
-  entityType: string;
-  entityId: string;
+  body?: string;
+  content?: string;
+  entityType?: string;
+  entityId?: string;
+  contactId?: string | null;
+  dealId?: string | null;
+  isInternal?: boolean;
   authorId?: string | null;
   author?: UserRef | null;
   createdAt: string;

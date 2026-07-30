@@ -43,7 +43,10 @@ export class ApiError extends Error {
 type QueryValue = string | number | boolean | null | undefined;
 
 function buildUrl(path: string, query?: Record<string, QueryValue>) {
-  const url = new URL(path.startsWith("http") ? path : `${API_URL}${path}`);
+  const normalized = path.startsWith("/api")
+    ? path
+    : `/api${path.startsWith("/") ? path : `/${path}`}`;
+  const url = new URL(normalized.startsWith("http") ? normalized : `${API_URL}${normalized}`);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null || value === "") continue;
@@ -159,7 +162,12 @@ export const companiesApi = {
 };
 
 export const pipelinesApi = {
-  list: () => api.get<Pipeline[]>("/pipelines"),
+  list: async () => {
+    const res = await api.get<Pipeline[] | PaginatedResponse<Pipeline>>("/pipelines", {
+      pageSize: 100,
+    });
+    return Array.isArray(res) ? res : res.data;
+  },
   get: (id: string) => api.get<Pipeline>(`/pipelines/${id}`),
   board: (id: string) => api.get<Pipeline>(`/pipelines/${id}/board`),
 };
@@ -184,21 +192,26 @@ export const conversationsApi = {
   messages: (id: string) => api.get<Message[]>(`/conversations/${id}/messages`),
   sendMessage: (id: string, body: string) =>
     api.post<Message>(`/conversations/${id}/messages`, { body }),
-  byDeal: (dealId: string) =>
-    api.get<Conversation>(`/conversations`, { dealId }).then(async (res) => {
-      if (Array.isArray(res)) return (res as unknown as Conversation[])[0] ?? null;
-      if ("data" in (res as PaginatedResponse<Conversation>)) {
-        return (res as PaginatedResponse<Conversation>).data[0] ?? null;
-      }
-      return res as Conversation;
-    }),
+  byDeal: async (dealId: string) => {
+    const res = await api.get<
+      Conversation | Conversation[] | PaginatedResponse<Conversation>
+    >("/conversations", { dealId });
+    if (Array.isArray(res)) return res[0] ?? null;
+    if (res && typeof res === "object" && "data" in res) {
+      return (res as PaginatedResponse<Conversation>).data[0] ?? null;
+    }
+    return (res as Conversation) ?? null;
+  },
 };
 
 export const notesApi = {
-  list: (entityType: string, entityId: string) =>
-    api.get<Note[]>("/notes", { entityType, entityId }),
-  create: (data: { body: string; entityType: string; entityId: string }) =>
-    api.post<Note>("/notes", data),
+  list: (query?: Record<string, QueryValue>) => api.get<Note[]>("/notes", query),
+  create: (data: {
+    content: string;
+    contactId?: string;
+    dealId?: string;
+    isInternal?: boolean;
+  }) => api.post<Note>("/notes", data),
 };
 
 export const tasksApi = {
@@ -270,7 +283,7 @@ export const searchApi = {
 export const notificationsApi = {
   list: () => api.get<NotificationItem[]>("/notifications"),
   markRead: (id: string) => api.patch(`/notifications/${id}/read`),
-  markAllRead: () => api.post("/notifications/read-all"),
+  markAllRead: () => api.patch("/notifications/read-all"),
 };
 
 export const settingsApi = {

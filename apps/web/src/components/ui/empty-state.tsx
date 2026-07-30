@@ -1,9 +1,10 @@
+import * as React from "react";
 import { type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
 
 interface EmptyStateProps {
-  icon?: LucideIcon;
+  icon?: LucideIcon | React.ComponentType<{ className?: string }>;
   title: string;
   description?: string;
   actionLabel?: string;

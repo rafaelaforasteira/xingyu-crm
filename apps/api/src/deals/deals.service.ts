@@ -29,7 +29,7 @@ export class DealsService {
       ...(query.companyId ? { companyId: query.companyId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.search
-        ? { title: { contains: query.search, mode: "insensitive" } }
+        ? { name: { contains: query.search, mode: "insensitive" } }
         : {}),
     };
     const [data, total] = await Promise.all([
@@ -39,8 +39,8 @@ export class DealsService {
         take,
         orderBy: { [query.sortBy ?? "updatedAt"]: query.sortOrder ?? "desc" },
         include: {
-          contact: { select: { id: true, name: true } },
-          company: { select: { id: true, name: true } },
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          company: { select: { id: true, legalName: true, tradeName: true } },
           stage: true,
           owner: { select: { id: true, name: true } },
         },
@@ -59,7 +59,7 @@ export class DealsService {
         stage: true,
         pipeline: { include: { stages: { orderBy: { position: "asc" } } } },
         owner: { select: { id: true, name: true } },
-        activities: { where: notDeleted, take: 20, orderBy: { createdAt: "desc" } },
+        activities: { take: 20, orderBy: { createdAt: "desc" } },
       },
     });
     if (!deal) throw new NotFoundException(`Deal ${id} not found`);
@@ -72,8 +72,7 @@ export class DealsService {
         ...dto,
         organizationId,
         ownerId: dto.ownerId ?? userId,
-        status: dto.status ?? "OPEN",
-        expectedCloseAt: dto.expectedCloseAt ? new Date(dto.expectedCloseAt) : undefined,
+        status: (dto.status as "OPEN" | "WON" | "LOST") ?? "OPEN",
       },
       include: { stage: true, contact: true },
     });
@@ -83,10 +82,7 @@ export class DealsService {
     await this.findOne(organizationId, id);
     return this.prisma.deal.update({
       where: { id },
-      data: {
-        ...dto,
-        expectedCloseAt: dto.expectedCloseAt ? new Date(dto.expectedCloseAt) : undefined,
-      },
+      data: dto as never,
       include: { stage: true, contact: true },
     });
   }
@@ -107,20 +103,30 @@ export class DealsService {
       where: { id },
       data: {
         stageId: dto.stageId,
+        enteredStageAt: new Date(),
         ...(stage.isWon ? { status: "WON", closedAt: new Date() } : {}),
         ...(stage.isLost ? { status: "LOST", closedAt: new Date() } : {}),
       },
       include: { stage: true },
     });
 
+    await this.prisma.dealStageHistory.create({
+      data: {
+        dealId: id,
+        stageId: dto.stageId,
+        fromStageId: deal.stageId,
+        movedById: userId,
+      },
+    });
+
     await this.prisma.activity.create({
       data: {
         organizationId,
-        type: "DEAL_STAGE_CHANGED",
+        type: "STAGE_CHANGED",
         title: `Deal moved to ${stage.name}`,
         dealId: id,
         contactId: deal.contactId,
-        userId,
+        actorId: userId,
       },
     });
 
@@ -146,11 +152,11 @@ export class DealsService {
     await this.prisma.activity.create({
       data: {
         organizationId,
-        type: "DEAL_WON",
+        type: "OTHER",
         title: `Deal won${dto.reason ? `: ${dto.reason}` : ""}`,
         dealId: id,
         contactId: deal.contactId,
-        userId,
+        actorId: userId,
       },
     });
     return updated;
@@ -174,11 +180,11 @@ export class DealsService {
     await this.prisma.activity.create({
       data: {
         organizationId,
-        type: "DEAL_LOST",
+        type: "OTHER",
         title: `Deal lost${dto.reason ? `: ${dto.reason}` : ""}`,
         dealId: id,
         contactId: deal.contactId,
-        userId,
+        actorId: userId,
       },
     });
     return updated;
@@ -187,7 +193,7 @@ export class DealsService {
   async bulkMove(organizationId: string, dto: BulkMoveDealsDto) {
     await this.prisma.deal.updateMany({
       where: { id: { in: dto.dealIds }, organizationId, ...notDeleted },
-      data: { stageId: dto.stageId },
+      data: { stageId: dto.stageId, enteredStageAt: new Date() },
     });
     return { updated: dto.dealIds.length };
   }
@@ -195,20 +201,15 @@ export class DealsService {
   async kanban(organizationId: string, pipelineId: string) {
     const pipeline = await this.prisma.pipeline.findFirst({
       where: { id: pipelineId, organizationId, ...notDeleted },
-      include: { stages: { orderBy: { position: "asc" } } },
+      include: { stages: { where: notDeleted, orderBy: { position: "asc" } } },
     });
     if (!pipeline) throw new NotFoundException(`Pipeline ${pipelineId} not found`);
 
     const deals = await this.prisma.deal.findMany({
-      where: {
-        organizationId,
-        pipelineId,
-        ...notDeleted,
-        status: { in: ["OPEN", "WON", "LOST"] },
-      },
+      where: { organizationId, pipelineId, ...notDeleted },
       include: {
-        contact: { select: { id: true, name: true } },
-        company: { select: { id: true, name: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
+        company: { select: { id: true, legalName: true } },
         owner: { select: { id: true, name: true } },
       },
       orderBy: { updatedAt: "desc" },

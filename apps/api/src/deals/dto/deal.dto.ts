@@ -12,7 +12,7 @@ export class CreateDealDto {
   @ApiProperty()
   @IsString()
   @MaxLength(200)
-  title!: string;
+  name!: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -55,12 +55,7 @@ export class CreateDealDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  expectedCloseAt?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  notes?: string;
+  campaign?: string;
 }
 
 export class UpdateDealDto extends PartialType(CreateDealDto) {}

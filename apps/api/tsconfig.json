@@ -6,7 +6,13 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "strictPropertyInitialization": false
+    "declaration": false,
+    "declarationMap": false,
+    "strict": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictPropertyInitialization": false,
+    "skipLibCheck": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

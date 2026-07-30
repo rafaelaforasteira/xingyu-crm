@@ -105,7 +105,7 @@ function ConversationPane({ deal }: { deal: Deal }) {
 
   const { data: notes = [] } = useQuery({
     queryKey: queryKeys.notes("deal", deal.id),
-    queryFn: () => notesApi.list("deal", deal.id),
+    queryFn: () => notesApi.list({ dealId: deal.id }),
     retry: false,
   });
 
@@ -126,7 +126,12 @@ function ConversationPane({ deal }: { deal: Deal }) {
 
   const noteMutation = useMutation({
     mutationFn: () =>
-      notesApi.create({ body: note, entityType: "deal", entityId: deal.id }),
+      notesApi.create({
+        content: note,
+        dealId: deal.id,
+        contactId: deal.contactId ?? undefined,
+        isInternal: true,
+      }),
     onSuccess: () => {
       setNote("");
       setShowNote(false);
@@ -180,7 +185,7 @@ function ConversationPane({ deal }: { deal: Deal }) {
             </p>
             {notes.map((n) => (
               <div key={n.id} className="rounded-lg bg-warning/10 px-3 py-2 text-sm">
-                <p>{n.body}</p>
+                <p>{n.body ?? n.content}</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   {n.author?.name ?? "Equipe"} · {formatRelative(n.createdAt)}
                 </p>

@@ -21,6 +21,18 @@ import {
 export class ContactsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private contactNameFilter(search: string) {
+    return {
+      OR: [
+        { firstName: { contains: search, mode: "insensitive" as const } },
+        { lastName: { contains: search, mode: "insensitive" as const } },
+        { email: { contains: search, mode: "insensitive" as const } },
+        { phone: { contains: search, mode: "insensitive" as const } },
+        { whatsapp: { contains: search, mode: "insensitive" as const } },
+      ],
+    };
+  }
+
   async findAll(organizationId: string, query: QueryContactsDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -33,18 +45,8 @@ export class ContactsService {
       ...(query.teamId ? { teamId: query.teamId } : {}),
       ...(query.companyId ? { companyId: query.companyId } : {}),
       ...(query.status ? { status: query.status } : {}),
-      ...(query.archived !== undefined ? { archived: query.archived } : { archived: false }),
       ...(query.tagId ? { tags: { some: { tagId: query.tagId } } } : {}),
-      ...(query.search
-        ? {
-            OR: [
-              { name: { contains: query.search, mode: "insensitive" } },
-              { email: { contains: query.search, mode: "insensitive" } },
-              { phone: { contains: query.search, mode: "insensitive" } },
-              { whatsapp: { contains: query.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
+      ...(query.search ? this.contactNameFilter(query.search) : {}),
     };
 
     const [data, total] = await Promise.all([
@@ -81,27 +83,33 @@ export class ContactsService {
   }
 
   async create(organizationId: string, dto: CreateContactDto, userId: string) {
-    const { tagIds, ...data } = dto;
+    const { tagIds, notes, ...data } = dto as CreateContactDto & { notes?: string; tagIds?: string[] };
     return this.prisma.contact.create({
       data: {
         ...data,
+        observations: notes,
         organizationId,
         ownerId: data.ownerId ?? userId,
+        type: data.type as never,
+        status: data.status as never,
         ...(tagIds?.length
           ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } }
           : {}),
-      },
+      } as never,
       include: { tags: { include: { tag: true } }, company: true },
     });
   }
 
   async update(organizationId: string, id: string, dto: UpdateContactDto) {
     await this.findOne(organizationId, id);
-    const { tagIds, ...data } = dto;
+    const { tagIds, notes, ...data } = dto as UpdateContactDto & { notes?: string; tagIds?: string[] };
     return this.prisma.contact.update({
       where: { id },
       data: {
         ...data,
+        ...(notes !== undefined ? { observations: notes } : {}),
+        type: data.type as never,
+        status: data.status as never,
         ...(tagIds
           ? {
               tags: {
@@ -110,7 +118,7 @@ export class ContactsService {
               },
             }
           : {}),
-      },
+      } as never,
       include: { tags: { include: { tag: true } }, company: true },
     });
   }
@@ -158,7 +166,7 @@ export class ContactsService {
   async bulkArchive(organizationId: string, dto: BulkArchiveDto) {
     await this.prisma.contact.updateMany({
       where: { id: { in: dto.contactIds }, organizationId, ...notDeleted },
-      data: { archived: dto.archived ?? true },
+      data: { status: dto.archived === false ? "ACTIVE_CUSTOMER" : "ARCHIVED" },
     });
     return { updated: dto.contactIds.length };
   }
@@ -193,7 +201,7 @@ export class ContactsService {
       }),
       this.prisma.contact.update({
         where: { id: secondary.id },
-        data: { ...softDeleteData(), archived: true, mergedIntoId: primary.id },
+        data: softDeleteData(),
       }),
     ]);
 
@@ -205,7 +213,9 @@ export class ContactsService {
     if (dto.email) or.push({ email: { equals: dto.email, mode: "insensitive" } });
     if (dto.phone) or.push({ phone: dto.phone });
     if (dto.whatsapp) or.push({ whatsapp: dto.whatsapp });
-    if (dto.name) or.push({ name: { equals: dto.name, mode: "insensitive" } });
+    if (dto.firstName) {
+      or.push({ firstName: { equals: dto.firstName, mode: "insensitive" } });
+    }
     if (!or.length) return { duplicates: [] };
 
     const duplicates = await this.prisma.contact.findMany({
@@ -213,7 +223,8 @@ export class ContactsService {
       take: 20,
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
         email: true,
         phone: true,
         whatsapp: true,
