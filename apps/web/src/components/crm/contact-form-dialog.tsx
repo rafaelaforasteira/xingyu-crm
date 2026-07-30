@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/form-controls";
 
 const schema = z.object({
-  name: z.string().min(2, "Informe o nome"),
+  firstName: z.string().min(1, "Informe o nome"),
+  lastName: z.string().optional(),
   email: z.string().email("E-mail inválido").optional().or(z.literal("")),
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
@@ -23,6 +24,30 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+
+function splitDisplayName(name?: string | null): {
+  firstName: string;
+  lastName: string;
+} {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { firstName: "", lastName: "" };
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function contactFormDefaults(contact?: Contact | null): FormValues {
+  const fromName = splitDisplayName(contact?.name);
+  return {
+    firstName: contact?.firstName ?? fromName.firstName,
+    lastName: contact?.lastName ?? fromName.lastName,
+    email: contact?.email ?? "",
+    phone: contact?.phone ?? "",
+    whatsapp: contact?.whatsapp ?? "",
+    source: contact?.source ?? "",
+  };
+}
 
 export function ContactFormDialog({
   open,
@@ -36,30 +61,27 @@ export function ContactFormDialog({
   const queryClient = useQueryClient();
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      name: contact?.name ?? "",
-      email: contact?.email ?? "",
-      phone: contact?.phone ?? "",
-      whatsapp: contact?.whatsapp ?? "",
-      source: contact?.source ?? "",
-    },
+    defaultValues: contactFormDefaults(contact),
   });
 
   React.useEffect(() => {
-    form.reset({
-      name: contact?.name ?? "",
-      email: contact?.email ?? "",
-      phone: contact?.phone ?? "",
-      whatsapp: contact?.whatsapp ?? "",
-      source: contact?.source ?? "",
-    });
+    form.reset(contactFormDefaults(contact));
   }, [contact, form, open]);
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) =>
-      contact
-        ? contactsApi.update(contact.id, values)
-        : contactsApi.create(values),
+    mutationFn: (values: FormValues) => {
+      const payload = {
+        firstName: values.firstName.trim(),
+        lastName: values.lastName?.trim() || undefined,
+        email: values.email || undefined,
+        phone: values.phone || undefined,
+        whatsapp: values.whatsapp || undefined,
+        source: values.source || undefined,
+      };
+      return contact
+        ? contactsApi.update(contact.id, payload)
+        : contactsApi.create(payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.contacts.all });
       toast.success(contact ? "Contato atualizado" : "Contato criado");
@@ -79,12 +101,20 @@ export function ContactFormDialog({
         className="space-y-3"
         onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
       >
-        <div className="space-y-1">
-          <Label htmlFor="name">Nome</Label>
-          <Input id="name" {...form.register("name")} />
-          {form.formState.errors.name ? (
-            <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
-          ) : null}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor="firstName">Nome</Label>
+            <Input id="firstName" {...form.register("firstName")} />
+            {form.formState.errors.firstName ? (
+              <p className="text-xs text-destructive">
+                {form.formState.errors.firstName.message}
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="lastName">Sobrenome</Label>
+            <Input id="lastName" {...form.register("lastName")} />
+          </div>
         </div>
         <div className="space-y-1">
           <Label htmlFor="email">E-mail</Label>

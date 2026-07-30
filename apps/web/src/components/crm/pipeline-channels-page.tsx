@@ -133,8 +133,8 @@ function simulationInputFromDraft(
 function sortStages(stages: PipelineStage[]) {
   return [...stages].sort(
     (left, right) =>
-      (left.order ?? left.position ?? 0) -
-      (right.order ?? right.position ?? 0),
+      (left.position ?? left.order ?? 0) -
+      (right.position ?? right.order ?? 0),
   );
 }
 

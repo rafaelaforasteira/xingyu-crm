@@ -7,6 +7,7 @@ import type {
   Automation,
   Company,
   Contact,
+  ContactWriteInput,
   Conversation,
   DashboardCharts,
   DashboardMetrics,
@@ -175,8 +176,8 @@ export const contactsApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<Contact>>("/contacts", query),
   get: (id: string) => api.get<Contact>(`/contacts/${id}`),
-  create: (data: Partial<Contact>) => api.post<Contact>("/contacts", data),
-  update: (id: string, data: Partial<Contact>) =>
+  create: (data: ContactWriteInput) => api.post<Contact>("/contacts", data),
+  update: (id: string, data: Partial<ContactWriteInput>) =>
     api.patch<Contact>(`/contacts/${id}`, data),
   activities: (id: string) => api.get<Activity[]>(`/contacts/${id}/activities`),
   deals: (id: string) => api.get<Deal[]>(`/contacts/${id}/deals`),
@@ -188,8 +189,31 @@ export const companiesApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<Company>>("/companies", query),
   get: (id: string) => api.get<Company>(`/companies/${id}`),
-  create: (data: Partial<Company>) => api.post<Company>("/companies", data),
-  update: (id: string, data: Partial<Company>) =>
+  create: (data: {
+    legalName: string;
+    tradeName?: string;
+    cnpj?: string;
+    email?: string;
+    phone?: string;
+    segment?: string;
+    website?: string;
+    notes?: string;
+    ownerId?: string;
+  }) => api.post<Company>("/companies", data),
+  update: (
+    id: string,
+    data: Partial<{
+      legalName: string;
+      tradeName: string;
+      cnpj: string;
+      email: string;
+      phone: string;
+      segment: string;
+      website: string;
+      notes: string;
+      ownerId: string;
+    }>,
+  ) =>
     api.patch<Company>(`/companies/${id}`, data),
   contacts: (id: string) => api.get<Contact[]>(`/companies/${id}/contacts`),
 };

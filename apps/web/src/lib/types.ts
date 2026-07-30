@@ -17,17 +17,22 @@ export interface UserRef {
   role?: string;
   teamId?: string;
   team?: string;
+  status?: string;
 }
 
 export interface Tag {
   id: string;
   name: string;
   color?: string;
+  entityType?: "CONTACT" | "COMPANY" | "DEAL" | "ORDER" | "OCCURRENCE" | "TASK";
+  status?: string;
 }
 
 export interface Contact {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string | null;
   email?: string | null;
   phone?: string | null;
   whatsapp?: string | null;
@@ -35,23 +40,49 @@ export interface Contact {
   company?: Company | null;
   ownerId?: string | null;
   owner?: UserRef | null;
+  teamId?: string | null;
+  team?: Team | null;
   status?: string;
   tags?: Tag[];
   source?: string | null;
+  campaign?: string | null;
   lastInteractionAt?: string | null;
+  lastPurchaseAt?: string | null;
+  totalPurchased?: number;
+  orderCount?: number;
   createdAt: string;
   updatedAt?: string;
   notes?: string | null;
 }
 
+export interface ContactWriteInput {
+  firstName: string;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  source?: string | null;
+  companyId?: string | null;
+  ownerId?: string | null;
+  teamId?: string | null;
+  status?: string;
+  type?: string;
+  notes?: string | null;
+  tagIds?: string[];
+}
+
 export interface Company {
   id: string;
   name: string;
+  legalName?: string;
+  tradeName?: string | null;
   document?: string | null;
+  cnpj?: string | null;
   email?: string | null;
   phone?: string | null;
   website?: string | null;
   industry?: string | null;
+  segment?: string | null;
   ownerId?: string | null;
   owner?: UserRef | null;
   contactsCount?: number;
@@ -261,8 +292,9 @@ export interface PipelineStage {
   pipelineId?: string;
   name: string;
   description?: string | null;
-  order: number;
-  position?: number;
+  position: number;
+  /** @deprecated Prefer `position` — kept optional for older payloads */
+  order?: number;
   color?: string | null;
   type?: PipelineStageType;
   isInitial?: boolean;
@@ -446,13 +478,22 @@ export interface Occurrence {
 
 export interface RepurchaseLead {
   id: string;
-  contact: Contact;
+  contactId: string;
+  contact: Pick<Contact, "id" | "name" | "firstName" | "lastName" | "email" | "phone" | "whatsapp">;
+  sourceDealId?: string | null;
+  sourceOrderId?: string | null;
   score: number;
   lastOrderAt?: string | null;
+  lastPurchaseAt?: string | null;
   daysSinceOrder?: number;
   predictedValue?: number | null;
+  totalPurchased?: number;
+  averageTicket?: number;
+  orderCount?: number;
   reason?: string | null;
   status?: string;
+  owner?: UserRef | null;
+  team?: Team | null;
 }
 
 export type ReactivationStatus =
@@ -494,6 +535,33 @@ export interface ReactivationContact {
   orderCount: number;
 }
 
+export interface ReactivationExistingOpenDeal {
+  id: string;
+  pipelineId: string;
+  stageId: string;
+  conversationId: string | null;
+}
+
+export interface ReactivationConversation {
+  id: string;
+  status: string;
+  lastMessageAt: string | null;
+}
+
+export type ReactivationWorkflowStatus =
+  | "APPROACHED"
+  | "POSTPONED"
+  | "DISCARDED"
+  | "CONVERTED";
+
+export interface ReactivationWorkflow {
+  status: ReactivationWorkflowStatus;
+  actedAt: string;
+  snoozedUntil: string | null;
+  reason: string | null;
+  actor: UserRef | null;
+}
+
 export interface ReactivationLead {
   id: string;
   contact: ReactivationContact | null;
@@ -507,6 +575,9 @@ export interface ReactivationLead {
   owner: UserRef | null;
   team: Team | null;
   existingOpenDealId: string | null;
+  existingOpenDeal: ReactivationExistingOpenDeal | null;
+  latestConversation: ReactivationConversation | null;
+  workflow: ReactivationWorkflow | null;
 }
 
 export interface ReactivationListQuery {

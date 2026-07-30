@@ -22,11 +22,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const schema = z.object({
-  name: z.string().min(2),
-  document: z.string().optional(),
+  legalName: z.string().min(2, "Informe a razão social"),
+  tradeName: z.string().optional(),
+  cnpj: z.string().optional(),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
-  industry: z.string().optional(),
+  segment: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -50,11 +51,26 @@ export function CompaniesPage() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", document: "", email: "", phone: "", industry: "" },
+    defaultValues: {
+      legalName: "",
+      tradeName: "",
+      cnpj: "",
+      email: "",
+      phone: "",
+      segment: "",
+    },
   });
 
   const create = useMutation({
-    mutationFn: (values: FormValues) => companiesApi.create(values),
+    mutationFn: (values: FormValues) =>
+      companiesApi.create({
+        legalName: values.legalName.trim(),
+        tradeName: values.tradeName?.trim() || undefined,
+        cnpj: values.cnpj?.trim() || undefined,
+        email: values.email || undefined,
+        phone: values.phone || undefined,
+        segment: values.segment?.trim() || undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.companies.all });
       toast.success("Empresa criada");
@@ -142,12 +158,21 @@ export function CompaniesPage() {
           onSubmit={form.handleSubmit((v) => create.mutate(v))}
         >
           <div className="space-y-1">
-            <Label>Nome</Label>
-            <Input {...form.register("name")} />
+            <Label>Razão social</Label>
+            <Input {...form.register("legalName")} />
+            {form.formState.errors.legalName ? (
+              <p className="text-xs text-destructive">
+                {form.formState.errors.legalName.message}
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1">
-            <Label>CNPJ / Documento</Label>
-            <Input {...form.register("document")} />
+            <Label>Nome fantasia</Label>
+            <Input {...form.register("tradeName")} />
+          </div>
+          <div className="space-y-1">
+            <Label>CNPJ</Label>
+            <Input {...form.register("cnpj")} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
@@ -160,8 +185,8 @@ export function CompaniesPage() {
             </div>
           </div>
           <div className="space-y-1">
-            <Label>Setor</Label>
-            <Input {...form.register("industry")} />
+            <Label>Segmento</Label>
+            <Input {...form.register("segment")} />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
