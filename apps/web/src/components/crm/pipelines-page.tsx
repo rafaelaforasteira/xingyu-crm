@@ -201,7 +201,7 @@ function PipelineCard({
             </Link>
             <Link
               role="menuitem"
-              href={`/pipelines/${pipeline.id}/settings/channels`}
+              href={`/pipelines/${pipeline.id}/channels`}
               className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition hover:bg-accent"
             >
               <Wifi className="h-4 w-4" />

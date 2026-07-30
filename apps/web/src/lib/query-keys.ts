@@ -22,6 +22,9 @@ export const queryKeys = {
     board: (id: string) => ["pipelines", id, "board"] as const,
     stages: (id: string, archived = false) =>
       ["pipelines", id, "stages", { archived }] as const,
+    channels: (id: string) => ["pipelines", id, "channels"] as const,
+    availableChannels: (id: string) =>
+      ["pipelines", id, "channels", "available"] as const,
   },
   deals: {
     detail: (id: string) => ["deals", id] as const,

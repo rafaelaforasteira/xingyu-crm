@@ -12,6 +12,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -591,6 +592,13 @@ export function PipelineStagesPage({ pipelineId }: { pipelineId: string }) {
             >
               <ArrowLeft className="h-4 w-4" />
               Voltar ao quadro
+            </Link>
+            <Link
+              href={`/pipelines/${pipelineId}/channels`}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-input bg-card px-3.5 text-sm font-medium hover:bg-accent"
+            >
+              <Wifi className="h-4 w-4" />
+              Canais
             </Link>
             <Button type="button" onClick={openCreate}>
               <Plus className="h-4 w-4" />

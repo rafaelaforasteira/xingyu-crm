@@ -18,6 +18,10 @@ import type {
   Order,
   PaginatedResponse,
   Pipeline,
+  AvailablePipelineChannel,
+  PipelineChannelConnection,
+  PipelineChannelInput,
+  PipelineChannelTestResult,
   PipelineInput,
   PipelineListQuery,
   PipelineStage,
@@ -26,6 +30,7 @@ import type {
   RepurchaseLead,
   SearchResult,
   SettingsOverview,
+  Tag,
   Task,
   Team,
   UserRef,
@@ -245,6 +250,55 @@ export const pipelineStagesApi = {
   },
 };
 
+function unwrapData<T>(response: T[] | { data: T[] }) {
+  return Array.isArray(response) ? response : response.data;
+}
+
+export const pipelineChannelsApi = {
+  list: async (pipelineId: string) =>
+    unwrapData(
+      await api.get<
+        PipelineChannelConnection[] | { data: PipelineChannelConnection[] }
+      >(`/pipelines/${pipelineId}/channels`),
+    ),
+  available: async (pipelineId: string) =>
+    unwrapData(
+      await api.get<
+        AvailablePipelineChannel[] | { data: AvailablePipelineChannel[] }
+      >(`/pipelines/${pipelineId}/channels/available`),
+    ),
+  connect: (pipelineId: string, data: PipelineChannelInput) =>
+    api.post<PipelineChannelConnection>(
+      `/pipelines/${pipelineId}/channels`,
+      data,
+    ),
+  update: (
+    pipelineId: string,
+    connectionId: string,
+    data: Partial<Omit<PipelineChannelInput, "channelId">>,
+  ) =>
+    api.patch<PipelineChannelConnection>(
+      `/pipelines/${pipelineId}/channels/${connectionId}`,
+      data,
+    ),
+  pause: (pipelineId: string, connectionId: string) =>
+    api.patch<PipelineChannelConnection>(
+      `/pipelines/${pipelineId}/channels/${connectionId}/pause`,
+    ),
+  resume: (pipelineId: string, connectionId: string) =>
+    api.patch<PipelineChannelConnection>(
+      `/pipelines/${pipelineId}/channels/${connectionId}/resume`,
+    ),
+  test: (pipelineId: string, connectionId: string) =>
+    api.post<PipelineChannelTestResult>(
+      `/pipelines/${pipelineId}/channels/${connectionId}/test`,
+    ),
+  disconnect: (pipelineId: string, connectionId: string) =>
+    api.delete<{ id: string; disconnected: boolean }>(
+      `/pipelines/${pipelineId}/channels/${connectionId}`,
+    ),
+};
+
 export const dealsApi = {
   get: (id: string) => api.get<Deal>(`/deals/${id}`),
   create: (data: Partial<Deal>) => api.post<Deal>("/deals", data),
@@ -335,6 +389,13 @@ export const automationsApi = {
 };
 
 export const marketingApi = {
+  campaigns: async () => {
+    const response = await api.get<
+      | { id: string; name: string; status: string }[]
+      | PaginatedResponse<{ id: string; name: string; status: string }>
+    >("/marketing/campaigns", { pageSize: 100 });
+    return Array.isArray(response) ? response : response.data;
+  },
   overview: () =>
     api.get<{
       campaigns: { id: string; name: string; status: string; spend: number; leads: number }[];
@@ -387,6 +448,13 @@ export const settingsApi = {
   users: async () => {
     const response = await api.get<UserRef[] | PaginatedResponse<UserRef>>(
       "/settings/users",
+      { pageSize: 100 },
+    );
+    return Array.isArray(response) ? response : response.data;
+  },
+  tags: async () => {
+    const response = await api.get<Tag[] | PaginatedResponse<Tag>>(
+      "/settings/tags",
       { pageSize: 100 },
     );
     return Array.isArray(response) ? response : response.data;

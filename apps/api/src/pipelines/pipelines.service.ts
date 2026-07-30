@@ -20,6 +20,22 @@ import {
 } from "./dto/pipeline.dto";
 
 const activeStageWhere = { deletedAt: null, archived: false } as const;
+const pipelineChannelConnectionsInclude = {
+  where: { deletedAt: null },
+  orderBy: { createdAt: "asc" },
+  select: {
+    active: true,
+    channel: {
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        type: true,
+        isActive: true,
+      },
+    },
+  },
+} satisfies Prisma.Pipeline$channelConnectionsArgs;
 
 type DbClient = Prisma.TransactionClient | PrismaService;
 
@@ -54,6 +70,7 @@ export class PipelinesService {
             where: activeStageWhere,
             orderBy: { position: "asc" },
           },
+          channelConnections: pipelineChannelConnectionsInclude,
         },
       }),
       this.prisma.pipeline.count({ where }),
@@ -92,12 +109,17 @@ export class PipelinesService {
     );
 
     return paginate(
-      pipelines.map((pipeline) => ({
+      pipelines.map(({ channelConnections, ...pipeline }) => ({
         ...pipeline,
         stagesCount: pipeline.stages.length,
         dealsCount: countByPipeline.get(pipeline.id) ?? 0,
         openValue: valueByPipeline.get(pipeline.id) ?? 0,
-        channels: [],
+        channels: channelConnections.map(({ active, channel }) => ({
+          id: channel.id,
+          name: channel.displayName ?? channel.name,
+          type: channel.type,
+          enabled: active && channel.isActive,
+        })),
       })),
       total,
       page,
@@ -115,6 +137,7 @@ export class PipelinesService {
           where: { deletedAt: null },
           orderBy: { position: "asc" },
         },
+        channelConnections: pipelineChannelConnectionsInclude,
         _count: { select: { deals: { where: { deletedAt: null } } } },
       },
     });
@@ -130,13 +153,18 @@ export class PipelinesService {
       _sum: { value: true },
     });
 
-    const { _count, ...result } = pipeline;
+    const { _count, channelConnections, ...result } = pipeline;
     return {
       ...result,
       stagesCount: result.stages.filter((stage) => !stage.archived).length,
       dealsCount: _count.deals,
       openValue: Number(openValue._sum.value ?? 0),
-      channels: [],
+      channels: channelConnections.map(({ active, channel }) => ({
+        id: channel.id,
+        name: channel.displayName ?? channel.name,
+        type: channel.type,
+        enabled: active && channel.isActive,
+      })),
     };
   }
 

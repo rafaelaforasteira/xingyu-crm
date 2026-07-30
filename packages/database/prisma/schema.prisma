@@ -105,8 +105,24 @@ enum ChannelType {
   WHATSAPP
   INSTAGRAM
   SITE_CHAT
+  WEB_CHAT
   EMAIL
+  SHOPIFY
+  FORM
+  WEBHOOK
   MANUAL
+}
+
+enum PipelineDuplicateStrategy {
+  MERGE
+  CREATE_NEW
+  REJECT
+}
+
+enum PipelineRoutingMode {
+  PIPELINE_DEFAULTS
+  FIXED
+  ROUND_ROBIN
 }
 
 enum OrderStatus {
@@ -254,30 +270,31 @@ model Organization {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  users         User[]
-  teams         Team[]
-  roles         Role[]
-  contacts      Contact[]
-  companies     Company[]
-  pipelines     Pipeline[]
-  deals         Deal[]
-  tasks         Task[]
-  activities    Activity[]
-  notes         Note[]
-  tags          Tag[]
-  customFields  CustomFieldDefinition[]
-  conversations Conversation[]
-  channels      Channel[]
-  orders        Order[]
-  products      Product[]
-  collections   ProductCollection[]
-  occurrences   Occurrence[]
-  campaigns     Campaign[]
-  automations   Automation[]
-  notifications Notification[]
-  savedViews    SavedView[]
-  auditLogs     AuditLog[]
-  attributions  Attribution[]
+  users                      User[]
+  teams                      Team[]
+  roles                      Role[]
+  contacts                   Contact[]
+  companies                  Company[]
+  pipelines                  Pipeline[]
+  deals                      Deal[]
+  tasks                      Task[]
+  activities                 Activity[]
+  notes                      Note[]
+  tags                       Tag[]
+  customFields               CustomFieldDefinition[]
+  conversations              Conversation[]
+  channels                   Channel[]
+  pipelineChannelConnections PipelineChannelConnection[]
+  orders                     Order[]
+  products                   Product[]
+  collections                ProductCollection[]
+  occurrences                Occurrence[]
+  campaigns                  Campaign[]
+  automations                Automation[]
+  notifications              Notification[]
+  savedViews                 SavedView[]
+  auditLogs                  AuditLog[]
+  attributions               Attribution[]
 }
 
 model Role {
@@ -307,12 +324,13 @@ model Team {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization     Organization @relation(fields: [organizationId], references: [id])
-  members          User[]
-  contacts         Contact[]
-  deals            Deal[]
-  tasks            Task[]
-  defaultPipelines Pipeline[]   @relation("PipelineDefaultTeam")
+  organization               Organization                @relation(fields: [organizationId], references: [id])
+  members                    User[]
+  contacts                   Contact[]
+  deals                      Deal[]
+  tasks                      Task[]
+  defaultPipelines           Pipeline[]                  @relation("PipelineDefaultTeam")
+  pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultTeam")
 
   @@index([organizationId])
 }
@@ -340,20 +358,21 @@ model User {
   manager      User?        @relation("UserManager", fields: [managerId], references: [id])
   reports      User[]       @relation("UserManager")
 
-  ownedContacts         Contact[]      @relation("ContactOwner")
-  ownedCompanies        Company[]      @relation("CompanyOwner")
-  ownedDeals            Deal[]         @relation("DealOwner")
-  assignedTasks         Task[]         @relation("TaskAssignee")
-  createdTasks          Task[]         @relation("TaskCreator")
-  assignedConversations Conversation[] @relation("ConversationAssignee")
-  sentMessages          Message[]      @relation("MessageSender")
-  ownedOrders           Order[]        @relation("OrderOwner")
-  ownedOccurrences      Occurrence[]   @relation("OccurrenceOwner")
-  notifications         Notification[]
-  activities            Activity[]     @relation("ActivityActor")
-  notes                 Note[]
-  auditLogs             AuditLog[]
-  defaultPipelines      Pipeline[]     @relation("PipelineDefaultOwner")
+  ownedContacts              Contact[]                   @relation("ContactOwner")
+  ownedCompanies             Company[]                   @relation("CompanyOwner")
+  ownedDeals                 Deal[]                      @relation("DealOwner")
+  assignedTasks              Task[]                      @relation("TaskAssignee")
+  createdTasks               Task[]                      @relation("TaskCreator")
+  assignedConversations      Conversation[]              @relation("ConversationAssignee")
+  sentMessages               Message[]                   @relation("MessageSender")
+  ownedOrders                Order[]                     @relation("OrderOwner")
+  ownedOccurrences           Occurrence[]                @relation("OccurrenceOwner")
+  notifications              Notification[]
+  activities                 Activity[]                  @relation("ActivityActor")
+  notes                      Note[]
+  auditLogs                  AuditLog[]
+  defaultPipelines           Pipeline[]                  @relation("PipelineDefaultOwner")
+  pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultOwner")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -490,11 +509,12 @@ model Pipeline {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization    @relation(fields: [organizationId], references: [id])
-  defaultTeam  Team?           @relation("PipelineDefaultTeam", fields: [defaultTeamId], references: [id], onDelete: SetNull)
-  defaultOwner User?           @relation("PipelineDefaultOwner", fields: [defaultOwnerId], references: [id], onDelete: SetNull)
-  stages       PipelineStage[]
-  deals        Deal[]
+  organization       Organization                @relation(fields: [organizationId], references: [id])
+  defaultTeam        Team?                       @relation("PipelineDefaultTeam", fields: [defaultTeamId], references: [id], onDelete: SetNull)
+  defaultOwner       User?                       @relation("PipelineDefaultOwner", fields: [defaultOwnerId], references: [id], onDelete: SetNull)
+  stages             PipelineStage[]
+  deals              Deal[]
+  channelConnections PipelineChannelConnection[]
 
   @@index([organizationId])
   @@index([archived])
@@ -524,9 +544,10 @@ model PipelineStage {
   updatedAt          DateTime          @updatedAt
   deletedAt          DateTime?
 
-  pipeline Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  deals    Deal[]
-  history  DealStageHistory[]
+  pipeline                   Pipeline                    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals                      Deal[]
+  history                    DealStageHistory[]
+  pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultStage")
 
   @@index([pipelineId])
   @@index([organizationId])
@@ -804,22 +825,76 @@ model CustomFieldValue {
 }
 
 model Channel {
-  id             String      @id @default(cuid())
-  organizationId String
-  type           ChannelType
-  name           String
-  isActive       Boolean     @default(true)
-  config         Json?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?
+  id                String      @id @default(cuid())
+  organizationId    String
+  type              ChannelType
+  name              String
+  provider          String?
+  externalAccountId String?
+  displayName       String?
+  status            String      @default("ACTIVE")
+  isActive          Boolean     @default(true)
+  /// Non-sensitive account configuration. Credentials must be referenced by
+  /// secretReference and never persisted in this JSON field.
+  config            Json?
+  secretReference   String?
+  lastSyncAt        DateTime?
+  lastErrorAt       DateTime?
+  lastErrorMessage  String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?
 
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  conversations Conversation[]
-  messages      Message[]
+  organization        Organization                @relation(fields: [organizationId], references: [id])
+  conversations       Conversation[]
+  messages            Message[]
+  pipelineConnections PipelineChannelConnection[]
 
   @@index([organizationId])
   @@index([type])
+  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, provider, externalAccountId])
+}
+
+/// Routes one existing Channel integration account into one pipeline. Channel
+/// deliberately serves as IntegrationAccount so credentials and provider state
+/// are not duplicated across CRM domains.
+model PipelineChannelConnection {
+  id                 String                    @id @default(cuid())
+  organizationId     String
+  pipelineId         String
+  channelId          String
+  defaultStageId     String?
+  defaultOwnerId     String?
+  defaultTeamId      String?
+  defaultTagIds      Json                      @default("[]")
+  source             String?
+  campaignId         String?
+  active             Boolean                   @default(true)
+  createContact      Boolean                   @default(true)
+  createConversation Boolean                   @default(true)
+  createDeal         Boolean                   @default(true)
+  duplicateStrategy  PipelineDuplicateStrategy @default(MERGE)
+  routingMode        PipelineRoutingMode       @default(PIPELINE_DEFAULTS)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  deletedAt          DateTime?
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline     Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  channel      Channel        @relation(fields: [channelId], references: [id], onDelete: Restrict)
+  defaultStage PipelineStage? @relation("PipelineChannelDefaultStage", fields: [defaultStageId], references: [id], onDelete: SetNull)
+  defaultOwner User?          @relation("PipelineChannelDefaultOwner", fields: [defaultOwnerId], references: [id], onDelete: SetNull)
+  defaultTeam  Team?          @relation("PipelineChannelDefaultTeam", fields: [defaultTeamId], references: [id], onDelete: SetNull)
+  campaign     Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([pipelineId, deletedAt, active])
+  @@index([channelId])
+  @@index([defaultStageId])
+  @@index([defaultOwnerId])
+  @@index([defaultTeamId])
+  @@index([campaignId])
 }
 
 model Conversation {
@@ -1134,8 +1209,9 @@ model Campaign {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  attributions Attribution[]
+  organization               Organization                @relation(fields: [organizationId], references: [id])
+  attributions               Attribution[]
+  pipelineChannelConnections PipelineChannelConnection[]
 
   @@index([organizationId])
   @@index([source])

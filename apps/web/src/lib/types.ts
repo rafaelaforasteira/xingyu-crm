@@ -89,6 +89,92 @@ export interface PipelineChannelSummary {
   enabled?: boolean;
 }
 
+export interface AvailablePipelineChannel {
+  id: string;
+  type: string;
+  name: string;
+  provider?: string | null;
+  externalAccountId?: string | null;
+  displayName?: string | null;
+  status?: string | null;
+  isActive: boolean;
+  lastSyncAt?: string | null;
+  lastErrorAt?: string | null;
+  lastErrorMessage?: string | null;
+  connected: boolean;
+  connectionId?: string | null;
+}
+
+export interface PipelineChannelConnection {
+  id: string;
+  pipelineId: string;
+  channelId: string;
+  defaultStageId: string;
+  defaultOwnerId?: string | null;
+  defaultTeamId?: string | null;
+  defaultTagIds?: string[];
+  source?: string | null;
+  campaignId?: string | null;
+  active: boolean;
+  createContact: boolean;
+  createConversation: boolean;
+  createDeal: boolean;
+  duplicateStrategy: "MERGE" | "CREATE_NEW" | "REJECT";
+  routingMode: "PIPELINE_DEFAULTS" | "FIXED" | "ROUND_ROBIN";
+  lastSyncAt?: string | null;
+  lastErrorAt?: string | null;
+  lastErrorMessage?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  channel: {
+    id: string;
+    type: string;
+    name: string;
+    provider?: string | null;
+    externalAccountId?: string | null;
+    displayName?: string | null;
+    status?: string | null;
+    isActive?: boolean;
+    lastSyncAt?: string | null;
+    lastErrorAt?: string | null;
+    lastErrorMessage?: string | null;
+  };
+  pipeline?: Pick<Pipeline, "id" | "name">;
+  defaultStage?: Pick<PipelineStage, "id" | "name"> | null;
+  defaultOwner?: UserRef | null;
+  defaultTeam?: Team | null;
+  campaign?: { id: string; name: string } | null;
+}
+
+export interface PipelineChannelInput {
+  channelId: string;
+  defaultStageId: string;
+  defaultOwnerId?: string | null;
+  defaultTeamId?: string | null;
+  defaultTagIds?: string[];
+  source?: string | null;
+  campaignId?: string | null;
+  active?: boolean;
+  createContact?: boolean;
+  createConversation?: boolean;
+  createDeal?: boolean;
+  duplicateStrategy?: "MERGE" | "CREATE_NEW" | "REJECT";
+  routingMode?: "PIPELINE_DEFAULTS" | "FIXED" | "ROUND_ROBIN";
+}
+
+export interface PipelineChannelTestResult {
+  ok: boolean;
+  mode: string;
+  testedAt: string;
+  connectionId: string;
+  channel: {
+    id: string;
+    type: string;
+    name: string;
+    status?: string | null;
+  };
+}
+
 export interface PipelineListQuery {
   page?: number;
   pageSize?: number;
