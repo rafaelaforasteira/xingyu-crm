@@ -8,5 +8,6 @@ module.exports = {
   ignorePatterns: ["dist", "node_modules", "coverage"],
   rules: {
     "@typescript-eslint/no-unused-expressions": "off",
+    "@typescript-eslint/no-namespace": "off",
   },
 };
