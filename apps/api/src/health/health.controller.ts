@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -10,19 +10,26 @@ export class HealthController {
   @Get()
   @ApiOperation({ summary: "Health check" })
   async check() {
-    let database: "up" | "down" = "down";
+    const startedAt = performance.now();
     try {
       await this.prisma.$queryRaw`SELECT 1`;
-      database = "up";
     } catch {
-      database = "down";
+      throw new ServiceUnavailableException({
+        status: "degraded",
+        service: "xingyu-api",
+        database: "down",
+        message: "Banco de dados indisponível.",
+        timestamp: new Date().toISOString(),
+      });
     }
 
     return {
-      status: database === "up" ? "ok" : "degraded",
+      status: "ok",
       service: "xingyu-api",
-      database,
+      database: "up",
+      databaseLatencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
       demoMode: process.env.DEMO_MODE !== "false",
+      environment: process.env.NODE_ENV ?? "development",
       timestamp: new Date().toISOString(),
     };
   }
