@@ -44,6 +44,8 @@ import type {
   SettingsOverview,
   Tag,
   Task,
+  TaskBoardGroup,
+  TaskStatusDefinition,
   Team,
   UserRef,
 } from "./types";
@@ -409,9 +411,25 @@ export const notesApi = {
 export const tasksApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<Task>>("/tasks", query),
+  board: (query?: Record<string, QueryValue>) =>
+    api.get<TaskBoardGroup[]>("/tasks/board", query),
+  statuses: (includeArchived = false) =>
+    api.get<TaskStatusDefinition[]>("/tasks/statuses", {
+      includeArchived: includeArchived ? true : undefined,
+    }),
+  createStatus: (data: Partial<TaskStatusDefinition> & { name: string }) =>
+    api.post<TaskStatusDefinition>("/tasks/statuses", data),
+  updateStatus: (id: string, data: Partial<TaskStatusDefinition>) =>
+    api.patch<TaskStatusDefinition>(`/tasks/statuses/${id}`, data),
+  reorderStatuses: (statusIds: string[]) =>
+    api.post<TaskStatusDefinition[]>("/tasks/statuses/reorder", { statusIds }),
   get: (id: string) => api.get<Task>(`/tasks/${id}`),
-  create: (data: Partial<Task>) => api.post<Task>("/tasks", data),
-  update: (id: string, data: Partial<Task>) => api.patch<Task>(`/tasks/${id}`, data),
+  create: (data: Partial<Task> & { title: string; statusDefinitionId?: string }) =>
+    api.post<Task>("/tasks", data),
+  update: (id: string, data: Partial<Task> & { statusDefinitionId?: string }) =>
+    api.patch<Task>(`/tasks/${id}`, data),
+  complete: (id: string) => api.post<Task>(`/tasks/${id}/complete`),
+  reopen: (id: string) => api.post<Task>(`/tasks/${id}/reopen`),
   today: () => api.get<Task[]>("/tasks/today"),
 };
 

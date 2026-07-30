@@ -17,6 +17,9 @@ import {
   UpdateTaskDto,
   QueryTasksDto,
   RescheduleTaskDto,
+  CreateTaskStatusDto,
+  UpdateTaskStatusDto,
+  ReorderTaskStatusesDto,
 } from "./dto/task.dto";
 
 @ApiTags("tasks")
@@ -29,6 +32,49 @@ export class TasksController {
   @ApiOperation({ summary: "List tasks" })
   findAll(@OrganizationId() orgId: string, @Query() query: QueryTasksDto) {
     return this.tasksService.findAll(orgId, query);
+  }
+
+  @Get("board")
+  @ApiOperation({ summary: "Task board grouped by custom status" })
+  board(@OrganizationId() orgId: string, @Query() query: QueryTasksDto) {
+    return this.tasksService.board(orgId, query);
+  }
+
+  @Get("statuses")
+  @ApiOperation({ summary: "List custom task statuses" })
+  listStatuses(
+    @OrganizationId() orgId: string,
+    @Query("includeArchived") includeArchived?: string,
+  ) {
+    return this.tasksService.listStatuses(orgId, includeArchived === "true");
+  }
+
+  @Post("statuses")
+  @ApiOperation({ summary: "Create custom task status" })
+  createStatus(
+    @OrganizationId() orgId: string,
+    @Body() dto: CreateTaskStatusDto,
+  ) {
+    return this.tasksService.createStatus(orgId, dto);
+  }
+
+  @Patch("statuses/:id")
+  @ApiOperation({ summary: "Update custom task status" })
+  updateStatus(
+    @OrganizationId() orgId: string,
+    @Param("id") id: string,
+    @Body() dto: UpdateTaskStatusDto,
+  ) {
+    return this.tasksService.updateStatus(orgId, id, dto);
+  }
+
+  @Post("statuses/reorder")
+  @ApiOperation({ summary: "Reorder custom task statuses" })
+  reorderStatuses(
+    @OrganizationId() orgId: string,
+    @Body() dto: ReorderTaskStatusesDto,
+  ) {
+    return this.tasksService.reorderStatuses(orgId, dto.statusIds);
   }
 
   @Get("today")

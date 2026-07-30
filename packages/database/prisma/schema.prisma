@@ -58,6 +58,12 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum TaskStatusCategory {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
 enum TaskType {
   CALL
   WHATSAPP
@@ -308,6 +314,7 @@ model Organization {
   auditLogs                  AuditLog[]
   attributions               Attribution[]
   lifecycleActions           LifecycleAction[]
+  taskStatusDefinitions      TaskStatusDefinition[]
 }
 
 model Role {
@@ -529,6 +536,7 @@ model Pipeline {
   defaultOwner       User?                       @relation("PipelineDefaultOwner", fields: [defaultOwnerId], references: [id], onDelete: SetNull)
   stages             PipelineStage[]
   deals              Deal[]
+  tasks              Task[]
   channelConnections PipelineChannelConnection[]
 
   @@index([organizationId])
@@ -561,6 +569,7 @@ model PipelineStage {
 
   pipeline                   Pipeline                    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   deals                      Deal[]
+  tasks                      Task[]
   history                    DealStageHistory[]
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultStage")
 
@@ -644,50 +653,80 @@ model DealStageHistory {
   @@index([movedAt])
 }
 
-model Task {
-  id             String       @id @default(cuid())
+model TaskStatusDefinition {
+  id             String             @id @default(cuid())
   organizationId String
-  title          String
-  description    String?
-  type           TaskType     @default(FOLLOW_UP)
-  status         TaskStatus   @default(PENDING)
-  priority       TaskPriority @default(MEDIUM)
-  dueAt          DateTime?
-  reminderAt     DateTime?
-  completedAt    DateTime?
-  result         String?
-  completionNote String?
-  recurrenceRule String?
-  assigneeId     String?
-  createdById    String?
-  updatedById    String?
-  contactId      String?
-  companyId      String?
-  dealId         String?
-  orderId        String?
-  occurrenceId   String?
-  teamId         String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  name           String
+  slug           String
+  color          String             @default("#64748B")
+  position       Int                @default(0)
+  category       TaskStatusCategory @default(OPEN)
+  active         Boolean            @default(true)
+  archived       Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   deletedAt      DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  creator      User?        @relation("TaskCreator", fields: [createdById], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
-  company      Company?     @relation(fields: [companyId], references: [id])
-  deal         Deal?        @relation(fields: [dealId], references: [id])
-  order        Order?       @relation(fields: [orderId], references: [id])
-  occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
-  team         Team?        @relation(fields: [teamId], references: [id])
-  activities   Activity[]
+  tasks        Task[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, active, position])
+}
+
+model Task {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  title              String
+  description        String?
+  type               TaskType     @default(FOLLOW_UP)
+  status             TaskStatus   @default(PENDING)
+  statusDefinitionId String?
+  priority           TaskPriority @default(MEDIUM)
+  dueAt              DateTime?
+  reminderAt         DateTime?
+  completedAt        DateTime?
+  result             String?
+  completionNote     String?
+  recurrenceRule     String?
+  assigneeId         String?
+  createdById        String?
+  updatedById        String?
+  contactId          String?
+  companyId          String?
+  dealId             String?
+  pipelineId         String?
+  stageId            String?
+  orderId            String?
+  occurrenceId       String?
+  teamId             String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
+
+  organization     Organization         @relation(fields: [organizationId], references: [id])
+  statusDefinition TaskStatusDefinition? @relation(fields: [statusDefinitionId], references: [id], onDelete: SetNull)
+  assignee         User?                @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator          User?                @relation("TaskCreator", fields: [createdById], references: [id])
+  contact          Contact?             @relation(fields: [contactId], references: [id])
+  company          Company?             @relation(fields: [companyId], references: [id])
+  deal             Deal?                @relation(fields: [dealId], references: [id])
+  pipeline         Pipeline?            @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  stage            PipelineStage?       @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  order            Order?               @relation(fields: [orderId], references: [id])
+  occurrence       Occurrence?          @relation(fields: [occurrenceId], references: [id])
+  team             Team?                @relation(fields: [teamId], references: [id])
+  activities       Activity[]
 
   @@index([organizationId])
   @@index([assigneeId])
   @@index([status])
+  @@index([statusDefinitionId])
   @@index([dueAt])
   @@index([contactId])
   @@index([dealId])
+  @@index([pipelineId])
+  @@index([stageId])
   @@index([createdAt])
 }
 

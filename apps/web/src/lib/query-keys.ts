@@ -44,6 +44,8 @@ export const queryKeys = {
   },
   tasks: {
     list: (params?: unknown) => ["tasks", "list", params] as const,
+    board: (params?: unknown) => ["tasks", "board", params] as const,
+    statuses: ["tasks", "statuses"] as const,
     today: ["tasks", "today"] as const,
   },
   orders: {
