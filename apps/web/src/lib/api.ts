@@ -25,6 +25,7 @@ import type {
   Task,
   Team,
 } from "./types";
+import { normalizeMessages } from "./inbox-utils";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
@@ -208,7 +209,12 @@ export const conversationsApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<Conversation>>("/conversations", query),
   get: (id: string) => api.get<Conversation>(`/conversations/${id}`),
-  messages: (id: string) => api.get<Message[]>(`/conversations/${id}/messages`),
+  messages: async (id: string) =>
+    normalizeMessages(
+      await api.get<Message[] | PaginatedResponse<Message>>(
+        `/conversations/${id}/messages`,
+      ),
+    ),
   sendMessage: (id: string, body: string) =>
     api.post<Message>(`/conversations/${id}/messages`, { body }),
   byDeal: async (dealId: string) => {

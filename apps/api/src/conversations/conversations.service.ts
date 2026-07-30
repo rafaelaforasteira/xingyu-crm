@@ -37,11 +37,25 @@ export class ConversationsService {
           contact: { select: { id: true, firstName: true, lastName: true, whatsapp: true } },
           assignee: { select: { id: true, name: true } },
           channel: true,
+          messages: {
+            where: notDeleted,
+            orderBy: { sentAt: "desc" },
+            take: 1,
+            select: { body: true },
+          },
         },
       }),
       this.prisma.conversation.count({ where }),
     ]);
-    return paginate(data, total, page, pageSize);
+    return paginate(
+      data.map(({ messages, ...conversation }) => ({
+        ...conversation,
+        lastMessagePreview: messages[0]?.body ?? null,
+      })),
+      total,
+      page,
+      pageSize,
+    );
   }
 
   async findOne(organizationId: string, id: string) {
@@ -112,7 +126,7 @@ export class ConversationsService {
 
     await this.prisma.conversation.update({
       where: { id: conversationId },
-      data: { lastMessageAt: now },
+      data: { lastMessageAt: now, unreadCount: 0 },
     });
 
     await this.prisma.activity.create({

@@ -26,6 +26,8 @@ export const queryKeys = {
     files: (id: string) => ["deals", id, "files"] as const,
   },
   conversations: {
+    all: ["conversations"] as const,
+    lists: ["conversations", "list"] as const,
     list: (params?: unknown) => ["conversations", "list", params] as const,
     detail: (id: string) => ["conversations", id] as const,
     messages: (id: string) => ["conversations", id, "messages"] as const,

@@ -108,7 +108,7 @@ export interface Conversation {
   contactId?: string | null;
   contact?: Contact | null;
   dealId?: string | null;
-  channel?: string;
+  channel?: string | { id?: string; name?: string; type?: string } | null;
   status?: string;
   lastMessageAt?: string | null;
   lastMessagePreview?: string | null;
