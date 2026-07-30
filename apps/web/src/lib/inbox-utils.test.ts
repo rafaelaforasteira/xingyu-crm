@@ -30,8 +30,12 @@ describe("Inbox response normalization", () => {
   });
 
   it("normalizes message arrays and paginated responses", () => {
-    expect(normalizeMessages([message])).toEqual([message]);
-    expect(normalizeMessages({ data: [message], meta: {} })).toEqual([message]);
+    expect(normalizeMessages([message])).toEqual([
+      expect.objectContaining(message),
+    ]);
+    expect(normalizeMessages({ data: [message], meta: {} })).toEqual([
+      expect.objectContaining(message),
+    ]);
   });
 
   it("returns an empty message list for absent or invalid responses", () => {

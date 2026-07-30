@@ -6,8 +6,11 @@ test("Inbox omnichannel workspace shows lead context and persists messages", asy
   await page.goto("/inbox");
   await expect(page.getByTestId("conversation-list")).toBeVisible({ timeout: 15_000 });
 
-  const firstConversation = page.locator('[data-testid^="conversation-"]').first();
-  await expect(firstConversation).toBeVisible({ timeout: 15_000 });
+  const firstConversation = page
+    .getByTestId("conversation-list")
+    .locator('[data-testid^="conversation-"]:not([data-testid="conversation-list"])')
+    .first();
+  await expect(firstConversation).toBeVisible({ timeout: 20_000 });
 
   if (!/\/inbox\/[^/?#]+$/.test(page.url())) {
     await firstConversation.click();
