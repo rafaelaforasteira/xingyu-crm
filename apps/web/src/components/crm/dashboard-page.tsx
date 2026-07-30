@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -9,11 +10,24 @@ import { queryKeys } from "@/lib/query-keys";
 import { formatCurrency } from "@/lib/utils";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { PageHeader, MetricCard, ErrorBanner } from "@/components/crm/page-header";
-import { SimpleBarChart, SimpleLineChart, SimplePieChart } from "@/components/crm/charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Inbox } from "lucide-react";
+
+const SimpleBarChart = dynamic(
+  () => import("@/components/crm/charts").then((mod) => ({ default: mod.SimpleBarChart })),
+  { loading: () => <Skeleton className="h-64 w-full" /> },
+);
+const SimpleLineChart = dynamic(
+  () => import("@/components/crm/charts").then((mod) => ({ default: mod.SimpleLineChart })),
+  { loading: () => <Skeleton className="h-64 w-full" /> },
+);
+const SimplePieChart = dynamic(
+  () => import("@/components/crm/charts").then((mod) => ({ default: mod.SimplePieChart })),
+  { loading: () => <Skeleton className="h-64 w-full" /> },
+);
 
 export function DashboardPage() {
   const router = useRouter();
