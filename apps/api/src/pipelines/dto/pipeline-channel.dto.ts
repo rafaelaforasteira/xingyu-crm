@@ -2,14 +2,19 @@ import { ApiProperty, ApiPropertyOptional, OmitType, PartialType } from "@nestjs
 import {
   ArrayMaxSize,
   ArrayUnique,
+  IsEmail,
   IsArray,
   IsBoolean,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from "class-validator";
+import { Transform, Type } from "class-transformer";
 
 export const PIPELINE_DUPLICATE_STRATEGIES = ["MERGE", "CREATE_NEW", "REJECT"] as const;
 export const PIPELINE_ROUTING_MODES = ["PIPELINE_DEFAULTS", "FIXED", "ROUND_ROBIN"] as const;
@@ -107,3 +112,62 @@ export class ConnectPipelineChannelDto {
 export class UpdatePipelineChannelDto extends PartialType(
   OmitType(ConnectPipelineChannelDto, ["channelId"] as const),
 ) {}
+
+function trimmedString({ value }: { value: unknown }) {
+  return typeof value === "string" ? value.trim() : value;
+}
+
+export class SimulatePipelineLeadDto {
+  @ApiProperty({ example: "Marina Oliveira" })
+  @Transform(trimmedString)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(160)
+  name!: string;
+
+  @ApiPropertyOptional({
+    example: "+55 11 99999-0000",
+    description:
+      "Normalized for duplicate lookup; Brazilian local numbers receive country code +55",
+  })
+  @IsOptional()
+  @Transform(trimmedString)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(40)
+  phone?: string;
+
+  @ApiPropertyOptional({ example: "marina@example.com" })
+  @IsOptional()
+  @Transform(trimmedString)
+  @IsEmail()
+  @MaxLength(320)
+  email?: string;
+
+  @ApiPropertyOptional({ example: "@marina.semijoias" })
+  @IsOptional()
+  @Transform(trimmedString)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  instagram?: string;
+
+  @ApiProperty({ example: "Olá, gostaria de receber o catálogo." })
+  @Transform(trimmedString)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  message!: string;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    maximum: 999999999999.99,
+    default: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(999999999999.99)
+  estimatedValue?: number;
+}

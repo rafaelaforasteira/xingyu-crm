@@ -175,6 +175,67 @@ export interface PipelineChannelTestResult {
   };
 }
 
+export interface PipelineLeadSimulationInput {
+  name: string;
+  phone?: string;
+  email?: string;
+  instagram?: string;
+  message: string;
+  estimatedValue?: number;
+}
+
+export interface PipelineLeadSimulationResult {
+  ok: boolean;
+  mode: string;
+  simulatedAt: string;
+  simulationId: string;
+  connectionId: string;
+  duplicateStrategy: "MERGE" | "CREATE_NEW" | "REJECT";
+  matchedContactId: string | null;
+  contactCreated: boolean;
+  contactReused: boolean;
+  contact: {
+    id: string;
+    firstName: string;
+    lastName?: string | null;
+    phone?: string | null;
+    whatsapp?: string | null;
+    email?: string | null;
+    instagram?: string | null;
+  } | null;
+  conversation: {
+    id: string;
+    contactId?: string | null;
+    channelId?: string | null;
+    assigneeId?: string | null;
+    status: string;
+    lastMessageAt?: string | null;
+    unreadCount: number;
+  } | null;
+  message: {
+    id: string;
+    conversationId: string;
+    channelId?: string | null;
+    direction: "INBOUND";
+    status: string;
+    body?: string | null;
+    sentAt: string;
+  } | null;
+  deal: {
+    id: string;
+    name: string;
+    value: number | string;
+    pipelineId: string;
+    stageId: string;
+    contactId?: string | null;
+    conversationId?: string | null;
+    ownerId?: string | null;
+    teamId?: string | null;
+    status: string;
+  } | null;
+  appliedTagIds: string[];
+}
+
 export interface PipelineListQuery {
   page?: number;
   pageSize?: number;

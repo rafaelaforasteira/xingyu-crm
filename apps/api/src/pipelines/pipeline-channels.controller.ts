@@ -14,12 +14,17 @@ import {
   ApiConflictResponse,
   ApiHeader,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from "@nestjs/swagger";
 import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/demo-user.decorator";
 import { OrganizationId } from "../common/decorators/organization.decorator";
-import { ConnectPipelineChannelDto, UpdatePipelineChannelDto } from "./dto/pipeline-channel.dto";
+import {
+  ConnectPipelineChannelDto,
+  SimulatePipelineLeadDto,
+  UpdatePipelineChannelDto,
+} from "./dto/pipeline-channel.dto";
 import { PipelineChannelsService } from "./pipeline-channels.service";
 
 @ApiTags("pipeline channels")
@@ -111,6 +116,31 @@ export class PipelineChannelsController {
     @Param("connectionId") connectionId: string,
   ) {
     return this.service.test(organizationId, pipelineId, connectionId, user.id);
+  }
+
+  @Post(":connectionId/simulate")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Simulate an inbound DEMO lead and persist the configured local CRM entities",
+  })
+  @ApiOkResponse({
+    description:
+      "Created or matched contact and any conversation, inbound message, and deal enabled by the route",
+  })
+  @ApiBadRequestResponse({
+    description: "The simulated lead or a routing reference is invalid",
+  })
+  @ApiConflictResponse({
+    description: "The route/account is inactive or duplicateStrategy rejects the contact",
+  })
+  simulate(
+    @OrganizationId() organizationId: string,
+    @DemoUser() user: DemoUserType,
+    @Param("pipelineId") pipelineId: string,
+    @Param("connectionId") connectionId: string,
+    @Body() dto: SimulatePipelineLeadDto,
+  ) {
+    return this.service.simulate(organizationId, pipelineId, connectionId, dto, user.id);
   }
 
   @Delete(":connectionId")

@@ -22,6 +22,8 @@ import type {
   PipelineChannelConnection,
   PipelineChannelInput,
   PipelineChannelTestResult,
+  PipelineLeadSimulationInput,
+  PipelineLeadSimulationResult,
   PipelineInput,
   PipelineListQuery,
   PipelineStage,
@@ -292,6 +294,15 @@ export const pipelineChannelsApi = {
   test: (pipelineId: string, connectionId: string) =>
     api.post<PipelineChannelTestResult>(
       `/pipelines/${pipelineId}/channels/${connectionId}/test`,
+    ),
+  simulate: (
+    pipelineId: string,
+    connectionId: string,
+    data: PipelineLeadSimulationInput,
+  ) =>
+    api.post<PipelineLeadSimulationResult>(
+      `/pipelines/${pipelineId}/channels/${connectionId}/simulate`,
+      data,
     ),
   disconnect: (pipelineId: string, connectionId: string) =>
     api.delete<{ id: string; disconnected: boolean }>(

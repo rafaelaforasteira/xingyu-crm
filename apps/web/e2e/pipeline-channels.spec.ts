@@ -156,6 +156,11 @@ test("connects, persists, tests, pauses, resumes and disconnects a pipeline chan
     await expect(card).toBeVisible();
     await expect(card.getByText("Ativo", { exact: true })).toBeVisible();
     await expect(card.getByText(source, { exact: false })).toBeVisible();
+    await expect(
+      card.getByRole("button", {
+        name: `Simular novo lead em ${accountName}`,
+      }),
+    ).toBeVisible();
 
     const reloadListResponse = page.waitForResponse(
       (response) =>
@@ -203,11 +208,21 @@ test("connects, persists, tests, pauses, resumes and disconnects a pipeline chan
     await expect(
       connectionCard(page, accountName).getByText("Pausado", { exact: true }),
     ).toBeVisible();
+    await expect(
+      connectionCard(page, accountName).getByRole("button", {
+        name: `Simular novo lead em ${accountName}`,
+      }),
+    ).toHaveCount(0);
 
     await page.reload();
     await expect(
       connectionCard(page, accountName).getByText("Pausado", { exact: true }),
     ).toBeVisible();
+    await expect(
+      connectionCard(page, accountName).getByRole("button", {
+        name: `Simular novo lead em ${accountName}`,
+      }),
+    ).toHaveCount(0);
 
     const resumeResponsePromise = page.waitForResponse(
       (response) =>
@@ -222,6 +237,11 @@ test("connects, persists, tests, pauses, resumes and disconnects a pipeline chan
     expect((await resumeResponsePromise).ok()).toBeTruthy();
     await expect(
       connectionCard(page, accountName).getByText("Ativo", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      connectionCard(page, accountName).getByRole("button", {
+        name: `Simular novo lead em ${accountName}`,
+      }),
     ).toBeVisible();
 
     await connectionCard(page, accountName)
