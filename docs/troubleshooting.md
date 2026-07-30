@@ -20,3 +20,13 @@ encerre-o ou ajuste `POSTGRES_PORT` e `DATABASE_URL` em conjunto. Não apague
 
 Instale o navegador pelo pacote web:
 `pnpm --filter @xingyu/web exec playwright install chromium`.
+
+## Hydration no layout raiz
+
+O HTML enviado pelo servidor e o DOM inicial foram comparados em Chromium limpo:
+`html`, a classe determinística do `next/font` no `body` e o conteúdo hidratado
+coincidem. Os atributos `bis_register` e `__processed_*` não são gerados pelo
+Xingyu CRM; são injetados por extensões antes da hidratação. Por isso,
+`suppressHydrationWarning` existe somente no `body`, não no `html` nem em
+componentes descendentes. Erros de hidratação fora desse caso continuam
+visíveis.

@@ -21,7 +21,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className={`${fontSans.variable} font-sans`}>
+      <body
+        className={`${fontSans.variable} font-sans`}
+        // Browser extensions can inject bis_register/__processed_* before React hydrates.
+        // The server HTML and a clean Chromium DOM are otherwise byte-for-byte equivalent.
+        suppressHydrationWarning
+      >
         <Providers>{children}</Providers>
       </body>
     </html>

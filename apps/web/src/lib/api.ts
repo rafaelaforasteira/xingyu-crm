@@ -300,7 +300,18 @@ export const searchApi = {
 };
 
 export const notificationsApi = {
-  list: () => api.get<NotificationItem[]>("/notifications"),
+  list: async () => {
+    const response =
+      await api.get<
+        | (Omit<NotificationItem, "read"> & { readAt?: string | null })[]
+        | PaginatedResponse<Omit<NotificationItem, "read"> & { readAt?: string | null }>
+      >("/notifications");
+    const notifications = Array.isArray(response) ? response : response.data;
+    return notifications.map((notification) => ({
+      ...notification,
+      read: Boolean(notification.readAt),
+    }));
+  },
   markRead: (id: string) => api.patch(`/notifications/${id}/read`),
   markAllRead: () => api.patch("/notifications/read-all"),
 };
