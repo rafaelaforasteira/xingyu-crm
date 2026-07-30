@@ -45,54 +45,15 @@ function hoursAgo(n: number): Date {
   return new Date(NOW.getTime() - n * 60 * 60 * 1000);
 }
 
-async function clearDatabase() {
-  await prisma.automationExecutionLog.deleteMany();
-  await prisma.automationExecution.deleteMany();
-  await prisma.automationEdge.deleteMany();
-  await prisma.automationNode.deleteMany();
-  await prisma.automation.deleteMany();
-  await prisma.attribution.deleteMany();
-  await prisma.notification.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.savedView.deleteMany();
-  await prisma.occurrenceAttachment.deleteMany();
-  await prisma.messageAttachment.deleteMany();
-  await prisma.shipmentEvent.deleteMany();
-  await prisma.contactTag.deleteMany();
-  await prisma.dealTag.deleteMany();
-  await prisma.customFieldValue.deleteMany();
-  await prisma.dealStageHistory.deleteMany();
-  await prisma.activity.deleteMany();
-  await prisma.note.deleteMany();
-  await prisma.task.deleteMany();
-  await prisma.message.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.orderItem.deleteMany();
-  await prisma.shipment.deleteMany();
-  await prisma.occurrence.deleteMany();
-  await prisma.order.deleteMany();
-  await prisma.deal.deleteMany();
-  await prisma.conversation.deleteMany();
-  await prisma.channel.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.productCollection.deleteMany();
-  await prisma.campaign.deleteMany();
-  await prisma.customFieldDefinition.deleteMany();
-  await prisma.tag.deleteMany();
-  await prisma.pipelineStage.deleteMany();
-  await prisma.pipeline.deleteMany();
-  await prisma.contact.deleteMany();
-  await prisma.company.deleteMany();
-  await prisma.user.updateMany({ data: { managerId: null, teamId: null, roleId: null } });
-  await prisma.user.deleteMany();
-  await prisma.team.deleteMany();
-  await prisma.role.deleteMany();
-  await prisma.organization.deleteMany();
-}
-
 async function main() {
-  console.log("Clearing existing data...");
-  await clearDatabase();
+  const existingOrganization = await prisma.organization.findUnique({
+    where: { id: ORG_ID },
+    select: { id: true },
+  });
+  if (existingOrganization) {
+    console.log("Demo seed already exists; preserving existing and manually created data.");
+    return;
+  }
 
   //  Organization 
   await prisma.organization.create({
