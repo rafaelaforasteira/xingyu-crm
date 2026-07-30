@@ -498,9 +498,14 @@ export class PipelinesService {
     const existing = await this.requireStage(organizationId, pipelineId, stageId);
     const type = this.resolveStageType(dto, existing.type);
     const isInitial =
-      type === "OPEN" ? (dto.isInitial ?? existing.isInitial) : false;
+      type === "OPEN" && dto.archived !== true
+        ? (dto.isInitial ?? existing.isInitial)
+        : false;
 
-    if (existing.type === "OPEN" && type !== "OPEN") {
+    if (
+      existing.type === "OPEN" &&
+      (type !== "OPEN" || dto.archived === true)
+    ) {
       await this.ensureAnotherOpenStage(pipelineId, stageId);
     }
 
@@ -515,6 +520,24 @@ export class PipelinesService {
           },
           data: { isInitial: false },
         });
+      } else if (existing.isInitial && (type !== "OPEN" || dto.archived === true)) {
+        const replacement = await tx.pipelineStage.findFirst({
+          where: {
+            pipelineId,
+            deletedAt: null,
+            archived: false,
+            type: "OPEN",
+            id: { not: stageId },
+          },
+          orderBy: { position: "asc" },
+          select: { id: true },
+        });
+        if (replacement) {
+          await tx.pipelineStage.update({
+            where: { id: replacement.id },
+            data: { isInitial: true },
+          });
+        }
       }
       const updated = await tx.pipelineStage.update({
         where: { id: stageId },

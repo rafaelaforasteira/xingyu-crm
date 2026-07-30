@@ -20,6 +20,8 @@ export const queryKeys = {
     list: (params?: unknown) => ["pipelines", "list", params] as const,
     detail: (id: string) => ["pipelines", id] as const,
     board: (id: string) => ["pipelines", id, "board"] as const,
+    stages: (id: string, archived = false) =>
+      ["pipelines", id, "stages", { archived }] as const,
   },
   deals: {
     detail: (id: string) => ["deals", id] as const,

@@ -20,6 +20,8 @@ import type {
   Pipeline,
   PipelineInput,
   PipelineListQuery,
+  PipelineStage,
+  PipelineStageInput,
   ReactivationLead,
   RepurchaseLead,
   SearchResult,
@@ -213,6 +215,34 @@ export const pipelinesApi = {
   archive: (id: string) => api.post<Pipeline>(`/pipelines/${id}/archive`),
   restore: (id: string) => api.post<Pipeline>(`/pipelines/${id}/restore`),
   remove: (id: string) => api.delete<void>(`/pipelines/${id}`),
+};
+
+export const pipelineStagesApi = {
+  list: (pipelineId: string, archived = false) =>
+    api.get<PipelineStage[]>(`/pipelines/${pipelineId}/stages`, { archived }),
+  create: (pipelineId: string, data: PipelineStageInput) =>
+    api.post<PipelineStage>(`/pipelines/${pipelineId}/stages`, data),
+  update: (
+    pipelineId: string,
+    stageId: string,
+    data: Partial<PipelineStageInput>,
+  ) =>
+    api.patch<PipelineStage>(
+      `/pipelines/${pipelineId}/stages/${stageId}`,
+      data,
+    ),
+  reorder: (pipelineId: string, stageIds: string[]) =>
+    api.post<PipelineStage[]>(`/pipelines/${pipelineId}/stages/reorder`, {
+      stageIds,
+    }),
+  remove: (pipelineId: string, stageId: string, targetStageId?: string) => {
+    const query = targetStageId
+      ? `?targetStageId=${encodeURIComponent(targetStageId)}`
+      : "";
+    return api.delete<PipelineStage>(
+      `/pipelines/${pipelineId}/stages/${stageId}${query}`,
+    );
+  },
 };
 
 export const dealsApi = {

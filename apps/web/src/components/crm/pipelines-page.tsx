@@ -188,7 +188,7 @@ function PipelineCard({
             </MenuButton>
             <Link
               role="menuitem"
-              href={`/pipelines/${pipeline.id}/settings`}
+              href={`/pipelines/${pipeline.id}/settings/stages`}
               className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition hover:bg-accent"
             >
               <Settings className="h-4 w-4" />

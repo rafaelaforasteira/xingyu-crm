@@ -107,14 +107,39 @@ export interface PipelineInput {
   favorite?: boolean;
 }
 
+export type PipelineStageType = "OPEN" | "WON" | "LOST";
+
 export interface PipelineStage {
   id: string;
+  pipelineId?: string;
   name: string;
+  description?: string | null;
   order: number;
   position?: number;
-  color?: string;
-  probability?: number;
+  color?: string | null;
+  type?: PipelineStageType;
+  isInitial?: boolean;
+  maxDurationMinutes?: number | null;
+  probability?: number | null;
+  archived?: boolean;
+  isWon?: boolean;
+  isLost?: boolean;
+  maxDaysInStage?: number | null;
+  _count?: {
+    deals: number;
+  };
   deals?: Deal[];
+}
+
+export interface PipelineStageInput {
+  name: string;
+  description?: string;
+  color?: string;
+  type?: PipelineStageType;
+  isInitial?: boolean;
+  maxDurationMinutes?: number;
+  probability?: number;
+  archived?: boolean;
 }
 
 export type DealPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
