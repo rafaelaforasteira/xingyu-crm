@@ -4,11 +4,12 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight, Kanban, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, X, type LucideIcon } from "lucide-react";
 import { APP_NAME, DEMO_USER_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "@/lib/nav";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
+import { formatPipelineNavLabel, resolvePipelineIcon } from "@/lib/pipeline-icons";
 import { pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { useUiStore } from "@/stores/ui";
@@ -122,11 +123,16 @@ function PipelinesNavSection({
                 activePipelineId === pipeline.id ||
                 pendingHref === href ||
                 pendingHref?.startsWith(`${href}/`) === true;
+              const PipelineIcon = resolvePipelineIcon(pipeline.icon);
+              const label = formatPipelineNavLabel(
+                pipeline.name,
+                pipeline.index ?? pipeline.position + 1,
+              );
               return (
                 <Link
                   key={pipeline.id}
                   href={href}
-                  title={pipeline.name}
+                  title={label}
                   role="menuitem"
                   aria-current={active ? "page" : undefined}
                   onClick={() => onNavigate(href)}
@@ -139,10 +145,9 @@ function PipelinesNavSection({
                       : "hover:bg-sidebar-accent/70",
                   )}
                 >
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: pipeline.color ?? "#7c3aed" }}
-                    aria-hidden
+                  <PipelineIcon
+                    className="h-3.5 w-3.5"
+                    style={{ color: pipeline.color ?? "#7c3aed" }}
                   />
                 </Link>
               );
@@ -205,27 +210,37 @@ function PipelinesNavSection({
               activePipelineId === pipeline.id ||
               pendingHref === href ||
               pendingHref?.startsWith(`${href}/`) === true;
+            const PipelineIcon = resolvePipelineIcon(pipeline.icon);
+            const label = formatPipelineNavLabel(
+              pipeline.name,
+              pipeline.index ?? pipeline.position + 1,
+            );
             return (
               <Link
                 key={pipeline.id}
                 href={href}
+                title={label}
                 aria-current={active ? "page" : undefined}
                 onClick={() => onNavigate(href)}
                 onMouseEnter={() => onPrefetch(href)}
                 onFocus={() => onPrefetch(href)}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold tracking-wide transition-colors",
                   active
-                    ? "bg-sidebar-accent font-medium text-primary"
+                    ? "bg-sidebar-accent text-primary"
                     : "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-foreground",
                 )}
               >
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  className="h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: pipeline.color ?? "#7c3aed" }}
                   aria-hidden
                 />
-                <span className="truncate">{pipeline.name}</span>
+                <PipelineIcon
+                  className="h-3.5 w-3.5 shrink-0 opacity-80"
+                  style={{ color: pipeline.color ?? undefined }}
+                />
+                <span className="min-w-0 flex-1 truncate uppercase">{label}</span>
                 {pipeline.unreadCount ? (
                   <span className="ml-auto rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                     {pipeline.unreadCount}
@@ -235,17 +250,19 @@ function PipelinesNavSection({
             );
           })}
           <Link
-            href={PIPELINES_HREF}
-            onClick={() => onNavigate(PIPELINES_HREF)}
+            href={`${PIPELINES_HREF}?view=leads`}
+            onClick={() => onNavigate(`${PIPELINES_HREF}?view=leads`)}
             onMouseEnter={() => onPrefetch(PIPELINES_HREF)}
             onFocus={() => onPrefetch(PIPELINES_HREF)}
             className={cn(
-              "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/70 hover:text-foreground",
-              pathname === PIPELINES_HREF && pendingHref == null && "text-primary",
+              "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-sidebar-accent/70 hover:text-foreground",
+              pathname === PIPELINES_HREF &&
+                pendingHref == null &&
+                "text-primary",
             )}
           >
-            <Kanban className="h-3.5 w-3.5" />
-            Ver todos
+            <ListChecks className="h-3.5 w-3.5" />
+            Todos os leads
           </Link>
         </div>
       ) : null}
