@@ -26,7 +26,12 @@ import type {
   Team,
 } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === "development" ? "http://localhost:3333/api" : "");
+const REQUEST_TIMEOUT_MS = 10_000;
+
+if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL não foi definida.");
 
 export class ApiError extends Error {
   status: number;
@@ -43,10 +48,13 @@ export class ApiError extends Error {
 type QueryValue = string | number | boolean | null | undefined;
 
 function buildUrl(path: string, query?: Record<string, QueryValue>) {
-  const normalized = path.startsWith("/api")
-    ? path
-    : `/api${path.startsWith("/") ? path : `/${path}`}`;
-  const url = new URL(normalized.startsWith("http") ? normalized : `${API_URL}${normalized}`);
+  const base = API_URL.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const requestPath =
+    /\/api$/i.test(base) && normalizedPath.startsWith("/api/")
+      ? normalizedPath.slice(4)
+      : normalizedPath;
+  const url = new URL(`${base}${requestPath}`);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null || value === "") continue;
@@ -62,6 +70,8 @@ async function request<T>(
 ): Promise<T> {
   const { query, headers, ...rest } = options;
   const url = buildUrl(path, query);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let response: Response;
   try {
@@ -74,12 +84,15 @@ async function request<T>(
         ...headers,
       },
       cache: "no-store",
+      signal: controller.signal,
     });
   } catch {
     throw new ApiError(
-      "Não foi possível conectar à API. Verifique se o servidor está em execução.",
+      "Não foi possível conectar à API do Xingyu CRM.",
       0,
     );
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (response.status === 204) {
@@ -90,12 +103,18 @@ async function request<T>(
   const body = text ? safeJson(text) : null;
 
   if (!response.ok) {
-    const message =
-      (body && typeof body === "object" && "message" in body
+    const serverMessage =
+      body && typeof body === "object" && "message" in body
         ? Array.isArray((body as { message: unknown }).message)
           ? ((body as { message: string[] }).message).join(", ")
           : String((body as { message: unknown }).message)
-        : null) ?? `Erro ${response.status}`;
+        : null;
+    const message =
+      response.status === 503
+        ? "O banco de dados local não está disponível. Inicie o ambiente com pnpm dev:local."
+        : response.status >= 500
+          ? "O Xingyu CRM encontrou um erro ao processar a solicitação."
+          : serverMessage ?? `Erro ${response.status}`;
     throw new ApiError(message, response.status, body);
   }
 
