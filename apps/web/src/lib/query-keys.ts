@@ -9,6 +9,7 @@ export const queryKeys = {
     list: (params?: unknown) => ["contacts", "list", params] as const,
     detail: (id: string) => ["contacts", id] as const,
     activities: (id: string) => ["contacts", id, "activities"] as const,
+    deals: (id: string) => ["contacts", id, "deals"] as const,
   },
   companies: {
     all: ["companies"] as const,
@@ -17,6 +18,7 @@ export const queryKeys = {
   },
   pipelines: {
     all: ["pipelines"] as const,
+    navigation: ["pipelines", "navigation"] as const,
     list: (params?: unknown) => ["pipelines", "list", params] as const,
     detail: (id: string) => ["pipelines", id] as const,
     board: (id: string) => ["pipelines", id, "board"] as const,
@@ -36,7 +38,9 @@ export const queryKeys = {
     lists: ["conversations", "list"] as const,
     list: (params?: unknown) => ["conversations", "list", params] as const,
     detail: (id: string) => ["conversations", id] as const,
-    messages: (id: string) => ["conversations", id, "messages"] as const,
+    context: (id: string) => ["conversations", id, "context"] as const,
+    messages: (id: string, params?: unknown) =>
+      ["conversations", id, "messages", params] as const,
   },
   tasks: {
     list: (params?: unknown) => ["tasks", "list", params] as const,

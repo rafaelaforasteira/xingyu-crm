@@ -38,6 +38,12 @@ export class PipelinesController {
     return this.pipelinesService.findAll(orgId, query);
   }
 
+  @Get("navigation")
+  @ApiOperation({ summary: "Lightweight pipeline list for sidebar navigation" })
+  navigation(@OrganizationId() orgId: string) {
+    return this.pipelinesService.navigation(orgId);
+  }
+
   @Get(":id/board")
   @ApiOperation({ summary: "Kanban board for one pipeline" })
   board(@OrganizationId() orgId: string, @Param("id") id: string) {

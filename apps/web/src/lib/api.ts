@@ -9,10 +9,15 @@ import type {
   Contact,
   ContactWriteInput,
   Conversation,
+  ConversationContext,
+  ConversationListItem,
+  ConversationListQuery,
   DashboardCharts,
   DashboardMetrics,
   Deal,
   Message,
+  MessageCursorPage,
+  MessageQuery,
   Note,
   NotificationItem,
   Occurrence,
@@ -27,6 +32,7 @@ import type {
   PipelineLeadSimulationResult,
   PipelineInput,
   PipelineListQuery,
+  PipelineNavigationItem,
   PipelineStage,
   PipelineStageInput,
   CreateLifecycleOpportunityInput,
@@ -41,7 +47,7 @@ import type {
   Team,
   UserRef,
 } from "./types";
-import { normalizeMessages } from "./inbox-utils";
+import { normalizeMessages, unwrapMessageCursorPage } from "./inbox-utils";
 import { normalizeReactivationResponse } from "./reactivation-utils";
 
 const API_URL =
@@ -222,6 +228,7 @@ export const companiesApi = {
 };
 
 export const pipelinesApi = {
+  navigation: () => api.get<PipelineNavigationItem[]>("/pipelines/navigation"),
   list: async (query?: PipelineListQuery): Promise<PaginatedResponse<Pipeline>> => {
     const res = await api.get<Pipeline[] | PaginatedResponse<Pipeline>>("/pipelines", {
       page: query?.page,
@@ -352,17 +359,31 @@ export const dealsApi = {
 };
 
 export const conversationsApi = {
-  list: (query?: Record<string, QueryValue>) =>
-    api.get<PaginatedResponse<Conversation>>("/conversations", query),
+  list: (query?: ConversationListQuery) =>
+    api.get<PaginatedResponse<ConversationListItem> | {
+      data: ConversationListItem[];
+      meta: { pageSize: number; hasMore: boolean; nextCursor: string | null };
+    }>("/conversations", query as Record<string, QueryValue> | undefined),
   get: (id: string) => api.get<Conversation>(`/conversations/${id}`),
-  messages: async (id: string) =>
-    normalizeMessages(
-      await api.get<Message[] | PaginatedResponse<Message>>(
+  messages: async (id: string, query?: MessageQuery): Promise<MessageCursorPage> =>
+    unwrapMessageCursorPage(
+      await api.get<Message[] | MessageCursorPage>(
         `/conversations/${id}/messages`,
+        query as Record<string, QueryValue> | undefined,
       ),
     ),
-  sendMessage: (id: string, body: string) =>
-    api.post<Message>(`/conversations/${id}/messages`, { body }),
+  context: (id: string) =>
+    api.get<ConversationContext>(`/conversations/${id}/context`),
+  markRead: (id: string) =>
+    api.patch<{ id: string; unreadCount: number }>(`/conversations/${id}/read`),
+  sendMessage: async (id: string, body: string) => {
+    const raw = await api.post<unknown>(`/conversations/${id}/messages`, { body });
+    const messages = normalizeMessages(raw);
+    if (!messages[0]) {
+      throw new ApiError("Resposta de mensagem inválida.", 500, raw);
+    }
+    return messages[0];
+  },
   byDeal: async (dealId: string) => {
     const res = await api.get<
       Conversation | Conversation[] | PaginatedResponse<Conversation>

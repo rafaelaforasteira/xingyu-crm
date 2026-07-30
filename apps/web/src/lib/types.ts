@@ -90,6 +90,15 @@ export interface Company {
   createdAt: string;
 }
 
+export interface PipelineNavigationItem {
+  id: string;
+  name: string;
+  color?: string | null;
+  position: number;
+  favorite: boolean;
+  unreadCount?: number;
+}
+
 export interface Pipeline {
   id: string;
   name: string;
@@ -347,18 +356,140 @@ export interface Deal {
   updatedAt?: string;
 }
 
+export interface ConversationChannelSummary {
+  id: string;
+  type: string;
+  name: string;
+  displayName?: string | null;
+  provider?: string | null;
+  externalAccountId?: string | null;
+  status?: string | null;
+}
+
+export interface ConversationContactSummary {
+  id: string;
+  firstName: string;
+  lastName?: string | null;
+  name: string;
+}
+
+export interface ConversationDealSummary {
+  id: string;
+  name: string;
+  pipelineId: string;
+  stageId: string;
+  stageName?: string | null;
+  priority?: string | null;
+}
+
+export interface ConversationListItem {
+  id: string;
+  status: string;
+  lastMessageAt?: string | null;
+  unreadCount: number;
+  lastMessagePreview?: string | null;
+  contact?: ConversationContactSummary | null;
+  assignee?: UserRef | null;
+  channel?: ConversationChannelSummary | null;
+  currentDeal?: ConversationDealSummary | null;
+  tags?: Tag[];
+}
+
+export interface ConversationListQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  pipelineId?: string;
+  channelId?: string;
+  stageId?: string;
+  assigneeId?: string;
+  unreadOnly?: boolean;
+  cursor?: string;
+}
+
 export interface Conversation {
   id: string;
   contactId?: string | null;
   contact?: Contact | null;
   dealId?: string | null;
-  channel?: string | { id?: string; name?: string; type?: string } | null;
+  deal?: {
+    id: string;
+    name: string;
+    pipelineId: string;
+    stageId: string;
+    priority?: string | null;
+    pipeline?: Pick<Pipeline, "id" | "name" | "color"> | null;
+    stage?: PipelineStage | null;
+    owner?: UserRef | null;
+    tags?: Tag[];
+  } | null;
+  channel?: string | ConversationChannelSummary | null;
   status?: string;
   lastMessageAt?: string | null;
   lastMessagePreview?: string | null;
   unreadCount?: number;
   assignee?: UserRef | null;
   messages?: Message[];
+}
+
+export interface MessageQuery {
+  pageSize?: number;
+  cursor?: string;
+  before?: boolean;
+}
+
+export interface CursorPageMeta {
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export interface MessageCursorPage {
+  data: Message[];
+  meta: CursorPageMeta;
+}
+
+export interface ConversationContextCounts {
+  notesCount: number;
+  filesCount: number;
+  tasksCount: number;
+  ordersCount: number;
+  activitiesCount: number;
+}
+
+export interface ConversationContext {
+  conversation: {
+    id: string;
+    status: string;
+    subject?: string | null;
+    unreadCount: number;
+    lastMessageAt?: string | null;
+    lastMessagePreview?: string | null;
+    assignee?: UserRef | null;
+  };
+  contact: Contact | null;
+  company: Company | null;
+  currentDeal: (ConversationDealSummary & {
+    owner?: UserRef | null;
+    team?: Team | null;
+  }) | null;
+  pipeline: Pipeline | null;
+  stage: PipelineStage | null;
+  owner: UserRef | null;
+  team: Team | null;
+  channel: ConversationChannelSummary | null;
+  tags: Tag[];
+  nextTask: Pick<Task, "id" | "title" | "dueAt" | "status" | "priority"> & {
+    assignee?: UserRef | null;
+  } | null;
+  lastOrder: {
+    id: string;
+    number: string;
+    status: string;
+    finalValue?: number | string;
+    orderedAt?: string | null;
+  } | null;
+  counts: ConversationContextCounts;
 }
 
 export interface Message {

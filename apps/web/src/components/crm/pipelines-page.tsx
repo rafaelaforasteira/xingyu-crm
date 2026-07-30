@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,7 +32,7 @@ import { pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { cn, formatCurrency } from "@/lib/utils";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
-import { KanbanBoard } from "@/components/crm/kanban-board";
+import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
 import { DealWorkspaceDrawer } from "@/components/crm/deal-workspace";
 import { PipelineFormDialog } from "@/components/crm/pipeline-form-dialog";
@@ -45,6 +46,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const KanbanBoard = dynamic(
+  () => import("@/components/crm/kanban-board").then((mod) => ({ default: mod.KanbanBoard })),
+  {
+    loading: () => <Skeleton className="h-96 w-full" />,
+  },
+);
 
 type PipelineTab = "active" | "archived" | "favorites";
 type PipelineAction = "duplicate" | "favorite" | "archive" | "restore";
@@ -560,7 +568,8 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
         title={data?.name ?? "Pipeline"}
         description={data?.description ?? "Quadro Kanban"}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <PipelineViewSwitcher pipelineId={pipelineId} active="kanban" />
             <Link href="/pipelines" className="text-sm text-primary hover:underline">
               Todos os pipelines
             </Link>

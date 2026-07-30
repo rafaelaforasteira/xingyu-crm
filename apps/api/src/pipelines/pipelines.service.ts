@@ -127,6 +127,49 @@ export class PipelinesService {
     );
   }
 
+  async navigation(organizationId: string) {
+    const pipelines = await this.prisma.pipeline.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        archived: false,
+      },
+      orderBy: [{ favorite: "desc" }, { position: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        position: true,
+        favorite: true,
+      },
+    });
+
+    const ids = pipelines.map((pipeline) => pipeline.id);
+    const unreadSums = ids.length
+      ? await this.prisma.deal.groupBy({
+          by: ["pipelineId"],
+          where: {
+            organizationId,
+            pipelineId: { in: ids },
+            deletedAt: null,
+          },
+          _sum: { unreadMessages: true },
+        })
+      : [];
+
+    const unreadByPipeline = new Map(
+      unreadSums.map((entry) => [
+        entry.pipelineId,
+        entry._sum.unreadMessages ?? 0,
+      ]),
+    );
+
+    return pipelines.map((pipeline) => ({
+      ...pipeline,
+      unreadCount: unreadByPipeline.get(pipeline.id) ?? 0,
+    }));
+  }
+
   async findOne(organizationId: string, id: string, db: DbClient = this.prisma) {
     const pipeline = await db.pipeline.findFirst({
       where: { id, organizationId, deletedAt: null },
