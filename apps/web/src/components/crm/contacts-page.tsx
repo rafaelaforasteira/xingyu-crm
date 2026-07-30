@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Plus, Users } from "lucide-react";
 import { contactsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { formatRelative } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
 import { ContactFormDialog } from "@/components/crm/contact-form-dialog";
 import { Button } from "@/components/ui/button";
@@ -144,7 +144,7 @@ export function ContactsPage() {
                   {contact.owner?.name ?? "—"}
                 </td>
                 <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
-                  {formatRelative(contact.lastInteractionAt)}
+                  <ClientRelativeTime value={contact.lastInteractionAt} />
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">

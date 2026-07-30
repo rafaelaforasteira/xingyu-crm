@@ -17,7 +17,8 @@ import {
 import { DEMO_USER_NAME } from "@xingyu/config";
 import { notificationsApi, settingsApi, tasksApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { cn, formatRelative } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { useUiStore } from "@/stores/ui";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -181,7 +182,7 @@ export function Header() {
                         </p>
                       ) : null}
                       <p className="mt-1 text-[11px] text-muted-foreground">
-                        {formatRelative(n.createdAt)}
+                        <ClientRelativeTime value={n.createdAt} />
                       </p>
                     </div>
                   ))

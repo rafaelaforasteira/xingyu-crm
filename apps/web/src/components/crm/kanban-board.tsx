@@ -20,7 +20,8 @@ import { toast } from "sonner";
 import { dealsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Pipeline, PipelineStage } from "@/lib/types";
-import { cn, formatCurrency, formatRelative } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { useUiStore } from "@/stores/ui";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -132,7 +133,10 @@ export function DealCard({
         ))}
       </div>
       <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
-        <p>Última interação: {formatRelative(deal.lastInteractionAt)}</p>
+        <p>
+          Última interação:{" "}
+          <ClientRelativeTime value={deal.lastInteractionAt} />
+        </p>
         <p>Próxima tarefa: {deal.nextTask?.title ? deal.nextTask.title : "—"}</p>
       </div>
     </article>

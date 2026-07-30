@@ -1,11 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { dashboardApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { formatCurrency, formatRelative } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { PageHeader, MetricCard, ErrorBanner } from "@/components/crm/page-header";
 import { SimpleBarChart, SimpleLineChart, SimplePieChart } from "@/components/crm/charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -129,7 +131,10 @@ export function DashboardPage() {
             id: c.id,
             href: `/inbox/${c.id}`,
             title: c.contact?.name ?? "Conversa",
-            meta: c.lastMessagePreview ?? formatRelative(c.lastMessageAt),
+            meta:
+              c.lastMessagePreview ?? (
+                <ClientRelativeTime value={c.lastMessageAt} />
+              ),
           }))}
         />
         <ListCard
@@ -164,7 +169,7 @@ function ListCard({
 }: {
   title: string;
   empty: string;
-  items: { id: string; href: string; title: string; meta?: string }[];
+  items: { id: string; href: string; title: string; meta?: ReactNode }[];
 }) {
   return (
     <Card>

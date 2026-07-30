@@ -218,3 +218,34 @@ export function safeDate(value: unknown, context = "date"): Date | null {
   }
   return date;
 }
+
+/**
+ * Converts supported numeric inputs to a finite number, or null when invalid.
+ */
+export function safeNumber(value: unknown, context = "number"): number | null {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      warnInvalid(context, "received a non-finite number");
+      return null;
+    }
+    return value;
+  }
+
+  if (typeof value === "string") {
+    if (!value.trim()) {
+      warnInvalid(context, "received an empty number");
+      return null;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      warnInvalid(context, "received an invalid number");
+      return null;
+    }
+    return parsed;
+  }
+
+  warnInvalid(context, "unsupported number value");
+  return null;
+}

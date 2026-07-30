@@ -25,7 +25,8 @@ import {
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Message } from "@/lib/types";
-import { cn, formatCurrency, formatRelative, formatTaskDue } from "@/lib/utils";
+import { cn, formatCurrency, formatTaskDue } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { useUiStore } from "@/stores/ui";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -187,7 +188,8 @@ function ConversationPane({ deal }: { deal: Deal }) {
               <div key={n.id} className="rounded-lg bg-warning/10 px-3 py-2 text-sm">
                 <p>{n.body ?? n.content}</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {n.author?.name ?? "Equipe"} · {formatRelative(n.createdAt)}
+                  {n.author?.name ?? "Equipe"} ·{" "}
+                  <ClientRelativeTime value={n.createdAt} />
                 </p>
               </div>
             ))}
@@ -402,7 +404,10 @@ function DealWorkspaceBody({ dealId }: { dealId: string }) {
           <InfoRow label="Empresa" value={deal.company?.name} />
           <InfoRow label="Valor" value={formatCurrency(deal.value ?? 0)} />
           <InfoRow label="Prioridade" value={deal.priority} />
-          <InfoRow label="Última interação" value={formatRelative(deal.lastInteractionAt)} />
+          <InfoRow
+            label="Última interação"
+            value={<ClientRelativeTime value={deal.lastInteractionAt} />}
+          />
           <InfoRow
             label="Próxima tarefa"
             value={
@@ -463,7 +468,7 @@ function DealWorkspaceBody({ dealId }: { dealId: string }) {
                   <p className="text-xs text-muted-foreground">{a.description}</p>
                 ) : null}
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  {formatRelative(a.createdAt)}
+                  <ClientRelativeTime value={a.createdAt} />
                   {a.actor?.name ? ` · ${a.actor.name}` : ""}
                 </p>
               </div>
@@ -494,11 +499,17 @@ function DealWorkspaceBody({ dealId }: { dealId: string }) {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: React.ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2 text-sm">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-right">{value || "—"}</span>
+      <span className="font-medium text-right">{value ?? "—"}</span>
     </div>
   );
 }

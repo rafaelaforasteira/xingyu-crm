@@ -6,7 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ShoppingCart } from "lucide-react";
 import { ordersApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { formatCurrency, formatDate, formatRelative } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -192,7 +193,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
                     <p className="text-xs text-muted-foreground">{e.description}</p>
                   ) : null}
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {formatRelative(e.createdAt)}
+                    <ClientRelativeTime value={e.createdAt} />
                   </p>
                 </div>
               ))

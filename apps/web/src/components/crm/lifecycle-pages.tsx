@@ -26,7 +26,7 @@ import {
   settingsApi,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { formatCurrency, formatRelative } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import type {
   ReactivationLead,
   ReactivationFilterStatus,
@@ -70,10 +70,12 @@ export function RepurchasePage() {
         loading={isLoading}
         emptyIcon={RefreshCw}
         emptyTitle="Nenhuma oportunidade de recompra"
-        rows={(data?.data ?? []).map((r) => ({
+        rows={(data?.data ?? [])
+          .filter((r) => r.contact?.id)
+          .map((r) => ({
           id: r.id,
           href: `/contacts/${r.contact.id}`,
-          name: r.contact.name,
+          name: r.contact.name || "Contato",
           score: r.score,
           meta: r.reason || `${r.daysSinceOrder ?? "—"} dias desde o pedido`,
           extra: r.predictedValue != null ? formatCurrency(r.predictedValue) : undefined,
@@ -930,7 +932,8 @@ export function AfterSalesPage() {
               <p className="text-xs text-muted-foreground">
                 {o.contact?.name ?? "—"}
                 {o.order?.number ? ` · Pedido #${o.order.number}` : ""}
-                {` · ${formatRelative(o.openedAt)}`}
+                {" · "}
+                <ClientRelativeTime value={o.openedAt} />
               </p>
             </div>
             <div className="flex gap-2">
@@ -1004,7 +1007,10 @@ export function OccurrenceDetailPage({ occurrenceId }: { occurrenceId: string })
           />
           <Row label="Prioridade" value={data.priority} />
           <Row label="Responsável" value={data.assignee?.name} />
-          <Row label="Aberta em" value={formatRelative(data.openedAt)} />
+          <Row
+            label="Aberta em"
+            value={<ClientRelativeTime value={data.openedAt} />}
+          />
           <div className="pt-2">
             <p className="text-muted-foreground">Descrição</p>
             <p className="mt-1 whitespace-pre-wrap">{data.description || "—"}</p>
@@ -1015,11 +1021,11 @@ export function OccurrenceDetailPage({ occurrenceId }: { occurrenceId: string })
   );
 }
 
-function Row({ label, value }: { label: string; value?: string | null }) {
+function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
     <div className="flex justify-between border-b border-border/50 py-2 last:border-0">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value || "—"}</span>
+      <span className="font-medium">{value ?? "—"}</span>
     </div>
   );
 }

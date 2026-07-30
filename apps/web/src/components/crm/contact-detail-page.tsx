@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { contactsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { formatCurrency, formatRelative } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +94,7 @@ export function ContactDetailPage({ contactId }: { contactId: string }) {
                     <p className="text-sm text-muted-foreground">{a.description}</p>
                   ) : null}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {formatRelative(a.createdAt)}
+                    <ClientRelativeTime value={a.createdAt} />
                   </p>
                 </CardContent>
               </Card>

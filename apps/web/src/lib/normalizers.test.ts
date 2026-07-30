@@ -5,6 +5,7 @@ import {
   normalizePaginatedResponse,
   safeArray,
   safeDate,
+  safeNumber,
   safeRelation,
   type TypeGuard,
 } from "./normalizers";
@@ -153,5 +154,17 @@ describe("safe nullable values", () => {
     expect(safeDate(null)).toBeNull();
     expect(safeDate("data-inválida")).toBeNull();
     expect(safeDate(Number.NaN)).toBeNull();
+  });
+
+  it("accepts valid numbers and rejects null or invalid numbers", () => {
+    expect(safeNumber(42)).toBe(42);
+    expect(safeNumber("12.5")).toBe(12.5);
+    expect(safeNumber(null)).toBeNull();
+    expect(safeNumber(undefined)).toBeNull();
+    expect(safeNumber("")).toBeNull();
+    expect(safeNumber("not-a-number")).toBeNull();
+    expect(safeNumber(Number.NaN)).toBeNull();
+    expect(safeNumber(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(safeNumber({})).toBeNull();
   });
 });

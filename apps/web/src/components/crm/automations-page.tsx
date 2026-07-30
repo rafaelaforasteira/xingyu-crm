@@ -8,7 +8,7 @@ import { Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { automationsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { formatRelative } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,8 @@ export function AutomationsPage() {
                     {a.description || a.trigger || "Sem descrição"}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Atualizada {formatRelative(a.updatedAt ?? a.createdAt)}
+                    Atualizada{" "}
+                    <ClientRelativeTime value={a.updatedAt ?? a.createdAt} />
                   </p>
                 </CardContent>
               </Card>
