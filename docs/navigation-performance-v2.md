@@ -100,3 +100,19 @@ API validations via PowerShell against `:3333` (2026-07-30):
 | Messages endpoint after send | count increases; detail still no messages array |
 | Context endpoint | contact + pipeline + counts |
 | Filter `pipelineId=pipe-novos` | `total=5` |
+
+## Hotfix (2026-07-30 evening)
+
+Additional root causes that kept Inbox empty in Playwright despite a healthy API:
+
+1. **Stale Next.js `.next` cache** — `main-app.js` / `app-pages-internals.js` returned **404**, so the document never hydrated (`hasReactFiber: false`). SSR skeletons stayed forever; React Query never ran. Fix: delete `apps/web/.next` and restart `next dev`.
+2. **Unstable conversation list query keys** — inline `scope={{ type: "global" }}` plus `undefined` fields in `listParams` caused key churn / cache collisions between bootstrap `useQuery` and list queries. Fix: stable scope constants, params without `undefined` keys, bootstrap under a distinct query key, paginated `useQuery` with `placeholderData`.
+
+Validation after fix:
+
+| Check | Result |
+|-------|--------|
+| `e2e/inbox-omnichannel.spec.ts` | pass (`--workers=1`) |
+| `e2e/pipelines-navigation.spec.ts` | pass (SPA nav entry count unchanged) |
+| Web unit tests | 30/30 |
+| Web typecheck | pass |
