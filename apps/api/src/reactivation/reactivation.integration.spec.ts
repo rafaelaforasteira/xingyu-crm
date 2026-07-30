@@ -150,6 +150,9 @@ describe("GET /api/reactivation integration", () => {
         "owner",
         "team",
         "existingOpenDealId",
+        "existingOpenDeal",
+        "latestConversation",
+        "workflow",
       ].sort(),
     );
     expect(item).toEqual(

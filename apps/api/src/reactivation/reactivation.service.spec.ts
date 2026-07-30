@@ -114,6 +114,9 @@ describe("ReactivationService", () => {
           owner: { id: "owner-1", name: "Amanda Souza" },
           team: { id: "team-1", name: "Comercial" },
           existingOpenDealId: "deal-open-1",
+          existingOpenDeal: null,
+          latestConversation: null,
+          workflow: null,
         },
       ],
       meta: {
