@@ -1,0 +1,153 @@
+{
+  "mode": "dev-after",
+  "measuredAt": "2026-07-30T20:42:56.932Z",
+  "results": [
+    {
+      "label": "dashboard→inbox",
+      "clickToActiveMs": 718,
+      "clickToUrlMs": 668,
+      "clickToMainMs": 764,
+      "settledMs": 1572,
+      "apiRequestCount": 0,
+      "duplicates": [],
+      "fullReload": false,
+      "pageErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "label": "inbox→contacts",
+      "clickToActiveMs": 1373,
+      "clickToUrlMs": 1321,
+      "clickToMainMs": 1412,
+      "settledMs": 2219,
+      "apiRequestCount": 0,
+      "duplicates": [],
+      "fullReload": false,
+      "pageErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "label": "contacts→pipelines",
+      "clickToActiveMs": 863,
+      "clickToUrlMs": 818,
+      "clickToMainMs": 908,
+      "settledMs": 1737,
+      "apiRequestCount": 0,
+      "duplicates": [],
+      "fullReload": false,
+      "pageErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "label": "pipelines→reactivation",
+      "clickToActiveMs": 795,
+      "clickToUrlMs": 756,
+      "clickToMainMs": 893,
+      "settledMs": 1694,
+      "apiRequestCount": 0,
+      "duplicates": [],
+      "fullReload": false,
+      "pageErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "label": "reactivation→repurchase",
+      "clickToActiveMs": 829,
+      "clickToUrlMs": 787,
+      "clickToMainMs": 837,
+      "settledMs": 1648,
+      "apiRequestCount": 0,
+      "duplicates": [],
+      "fullReload": false,
+      "pageErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "label": "repurchase→after-sales",
+      "clickToActiveMs": 11297,
+      "clickToUrlMs": 11226,
+      "clickToMainMs": 11338,
+      "settledMs": 12153,
+      "apiRequestCount": 0,
+      "duplicates": [],
+      "fullReload": false,
+      "pageErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "label": "after-sales→orders",
+      "clickToActiveMs": 18023,
+      "clickToUrlMs": 17835,
+      "clickToMainMs": 18048,
+      "settledMs": 18856,
+      "apiRequestCount": 0,
+      "duplicates": [],
+      "fullReload": false,
+      "pageErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "label": "pipelines→board",
+      "clickToUrlMs": 1874,
+      "settledMs": 1874,
+      "apiRequestCount": 0,
+      "fullReload": false
+    }
+  ]
+}
