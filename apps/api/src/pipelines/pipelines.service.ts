@@ -139,6 +139,7 @@ export class PipelinesService {
         id: true,
         name: true,
         color: true,
+        icon: true,
         position: true,
         favorite: true,
       },
@@ -164,8 +165,15 @@ export class PipelinesService {
       ]),
     );
 
-    return pipelines.map((pipeline) => ({
-      ...pipeline,
+    return pipelines.map((pipeline, index) => ({
+      id: pipeline.id,
+      name: pipeline.name,
+      color: pipeline.color,
+      icon: pipeline.icon,
+      position: pipeline.position,
+      index: index + 1,
+      favorite: pipeline.favorite,
+      active: true,
       unreadCount: unreadByPipeline.get(pipeline.id) ?? 0,
     }));
   }

@@ -94,8 +94,11 @@ export interface PipelineNavigationItem {
   id: string;
   name: string;
   color?: string | null;
+  icon?: string | null;
   position: number;
+  index?: number;
   favorite: boolean;
+  active?: boolean;
   unreadCount?: number;
 }
 
@@ -518,12 +521,25 @@ export interface Note {
   createdAt: string;
 }
 
+export interface TaskStatusDefinition {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  position: number;
+  category: "OPEN" | "IN_PROGRESS" | "DONE" | string;
+  active?: boolean;
+  archived?: boolean;
+}
+
 export interface Task {
   id: string;
   title: string;
   description?: string | null;
   type?: string;
-  status: "PENDING" | "IN_PROGRESS" | "DONE" | "CANCELLED" | string;
+  status: "PENDING" | "IN_PROGRESS" | "DONE" | "COMPLETED" | "CANCELLED" | string;
+  statusDefinitionId?: string | null;
+  statusDefinition?: TaskStatusDefinition | null;
   priority?: DealPriority | string;
   dueAt?: string | null;
   assigneeId?: string | null;
@@ -532,9 +548,19 @@ export interface Task {
   contact?: Contact | null;
   dealId?: string | null;
   deal?: Deal | null;
+  pipelineId?: string | null;
+  pipeline?: { id: string; name: string; color?: string | null } | null;
+  stageId?: string | null;
+  stage?: { id: string; name: string; color?: string | null } | null;
   orderId?: string | null;
   createdAt: string;
   completedAt?: string | null;
+}
+
+export interface TaskBoardGroup {
+  status: TaskStatusDefinition;
+  tasks: Task[];
+  count: number;
 }
 
 export type OrderStatus =
