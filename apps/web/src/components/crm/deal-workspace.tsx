@@ -24,7 +24,7 @@ import {
   tasksApi,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import type { Deal, Message } from "@/lib/types";
+import type { Deal, Message, Task } from "@/lib/types";
 import { cn, formatCurrency, formatTaskDue } from "@/lib/utils";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { useUiStore } from "@/stores/ui";
@@ -37,6 +37,96 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label, Select } from "@/components/ui/form-controls";
+
+function DealTasksPanel({
+  dealId,
+  contactId,
+  pipelineId,
+  stageId,
+  tasks,
+}: {
+  dealId: string;
+  contactId?: string | null;
+  pipelineId?: string | null;
+  stageId?: string | null;
+  tasks: Task[];
+}) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = React.useState("");
+
+  const create = useMutation({
+    mutationFn: () =>
+      tasksApi.create({
+        title,
+        dealId,
+        contactId: contactId || undefined,
+        pipelineId: pipelineId || undefined,
+        stageId: stageId || undefined,
+      }),
+    onSuccess: () => {
+      setTitle("");
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("Tarefa criada");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const complete = useMutation({
+    mutationFn: (id: string) => tasksApi.complete(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("Tarefa concluída");
+    },
+  });
+
+  return (
+    <div className="space-y-3" data-testid="deal-tasks-panel">
+      <form
+        className="flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!title.trim()) return;
+          create.mutate();
+        }}
+      >
+        <Input
+          placeholder="Nova tarefa neste card…"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          aria-label="Nova tarefa do deal"
+        />
+        <Button type="submit" disabled={!title.trim() || create.isPending}>
+          Criar
+        </Button>
+      </form>
+      {tasks.length === 0 ? (
+        <EmptyState title="Sem tarefas" description="Crie a primeira tarefa deste card." />
+      ) : (
+        tasks.map((task) => (
+          <div
+            key={task.id}
+            className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{task.title}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatTaskDue(task.dueAt)}
+                {task.stage?.name ? ` · ${task.stage.name}` : ""}
+              </p>
+            </div>
+            {task.status !== "COMPLETED" ? (
+              <Button size="sm" variant="ghost" onClick={() => complete.mutate(task.id)}>
+                Concluir
+              </Button>
+            ) : (
+              <Badge variant="secondary">Concluída</Badge>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
 
 const TABS = [
   { id: "conversa", label: "Conversa", icon: MessageSquare },
@@ -420,22 +510,13 @@ function DealWorkspaceBody({ dealId }: { dealId: string }) {
         </TabsContent>
 
         <TabsContent value="tarefas" className="space-y-2">
-          {tasks.length === 0 ? (
-            <EmptyState title="Sem tarefas" description="Crie uma tarefa na aba Conversa." />
-          ) : (
-            tasks.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-              >
-                <div>
-                  <p className="text-sm font-medium">{t.title}</p>
-                  <p className="text-xs text-muted-foreground">{formatTaskDue(t.dueAt)}</p>
-                </div>
-                <Badge variant="secondary">{t.status}</Badge>
-              </div>
-            ))
-          )}
+          <DealTasksPanel
+            dealId={deal.id}
+            contactId={deal.contactId ?? deal.contact?.id}
+            pipelineId={deal.pipelineId}
+            stageId={deal.stageId}
+            tasks={tasks}
+          />
         </TabsContent>
 
         <TabsContent value="pedidos" className="space-y-2">

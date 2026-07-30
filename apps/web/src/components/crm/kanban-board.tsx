@@ -137,7 +137,20 @@ export function DealCard({
           Última interação:{" "}
           <ClientRelativeTime value={deal.lastInteractionAt} />
         </p>
-        <p>Próxima tarefa: {deal.nextTask?.title ? deal.nextTask.title : "—"}</p>
+        <p
+          className={
+            deal.nextTask?.dueAt &&
+            new Date(deal.nextTask.dueAt).getTime() < Date.now()
+              ? "font-medium text-destructive"
+              : undefined
+          }
+        >
+          {deal.nextTask?.dueAt &&
+          new Date(deal.nextTask.dueAt).getTime() < Date.now()
+            ? "Tarefa vencida: "
+            : "Próxima tarefa: "}
+          {deal.nextTask?.title ? deal.nextTask.title : "—"}
+        </p>
       </div>
     </article>
   );

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ChevronDown,
@@ -98,40 +98,107 @@ function LazyNotes({ contactId, dealId }: { contactId?: string; dealId?: string 
   );
 }
 
-function LazyTasks({ contactId, dealId }: { contactId?: string; dealId?: string }) {
+function LazyTasks({
+  contactId,
+  dealId,
+  pipelineId,
+  stageId,
+}: {
+  contactId?: string;
+  dealId?: string;
+  pipelineId?: string;
+  stageId?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [title, setTitle] = React.useState("");
   const query = useQuery({
-    queryKey: queryKeys.tasks.list({ contactId, dealId, status: "PENDING" }),
+    queryKey: queryKeys.tasks.list({ contactId, dealId, pageSize: 8 }),
     queryFn: () =>
       tasksApi.list({
         contactId: contactId || undefined,
         dealId: dealId || undefined,
-        pageSize: 5,
+        pageSize: 8,
       }),
     enabled: Boolean(contactId || dealId),
   });
+
+  const create = useMutation({
+    mutationFn: () =>
+      tasksApi.create({
+        title,
+        contactId: contactId || undefined,
+        dealId: dealId || undefined,
+        pipelineId: pipelineId || undefined,
+        stageId: stageId || undefined,
+      }),
+    onSuccess: () => {
+      setTitle("");
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.all,
+      });
+    },
+  });
+
+  const complete = useMutation({
+    mutationFn: (id: string) => tasksApi.complete(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+  });
+
   if (query.isLoading) return <Skeleton className="h-8 w-full" />;
   const tasks = query.data?.data ?? [];
-  if (!tasks.length) {
-    return (
-      <Link
-        href="/tasks"
-        className="text-xs text-primary hover:underline"
-      >
-        Abrir tarefas
-      </Link>
-    );
-  }
+
   return (
-    <ul className="space-y-2 text-xs">
-      {tasks.map((task) => (
-        <li key={task.id} className="flex items-start justify-between gap-2">
-          <span>{task.title}</span>
-          {task.dueAt ? (
-            <ClientRelativeTime value={task.dueAt} className="shrink-0 text-muted-foreground" />
-          ) : null}
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-2">
+      <form
+        className="flex gap-1"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!title.trim()) return;
+          create.mutate();
+        }}
+      >
+        <input
+          className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+          placeholder="Nova tarefa…"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          aria-label="Nova tarefa no lead"
+        />
+        <Button type="submit" size="sm" disabled={!title.trim() || create.isPending}>
+          +
+        </Button>
+      </form>
+      {tasks.length ? (
+        <ul className="space-y-2 text-xs">
+          {tasks.map((task) => (
+            <li key={task.id} className="flex items-start justify-between gap-2">
+              <span className="min-w-0 flex-1">{task.title}</span>
+              {task.status !== "COMPLETED" ? (
+                <button
+                  type="button"
+                  className="shrink-0 text-[10px] text-primary hover:underline"
+                  onClick={() => complete.mutate(task.id)}
+                >
+                  Concluir
+                </button>
+              ) : (
+                <Badge variant="outline" className="text-[10px]">
+                  OK
+                </Badge>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">Sem tarefas.</p>
+      )}
+      <Link href="/tasks" className="text-xs text-primary hover:underline">
+        Abrir lista completa
+      </Link>
+    </div>
   );
 }
 
@@ -327,7 +394,12 @@ function ContextBody({ context }: { context: ConversationContext }) {
               : ""}
           </p>
         ) : null}
-        <LazyTasks contactId={contactId} dealId={dealId} />
+        <LazyTasks
+          contactId={context.contact?.id}
+          dealId={context.currentDeal?.id}
+          pipelineId={context.pipeline?.id ?? context.currentDeal?.pipelineId}
+          stageId={context.stage?.id ?? context.currentDeal?.stageId}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection title="Pedidos" count={context.counts.ordersCount}>
