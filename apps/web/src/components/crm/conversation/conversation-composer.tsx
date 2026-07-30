@@ -128,10 +128,12 @@ export function useMarkConversationRead(conversationId: string | undefined) {
     markedRef.current = conversationId;
 
     void conversationsApi.markRead(conversationId).then(() => {
-      queryClient.setQueriesData<{ pages?: { data: { id: string; unreadCount: number }[] }[] }>(
-        { queryKey: queryKeys.conversations.lists },
-        (current) => {
-          if (!current?.pages) return current;
+      queryClient.setQueriesData<
+        | { pages?: { data: { id: string; unreadCount: number }[] }[] }
+        | { data?: { id: string; unreadCount: number }[] }
+      >({ queryKey: queryKeys.conversations.lists }, (current) => {
+        if (!current) return current;
+        if ("pages" in current && Array.isArray(current.pages)) {
           return {
             ...current,
             pages: current.pages.map((page) => ({
@@ -141,8 +143,17 @@ export function useMarkConversationRead(conversationId: string | undefined) {
               ),
             })),
           };
-        },
-      );
+        }
+        if ("data" in current && Array.isArray(current.data)) {
+          return {
+            ...current,
+            data: current.data.map((item) =>
+              item.id === conversationId ? { ...item, unreadCount: 0 } : item,
+            ),
+          };
+        }
+        return current;
+      });
       queryClient.setQueryData(
         queryKeys.conversations.context(conversationId),
         (current: { conversation?: { unreadCount?: number } } | undefined) =>

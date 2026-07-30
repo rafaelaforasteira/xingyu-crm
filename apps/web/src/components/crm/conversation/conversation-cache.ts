@@ -36,7 +36,7 @@ export function patchConversationListItem(
   patch: Partial<ConversationListItem>,
 ) {
   queryClient.setQueryData<InfiniteData<ListPage>>(listQueryKey, (current) => {
-    if (!current) return current;
+    if (!current?.pages) return current;
     return {
       ...current,
       pages: patchListPages(current.pages, conversationId, patch) ?? current.pages,
@@ -52,6 +52,30 @@ export function patchConversationListItem(
       ),
     };
   });
+
+  // Keep every cached conversation list in sync (paginated or infinite).
+  queryClient.setQueriesData<InfiniteData<ListPage> | ListPage>(
+    { queryKey: queryKeys.conversations.lists },
+    (current) => {
+      if (!current) return current;
+      if ("pages" in current && Array.isArray(current.pages)) {
+        return {
+          ...current,
+          pages:
+            patchListPages(current.pages, conversationId, patch) ?? current.pages,
+        };
+      }
+      if ("data" in current && Array.isArray(current.data)) {
+        return {
+          ...current,
+          data: current.data.map((item) =>
+            item.id === conversationId ? { ...item, ...patch } : item,
+          ),
+        };
+      }
+      return current;
+    },
+  );
 }
 
 export function appendOptimisticMessage(

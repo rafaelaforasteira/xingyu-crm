@@ -32,7 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background" data-app-shell="true">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />

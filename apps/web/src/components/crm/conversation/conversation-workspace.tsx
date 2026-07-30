@@ -47,21 +47,27 @@ export function ConversationWorkspace({
     setPanelDrawerOpen(false);
   }, [conversationId]);
 
-  const listParams = React.useMemo(
-    () => ({
-      pageSize: 30,
-      pipelineId: scope.type === "pipeline" ? scope.pipelineId : undefined,
-    }),
-    [scope],
-  );
+  const scopeType = scope.type;
+  const scopePipelineId = scope.type === "pipeline" ? scope.pipelineId : undefined;
+
+  // Stable list params — never put `undefined` keys in the object or recreate
+  // from an inline `scope` identity, or infinite queries thrash forever.
+  const listParams = React.useMemo(() => {
+    const params: Record<string, string | number> = { pageSize: 30 };
+    if (scopeType === "pipeline" && scopePipelineId) {
+      params.pipelineId = scopePipelineId;
+    }
+    return params;
+  }, [scopePipelineId, scopeType]);
 
   const bootstrapListQuery = useQuery({
-    queryKey: queryKeys.conversations.list(listParams),
+    queryKey: [...queryKeys.conversations.lists, "bootstrap", listParams] as const,
     queryFn: async () => {
       const response = await conversationsApi.list(listParams);
       return normalizeConversationListItems(response);
     },
     retry: false,
+    staleTime: 30_000,
   });
 
   React.useEffect(() => {
@@ -80,8 +86,7 @@ export function ConversationWorkspace({
 
   const listQueryKey = queryKeys.conversations.list(listParams);
 
-  const showList =
-    !conversationId || mobileView === "list";
+  const showList = true;
 
   return (
     <div className={cn("flex h-[calc(100dvh-7.5rem)] min-h-[34rem] flex-col", className)}>
@@ -89,15 +94,14 @@ export function ConversationWorkspace({
       <div className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-card md:grid-cols-[280px_1fr] lg:grid-cols-[280px_1fr_300px]">
         <div
           className={cn(
-            "min-h-0 border-border md:border-r",
-            showList ? "flex flex-col" : "hidden md:flex md:flex-col",
+            "min-h-0 border-border md:border-r md:flex md:flex-col",
+            conversationId && mobileView !== "list" ? "hidden md:flex" : "flex flex-col",
           )}
         >
           <ConversationList
             scope={scope}
             activeId={conversationId}
             basePath={basePath}
-            visible={showList}
             mounted={mounted}
           />
         </div>

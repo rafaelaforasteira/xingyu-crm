@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Inbox, Loader2 } from "lucide-react";
 import { conversationsApi, pipelinesApi, settingsApi } from "@/lib/api";
 import { normalizeConversationListItems } from "@/lib/inbox-utils";
@@ -29,90 +29,128 @@ export function ConversationList({
   scope,
   activeId,
   basePath,
-  visible,
   mounted,
 }: {
   scope: { type: "global" } | { type: "pipeline"; pipelineId: string };
   activeId?: string;
   basePath: string;
-  visible: boolean;
+  visible?: boolean;
   mounted: boolean;
 }) {
+  const scopeType = scope.type;
+  const scopePipelineId = scope.type === "pipeline" ? scope.pipelineId : undefined;
+
   const [filters, setFilters] = React.useState<ConversationFiltersState>({
     search: "",
     channelId: "",
-    pipelineId: scope.type === "pipeline" ? scope.pipelineId : "",
+    pipelineId: scopePipelineId ?? "",
     unreadOnly: false,
   });
+  const [page, setPage] = React.useState(1);
+  const [accumulated, setAccumulated] = React.useState<ConversationListItem[]>(
+    [],
+  );
 
   React.useEffect(() => {
-    if (scope.type === "pipeline") {
-      setFilters((current) => ({ ...current, pipelineId: scope.pipelineId }));
+    if (scopeType === "pipeline" && scopePipelineId) {
+      setFilters((current) =>
+        current.pipelineId === scopePipelineId
+          ? current
+          : { ...current, pipelineId: scopePipelineId },
+      );
     }
-  }, [scope]);
+  }, [scopePipelineId, scopeType]);
 
   const debouncedSearch = useDebouncedValue(filters.search, 300);
 
-  const listParams = React.useMemo(
-    () => ({
+  const listParams = React.useMemo(() => {
+    const params: Record<string, string | number | boolean> = {
       pageSize: 30,
-      search: debouncedSearch || undefined,
-      channelId: filters.channelId || undefined,
-      pipelineId:
-        scope.type === "pipeline"
-          ? scope.pipelineId
-          : filters.pipelineId || undefined,
-      unreadOnly: filters.unreadOnly || undefined,
-    }),
-    [debouncedSearch, filters.channelId, filters.pipelineId, filters.unreadOnly, scope],
+      page,
+    };
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (filters.channelId) params.channelId = filters.channelId;
+    if (scopeType === "pipeline" && scopePipelineId) {
+      params.pipelineId = scopePipelineId;
+    } else if (filters.pipelineId) {
+      params.pipelineId = filters.pipelineId;
+    }
+    if (filters.unreadOnly) params.unreadOnly = true;
+    return params;
+  }, [
+    debouncedSearch,
+    filters.channelId,
+    filters.pipelineId,
+    filters.unreadOnly,
+    page,
+    scopePipelineId,
+    scopeType,
+  ]);
+
+  const filterKey = React.useMemo(
+    () =>
+      JSON.stringify({
+        search: debouncedSearch || "",
+        channelId: filters.channelId || "",
+        pipelineId:
+          scopeType === "pipeline"
+            ? scopePipelineId || ""
+            : filters.pipelineId || "",
+        unreadOnly: Boolean(filters.unreadOnly),
+        scopeType,
+      }),
+    [
+      debouncedSearch,
+      filters.channelId,
+      filters.pipelineId,
+      filters.unreadOnly,
+      scopePipelineId,
+      scopeType,
+    ],
   );
 
-  const listQuery = useInfiniteQuery({
+  React.useEffect(() => {
+    setPage(1);
+    setAccumulated([]);
+  }, [filterKey]);
+
+  const listQuery = useQuery({
     queryKey: queryKeys.conversations.list(listParams),
-    queryFn: async ({ pageParam }) => {
-      const isCursor = typeof pageParam === "string";
-      const response = await conversationsApi.list({
-        ...listParams,
-        ...(isCursor
-          ? { cursor: pageParam }
-          : { page: (pageParam as number | undefined) ?? 1 }),
-      });
+    queryFn: async () => {
+      const response = await conversationsApi.list(listParams);
       return {
         data: normalizeConversationListItems(response),
         meta: response.meta,
       };
     },
-    initialPageParam: 1 as number | string,
-    getNextPageParam: (lastPage, _allPages, lastPageParam) => {
-      const meta = lastPage.meta as {
-        hasMore?: boolean;
-        nextCursor?: string | null;
-        page?: number;
-        totalPages?: number;
-      };
-      if (meta.hasMore && meta.nextCursor) return meta.nextCursor;
-      if (
-        typeof lastPageParam === "number" &&
-        meta.page &&
-        meta.totalPages &&
-        meta.page < meta.totalPages
-      ) {
-        return lastPageParam + 1;
-      }
-      return undefined;
-    },
     retry: false,
+    placeholderData: (previous) => previous,
   });
 
-  const conversations = React.useMemo(
-    () => listQuery.data?.pages.flatMap((page) => page.data) ?? [],
-    [listQuery.data],
-  );
+  React.useEffect(() => {
+    if (!listQuery.data) return;
+    setAccumulated((current) => {
+      if (page <= 1) return listQuery.data.data;
+      const seen = new Set(current.map((item) => item.id));
+      const next = listQuery.data.data.filter((item) => !seen.has(item.id));
+      return next.length ? [...current, ...next] : current;
+    });
+  }, [listQuery.data, page]);
+
+  const conversations = accumulated;
+  const meta = listQuery.data?.meta as
+    | { page?: number; totalPages?: number; hasMore?: boolean }
+    | undefined;
+  const hasMore =
+    Boolean(meta?.hasMore) ||
+    (typeof meta?.page === "number" &&
+      typeof meta?.totalPages === "number" &&
+      meta.page < meta.totalPages);
 
   const pipelinesQuery = useQuery({
     queryKey: queryKeys.pipelines.navigation,
     queryFn: () => pipelinesApi.navigation(),
-    enabled: scope.type === "global",
+    enabled: scopeType === "global",
     staleTime: 60_000,
   });
 
@@ -126,43 +164,31 @@ export function ConversationList({
   const pipelines =
     pipelinesQuery.data?.map((item) => ({ id: item.id, name: item.name })) ?? [];
 
-  const loadMoreRef = React.useRef<HTMLDivElement | null>(null);
-  React.useEffect(() => {
-    const node = loadMoreRef.current;
-    if (!node || !listQuery.hasNextPage || listQuery.isFetchingNextPage) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) void listQuery.fetchNextPage();
-      },
-      { rootMargin: "120px" },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [listQuery]);
+  const showInitialLoading = listQuery.isPending && conversations.length === 0;
 
   return (
     <section
       aria-label="Lista de conversas"
-      className={visible ? "flex min-h-0 flex-col" : "hidden min-h-0 flex-col md:flex"}
+      className="flex h-full min-h-0 flex-1 flex-col"
     >
       <ConversationFilters
         filters={filters}
         onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
-        showPipelineFilter={scope.type === "global"}
+        showPipelineFilter={scopeType === "global"}
         channels={channels}
         pipelines={pipelines}
       />
       <div
-        className="scrollbar-thin flex-1 overflow-y-auto"
+        className="scrollbar-thin min-h-[12rem] flex-1 overflow-y-auto"
         data-testid="conversation-list"
       >
-        {listQuery.isLoading ? (
+        {showInitialLoading ? (
           <div className="space-y-2 p-3" aria-label="Carregando conversas">
             {[0, 1, 2].map((item) => (
               <Skeleton key={item} className="h-16 w-full" />
             ))}
           </div>
-        ) : listQuery.error ? (
+        ) : listQuery.error && conversations.length === 0 ? (
           <div className="p-3 text-sm text-destructive">
             {(listQuery.error as Error).message}
           </div>
@@ -184,20 +210,20 @@ export function ConversationList({
             />
           ))
         )}
-        {listQuery.hasNextPage ? (
-          <div ref={loadMoreRef} className="flex justify-center p-3">
-            {listQuery.isFetchingNextPage ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => void listQuery.fetchNextPage()}
-              >
-                Carregar mais
-              </Button>
-            )}
+        {hasMore ? (
+          <div className="flex justify-center p-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={listQuery.isFetching}
+              onClick={() => setPage((current) => current + 1)}
+            >
+              {listQuery.isFetching ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Carregar mais
+            </Button>
           </div>
         ) : null}
       </div>
