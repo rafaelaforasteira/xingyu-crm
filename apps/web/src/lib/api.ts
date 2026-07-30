@@ -29,6 +29,9 @@ import type {
   PipelineListQuery,
   PipelineStage,
   PipelineStageInput,
+  CreateLifecycleOpportunityInput,
+  CreateReactivationActionInput,
+  LifecycleOpportunityResult,
   ReactivationListQuery,
   RepurchaseLead,
   SearchResult,
@@ -408,6 +411,16 @@ export const reactivationApi = {
     normalizeReactivationResponse(
       await api.get<unknown>("/reactivation", { ...query }),
       query,
+    ),
+  createOpportunity: (contactId: string, data: CreateLifecycleOpportunityInput) =>
+    api.post<LifecycleOpportunityResult>(
+      `/reactivation/${contactId}/opportunity`,
+      data,
+    ),
+  createAction: (contactId: string, data: CreateReactivationActionInput) =>
+    api.post<{ id: string; type: string; contactId: string }>(
+      `/reactivation/${contactId}/actions`,
+      data,
     ),
 };
 

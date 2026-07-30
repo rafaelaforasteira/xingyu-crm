@@ -600,6 +600,47 @@ export interface ReactivationListQuery {
   sortOrder?: "asc" | "desc";
 }
 
+export interface CreateLifecycleOpportunityTaskInput {
+  title: string;
+  dueAt?: string;
+  assigneeId?: string;
+}
+
+export interface CreateLifecycleOpportunityInput {
+  name?: string;
+  value?: number;
+  pipelineId: string;
+  stageId: string;
+  ownerId?: string;
+  tagIds?: string[];
+  conversationId?: string;
+  createConversation?: boolean;
+  task?: CreateLifecycleOpportunityTaskInput;
+}
+
+export interface LifecycleOpportunityResult {
+  deal: {
+    id: string;
+    name: string;
+    pipelineId: string;
+    stageId: string;
+    contactId: string | null;
+    conversationId: string | null;
+    value: number;
+    status: string;
+  };
+  taskId: string | null;
+  conversationId: string | null;
+}
+
+export type ReactivationActionType = "APPROACHED" | "POSTPONED" | "DISCARDED";
+
+export interface CreateReactivationActionInput {
+  type: ReactivationActionType;
+  snoozedUntil?: string;
+  reason?: string;
+}
+
 export interface Automation {
   id: string;
   name: string;

@@ -11,6 +11,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
+  Briefcase,
   Headphones,
   RefreshCw,
   Search,
@@ -36,6 +37,7 @@ import type {
   ReactivationStatus,
 } from "@/lib/types";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
+import { CreateOpportunityDialog } from "@/components/crm/create-opportunity-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
@@ -675,155 +677,206 @@ function ReactivationTable({
   loading: boolean;
   fetching: boolean;
 }) {
+  const [createTarget, setCreateTarget] = React.useState<{
+    contactId: string;
+    contactName: string;
+    defaultOwnerId?: string | null;
+  } | null>(null);
+
   return (
-    <div
-      aria-busy={fetching}
-      className="overflow-x-auto rounded-xl border border-border bg-card shadow-card"
-    >
-      <table
-        data-testid="reactivation-table"
-        className="w-full min-w-[1100px] text-sm"
+    <>
+      <div
+        aria-busy={fetching}
+        className="overflow-x-auto rounded-xl border border-border bg-card shadow-card"
       >
-        <thead className="border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium">Contato</th>
-            <th className="px-4 py-3 text-left font-medium">Score</th>
-            <th className="px-4 py-3 text-left font-medium">Segmento</th>
-            <th className="px-4 py-3 text-left font-medium">Inatividade</th>
-            <th className="px-4 py-3 text-left font-medium">Consultora / equipe</th>
-            <th className="px-4 py-3 text-left font-medium">Última interação</th>
-            <th className="px-4 py-3 text-left font-medium">Última compra</th>
-            <th className="px-4 py-3 text-left font-medium">Status</th>
-            <th className="px-4 py-3 text-right font-medium">Ação</th>
-          </tr>
-        </thead>
-        <tbody>
-          {loading
-            ? Array.from({ length: 6 }).map((_, index) => (
-                <tr key={index} className="border-b border-border/60">
-                  <td colSpan={9} className="px-4 py-3">
-                    <Skeleton className="h-10 w-full" />
-                  </td>
-                </tr>
-              ))
-            : null}
-
-          {!loading && rows.length === 0 ? (
+        <table
+          data-testid="reactivation-table"
+          className="w-full min-w-[1100px] text-sm"
+        >
+          <thead className="border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground">
             <tr>
-              <td colSpan={9} className="p-4">
-                <EmptyState
-                  icon={Sparkles}
-                  title="Nenhuma oportunidade de reativação"
-                  description="Ajuste os filtros ou aguarde novos contatos elegíveis."
-                />
-              </td>
+              <th className="px-4 py-3 text-left font-medium">Contato</th>
+              <th className="px-4 py-3 text-left font-medium">Score</th>
+              <th className="px-4 py-3 text-left font-medium">Segmento</th>
+              <th className="px-4 py-3 text-left font-medium">Inatividade</th>
+              <th className="px-4 py-3 text-left font-medium">Consultora / equipe</th>
+              <th className="px-4 py-3 text-left font-medium">Última interação</th>
+              <th className="px-4 py-3 text-left font-medium">Última compra</th>
+              <th className="px-4 py-3 text-left font-medium">Status</th>
+              <th className="px-4 py-3 text-right font-medium">Ação</th>
             </tr>
-          ) : null}
+          </thead>
+          <tbody>
+            {loading
+              ? Array.from({ length: 6 }).map((_, index) => (
+                  <tr key={index} className="border-b border-border/60">
+                    <td colSpan={9} className="px-4 py-3">
+                      <Skeleton className="h-10 w-full" />
+                    </td>
+                  </tr>
+                ))
+              : null}
 
-          {!loading
-            ? rows.map((row) => (
-                <tr
-                  key={row.id}
-                  data-testid="reactivation-row"
-                  data-reactivation-id={row.id}
-                  className="border-b border-border/60 hover:bg-accent/40"
-                >
-                  <td className="px-4 py-3">
-                    {row.contact ? (
-                      <div>
-                        <Link
-                          href={`/contacts/${row.contact.id}`}
-                          className="font-medium hover:text-primary"
-                        >
-                          {row.contact.name}
-                        </Link>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {row.contact.email ||
-                            row.contact.phone ||
-                            row.contact.whatsapp ||
-                            "Sem contato direto"}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {row.contact.orderCount} pedido(s) ·{" "}
-                          {formatCurrency(row.contact.totalPurchased)}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <AlertCircle className="h-4 w-4 shrink-0" />
-                        <span>Contato não vinculado</span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <ScoreBadge score={row.score} />
-                  </td>
-                  <td className="max-w-64 px-4 py-3">
-                    <p className="font-medium">
-                      {SEGMENT_LABELS[row.classification]}
-                    </p>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                      {row.reason}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="font-medium">{row.daysInactive}</span>
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      dias
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="flex items-center gap-1.5">
-                      <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
-                      {row.owner?.name ?? "Sem consultora"}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Users className="h-3.5 w-3.5" />
-                      {row.team?.name ?? "Sem equipe"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <ClientRelativeTime
-                      value={row.lastInteractionAt}
-                      fallback="—"
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <ClientRelativeTime
-                      value={row.lastPurchaseAt}
-                      fallback="—"
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="outline">
-                      {STATUS_LABELS[row.status]}
-                    </Badge>
-                    {row.existingOpenDealId ? (
-                      <p className="mt-1 text-[11px] text-muted-foreground">
-                        Negócio aberto
+            {!loading && rows.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="p-4">
+                  <EmptyState
+                    icon={Sparkles}
+                    title="Nenhuma oportunidade de reativação"
+                    description="Ajuste os filtros ou aguarde novos contatos elegíveis."
+                  />
+                </td>
+              </tr>
+            ) : null}
+
+            {!loading
+              ? rows.map((row) => {
+                  const contact = row.contact;
+                  return (
+                  <tr
+                    key={row.id}
+                    data-testid="reactivation-row"
+                    data-reactivation-id={row.id}
+                    className="border-b border-border/60 hover:bg-accent/40"
+                  >
+                    <td className="px-4 py-3">
+                      {contact ? (
+                        <div>
+                          <Link
+                            href={`/contacts/${contact.id}`}
+                            className="font-medium hover:text-primary"
+                          >
+                            {contact.name}
+                          </Link>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {contact.email ||
+                              contact.phone ||
+                              contact.whatsapp ||
+                              "Sem contato direto"}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {contact.orderCount} pedido(s) ·{" "}
+                            {formatCurrency(contact.totalPurchased)}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          <span>Contato não vinculado</span>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ScoreBadge score={row.score} />
+                    </td>
+                    <td className="max-w-64 px-4 py-3">
+                      <p className="font-medium">
+                        {SEGMENT_LABELS[row.classification]}
                       </p>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {row.contact ? (
-                      <Link
-                        href={`/contacts/${row.contact.id}`}
-                        className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-card px-2.5 text-xs font-medium hover:bg-accent"
-                      >
-                        Analisar
-                      </Link>
-                    ) : (
-                      <Button type="button" size="sm" variant="outline" disabled>
-                        Análise indisponível
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            : null}
-        </tbody>
-      </table>
-    </div>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                        {row.reason}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-medium">{row.daysInactive}</span>
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        dias
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="flex items-center gap-1.5">
+                        <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
+                        {row.owner?.name ?? "Sem consultora"}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Users className="h-3.5 w-3.5" />
+                        {row.team?.name ?? "Sem equipe"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <ClientRelativeTime
+                        value={row.lastInteractionAt}
+                        fallback="—"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <ClientRelativeTime
+                        value={row.lastPurchaseAt}
+                        fallback="—"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant="outline">
+                        {STATUS_LABELS[row.status]}
+                      </Badge>
+                      {row.existingOpenDeal ? (
+                        <Link
+                          href={`/pipelines/${row.existingOpenDeal.pipelineId}/deals/${row.existingOpenDeal.id}`}
+                          className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                        >
+                          <Briefcase className="h-3 w-3" />
+                          Negócio aberto
+                        </Link>
+                      ) : row.existingOpenDealId ? (
+                        <Badge variant="secondary" className="mt-1">
+                          Negócio aberto
+                        </Badge>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {contact && !row.existingOpenDealId ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="default"
+                            onClick={() =>
+                              setCreateTarget({
+                                contactId: contact.id,
+                                contactName: contact.name,
+                                defaultOwnerId: row.owner?.id,
+                              })
+                            }
+                          >
+                            Criar oportunidade
+                          </Button>
+                        ) : null}
+                        {contact ? (
+                          <Link
+                            href={`/contacts/${contact.id}`}
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-card px-2.5 text-xs font-medium hover:bg-accent"
+                          >
+                            Analisar
+                          </Link>
+                        ) : (
+                          <Button type="button" size="sm" variant="outline" disabled>
+                            Análise indisponível
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  );
+                })
+              : null}
+          </tbody>
+        </table>
+      </div>
+
+      {createTarget ? (
+        <CreateOpportunityDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setCreateTarget(null);
+          }}
+          contactId={createTarget.contactId}
+          contactName={createTarget.contactName}
+          defaultOwnerId={createTarget.defaultOwnerId}
+          createOpportunity={reactivationApi.createOpportunity}
+          invalidateKeys={["reactivation"]}
+        />
+      ) : null}
+    </>
   );
 }
 
