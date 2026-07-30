@@ -1,0 +1,31 @@
+import { cn } from "@/lib/utils";
+
+export function Label({
+  className,
+  ...props
+}: React.LabelHTMLAttributes<HTMLLabelElement>) {
+  return (
+    <label
+      className={cn("text-sm font-medium text-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+export function Select({
+  className,
+  children,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      className={cn(
+        "flex h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </select>
+  );
+}

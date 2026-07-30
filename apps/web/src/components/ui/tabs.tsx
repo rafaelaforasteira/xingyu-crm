@@ -1,0 +1,100 @@
+"use client";
+
+import * as React from "react";
+import { cn } from "@/lib/utils";
+
+interface TabsContextValue {
+  value: string;
+  setValue: (v: string) => void;
+}
+
+const TabsContext = React.createContext<TabsContextValue | null>(null);
+
+export function Tabs({
+  defaultValue,
+  value: controlled,
+  onValueChange,
+  children,
+  className,
+}: {
+  defaultValue: string;
+  value?: string;
+  onValueChange?: (v: string) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [uncontrolled, setUncontrolled] = React.useState(defaultValue);
+  const value = controlled ?? uncontrolled;
+  const setValue = (v: string) => {
+    setUncontrolled(v);
+    onValueChange?.(v);
+  };
+  return (
+    <TabsContext.Provider value={{ value, setValue }}>
+      <div className={className}>{children}</div>
+    </TabsContext.Provider>
+  );
+}
+
+export function TabsList({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex h-10 items-center gap-1 rounded-lg bg-muted/70 p-1",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function TabsTrigger({
+  value,
+  children,
+  className,
+}: {
+  value: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const ctx = React.useContext(TabsContext);
+  if (!ctx) throw new Error("TabsTrigger must be used within Tabs");
+  const active = ctx.value === value;
+  return (
+    <button
+      type="button"
+      onClick={() => ctx.setValue(value)}
+      className={cn(
+        "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+        active
+          ? "bg-card text-foreground shadow-sm"
+          : "text-muted-foreground hover:text-foreground",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function TabsContent({
+  value,
+  children,
+  className,
+}: {
+  value: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const ctx = React.useContext(TabsContext);
+  if (!ctx) throw new Error("TabsContent must be used within Tabs");
+  if (ctx.value !== value) return null;
+  return <div className={cn("mt-4 outline-none", className)}>{children}</div>;
+}

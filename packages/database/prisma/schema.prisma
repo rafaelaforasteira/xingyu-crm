@@ -1,0 +1,1292 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  INVITED
+}
+
+enum ContactStatus {
+  LEAD
+  QUALIFIED
+  ACTIVE_CUSTOMER
+  INACTIVE
+  ARCHIVED
+}
+
+enum ContactType {
+  RESELLER
+  RETAILER
+  WHOLESALER
+  SITE_CUSTOMER
+  WHATSAPP
+  INSTAGRAM
+  OTHER
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum DealPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskType {
+  CALL
+  WHATSAPP
+  FOLLOW_UP
+  COLLECTION
+  SEND_CATALOG
+  SEND_LINK
+  PAYMENT
+  MEETING
+  MONITORING
+  AFTER_SALES
+  REPURCHASE
+  INTERNAL
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  ARCHIVED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum ChannelType {
+  WHATSAPP
+  INSTAGRAM
+  SITE_CHAT
+  EMAIL
+  MANUAL
+}
+
+enum OrderStatus {
+  ORDER_PLACED
+  AWAITING_PAYMENT
+  PAYMENT_APPROVED
+  SEPARATING
+  IN_PRODUCTION
+  LEFT_FACTORY
+  INTERNATIONAL_TRANSPORT
+  ARRIVED_BRAZIL
+  NATIONAL_TRANSPORT
+  DELIVERED
+  AFTER_SALES_STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  OVERDUE
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  BOLETO
+  BANK_TRANSFER
+  CASH
+  OTHER
+}
+
+enum ShipmentStatus {
+  PENDING
+  IN_PRODUCTION
+  INTERNATIONAL_TRANSPORT
+  IN_BRAZIL
+  NATIONAL_TRANSPORT
+  DELIVERED
+  DELAYED
+  RETURNED
+}
+
+enum OccurrenceType {
+  DEFECT
+  MISSING_PRODUCT
+  DIVERGENCE
+  DELAY
+  DAMAGED_PACKAGING
+  WRONG_ORDER
+  RETURN
+  RECALL
+  REFUND
+  CREDIT
+  GENERAL_COMPLAINT
+}
+
+enum OccurrenceStatus {
+  OPEN
+  AWAITING_FILES
+  UNDER_REVIEW
+  AWAITING_CUSTOMER
+  AWAITING_DEPARTMENT
+  APPROVED
+  REJECTED
+  RESOLVED
+  CLOSED
+}
+
+enum AutomationStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+enum NotificationType {
+  UNANSWERED_LEAD
+  OVERDUE_TASK
+  PENDING_PAYMENT
+  STALLED_DEAL
+  DELAYED_ORDER
+  OPEN_OCCURRENCE
+  REPURCHASE_READY
+  AUTOMATION_ERROR
+  SYSTEM
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  CURRENCY
+  PERCENT
+  DATE
+  TIME
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  PHONE
+  EMAIL
+  URL
+}
+
+enum EntityType {
+  CONTACT
+  COMPANY
+  DEAL
+  ORDER
+  OCCURRENCE
+  TASK
+}
+
+enum ActivityType {
+  CONTACT_CREATED
+  CONTACT_UPDATED
+  OWNER_CHANGED
+  STAGE_CHANGED
+  MESSAGE_SENT
+  MESSAGE_RECEIVED
+  DEAL_CREATED
+  TASK_CREATED
+  TASK_COMPLETED
+  ORDER_CREATED
+  PAYMENT_APPROVED
+  ORDER_SHIPPED
+  ORDER_DELIVERED
+  TAG_ADDED
+  NOTE_CREATED
+  OCCURRENCE_OPENED
+  OCCURRENCE_CLOSED
+  OTHER
+}
+
+model Organization {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  timezone  String    @default("America/Sao_Paulo")
+  currency  String    @default("BRL")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users            User[]
+  teams            Team[]
+  roles            Role[]
+  contacts         Contact[]
+  companies        Company[]
+  pipelines        Pipeline[]
+  deals            Deal[]
+  tasks            Task[]
+  activities       Activity[]
+  notes            Note[]
+  tags             Tag[]
+  customFields     CustomFieldDefinition[]
+  conversations    Conversation[]
+  channels         Channel[]
+  orders           Order[]
+  products         Product[]
+  collections      ProductCollection[]
+  occurrences      Occurrence[]
+  campaigns        Campaign[]
+  automations      Automation[]
+  notifications    Notification[]
+  savedViews       SavedView[]
+  auditLogs        AuditLog[]
+  attributions     Attribution[]
+}
+
+model Role {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  permissions    Json      @default("{}")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  users        User[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+model Team {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  members      User[]
+  contacts     Contact[]
+  deals        Deal[]
+  tasks        Task[]
+
+  @@index([organizationId])
+}
+
+model User {
+  id             String     @id @default(cuid())
+  organizationId String
+  teamId         String?
+  roleId         String?
+  managerId      String?
+  name           String
+  email          String
+  phone          String?
+  avatarUrl      String?
+  title          String?
+  status         UserStatus @default(ACTIVE)
+  monthlyGoal    Decimal?   @db.Decimal(12, 2)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  team         Team?        @relation(fields: [teamId], references: [id])
+  role         Role?        @relation(fields: [roleId], references: [id])
+  manager      User?        @relation("UserManager", fields: [managerId], references: [id])
+  reports      User[]       @relation("UserManager")
+
+  ownedContacts       Contact[]      @relation("ContactOwner")
+  ownedCompanies      Company[]      @relation("CompanyOwner")
+  ownedDeals          Deal[]         @relation("DealOwner")
+  assignedTasks       Task[]         @relation("TaskAssignee")
+  createdTasks        Task[]         @relation("TaskCreator")
+  assignedConversations Conversation[] @relation("ConversationAssignee")
+  sentMessages        Message[]      @relation("MessageSender")
+  ownedOrders         Order[]        @relation("OrderOwner")
+  ownedOccurrences    Occurrence[]   @relation("OccurrenceOwner")
+  notifications       Notification[]
+  activities          Activity[]     @relation("ActivityActor")
+  notes               Note[]
+  auditLogs           AuditLog[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([status])
+}
+
+model Company {
+  id             String    @id @default(cuid())
+  organizationId String
+  ownerId        String?
+  legalName      String
+  tradeName      String?
+  cnpj           String?
+  segment        String?
+  phone          String?
+  email          String?
+  instagram      String?
+  website        String?
+  address        String?
+  city           String?
+  state          String?
+  country        String?   @default("Brasil")
+  status         String    @default("ACTIVE")
+  totalPurchased Decimal   @default(0) @db.Decimal(14, 2)
+  averageTicket  Decimal   @default(0) @db.Decimal(14, 2)
+  lastPurchaseAt DateTime?
+  notes          String?
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  owner        User?        @relation("CompanyOwner", fields: [ownerId], references: [id])
+  contacts     Contact[]
+  deals        Deal[]
+  orders       Order[]
+  occurrences  Occurrence[]
+  activities   Activity[]
+  notes        Note[]
+
+  @@index([organizationId])
+  @@index([cnpj])
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([lastPurchaseAt])
+}
+
+model Contact {
+  id                String        @id @default(cuid())
+  organizationId    String
+  companyId         String?
+  ownerId           String?
+  teamId            String?
+  firstName         String
+  lastName          String?
+  phone             String?
+  whatsapp          String?
+  email             String?
+  instagram         String?
+  city              String?
+  state             String?
+  country           String?       @default("Brasil")
+  cnpj              String?
+  cpf               String?
+  type              ContactType   @default(OTHER)
+  status            ContactStatus @default(LEAD)
+  source            String?
+  campaign          String?
+  notes             String?
+  firstInteractionAt DateTime?
+  firstPurchaseAt   DateTime?
+  lastPurchaseAt    DateTime?
+  totalPurchased    Decimal       @default(0) @db.Decimal(14, 2)
+  averageTicket     Decimal       @default(0) @db.Decimal(14, 2)
+  orderCount        Int           @default(0)
+  daysWithoutPurchase Int?
+  nextContactAt     DateTime?
+  createdById       String?
+  updatedById       String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  company       Company?       @relation(fields: [companyId], references: [id])
+  owner         User?          @relation("ContactOwner", fields: [ownerId], references: [id])
+  team          Team?          @relation(fields: [teamId], references: [id])
+  tags          ContactTag[]
+  deals         Deal[]
+  tasks         Task[]
+  conversations Conversation[]
+  orders        Order[]
+  occurrences   Occurrence[]
+  activities    Activity[]
+  notes         Note[]
+  attributions  Attribution[]
+  customValues  CustomFieldValue[]
+
+  @@index([organizationId])
+  @@index([phone])
+  @@index([email])
+  @@index([instagram])
+  @@index([cnpj])
+  @@index([cpf])
+  @@index([status])
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([createdAt])
+  @@index([lastPurchaseAt])
+  @@index([companyId])
+}
+
+model Pipeline {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  color          String?   @default("#7C3AED")
+  isDefault      Boolean   @default(false)
+  position       Int       @default(0)
+  archived       Boolean   @default(false)
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  stages       PipelineStage[]
+  deals        Deal[]
+
+  @@index([organizationId])
+  @@index([archived])
+}
+
+model PipelineStage {
+  id             String    @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  name           String
+  color          String?   @default("#A78BFA")
+  position       Int       @default(0)
+  isWon          Boolean   @default(false)
+  isLost         Boolean   @default(false)
+  maxDaysInStage Int?
+  rules          Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals    Deal[]
+  history  DealStageHistory[]
+
+  @@index([pipelineId])
+  @@index([organizationId])
+  @@index([position])
+}
+
+model Deal {
+  id              String       @id @default(cuid())
+  organizationId  String
+  pipelineId      String
+  stageId         String
+  contactId       String?
+  companyId       String?
+  ownerId         String?
+  teamId          String?
+  conversationId  String?      @unique
+  name            String
+  value           Decimal      @default(0) @db.Decimal(14, 2)
+  status          DealStatus   @default(OPEN)
+  priority        DealPriority @default(MEDIUM)
+  source          String?
+  campaign        String?
+  lostReason      String?
+  enteredStageAt  DateTime     @default(now())
+  closedAt        DateTime?
+  nextTaskAt      DateTime?
+  lastInteractionAt DateTime?
+  unreadMessages  Int          @default(0)
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  pipeline     Pipeline          @relation(fields: [pipelineId], references: [id])
+  stage        PipelineStage     @relation(fields: [stageId], references: [id])
+  contact      Contact?          @relation(fields: [contactId], references: [id])
+  company      Company?          @relation(fields: [companyId], references: [id])
+  owner        User?             @relation("DealOwner", fields: [ownerId], references: [id])
+  team         Team?             @relation(fields: [teamId], references: [id])
+  conversation Conversation?     @relation(fields: [conversationId], references: [id])
+  tags         DealTag[]
+  stageHistory DealStageHistory[]
+  tasks        Task[]
+  orders       Order[]
+  activities   Activity[]
+  notes        Note[]
+  customValues CustomFieldValue[]
+
+  @@index([organizationId])
+  @@index([pipelineId])
+  @@index([stageId])
+  @@index([contactId])
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([lastInteractionAt])
+}
+
+model DealStageHistory {
+  id        String   @id @default(cuid())
+  dealId    String
+  stageId   String
+  fromStageId String?
+  movedById String?
+  movedAt   DateTime @default(now())
+  note      String?
+
+  deal  Deal          @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  stage PipelineStage @relation(fields: [stageId], references: [id])
+
+  @@index([dealId])
+  @@index([stageId])
+  @@index([movedAt])
+}
+
+model Task {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  description    String?
+  type           TaskType     @default(FOLLOW_UP)
+  status         TaskStatus   @default(PENDING)
+  priority       TaskPriority @default(MEDIUM)
+  dueAt          DateTime?
+  reminderAt     DateTime?
+  completedAt    DateTime?
+  result         String?
+  completionNote String?
+  recurrenceRule String?
+  assigneeId     String?
+  createdById    String?
+  updatedById    String?
+  contactId      String?
+  companyId      String?
+  dealId         String?
+  orderId        String?
+  occurrenceId   String?
+  teamId         String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator      User?        @relation("TaskCreator", fields: [createdById], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  company      Company?     @relation(fields: [companyId], references: [id])
+  deal         Deal?        @relation(fields: [dealId], references: [id])
+  order        Order?       @relation(fields: [orderId], references: [id])
+  occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
+  team         Team?        @relation(fields: [teamId], references: [id])
+  activities   Activity[]
+
+  @@index([organizationId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([contactId])
+  @@index([dealId])
+  @@index([createdAt])
+}
+
+model Activity {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           ActivityType
+  title          String
+  description    String?
+  metadata       Json?
+  actorId        String?
+  contactId      String?
+  companyId      String?
+  dealId         String?
+  orderId        String?
+  taskId         String?
+  occurrenceId   String?
+  conversationId String?
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  actor        User?        @relation("ActivityActor", fields: [actorId], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  company      Company?     @relation(fields: [companyId], references: [id])
+  deal         Deal?        @relation(fields: [dealId], references: [id])
+  order        Order?       @relation(fields: [orderId], references: [id])
+  task         Task?        @relation(fields: [taskId], references: [id])
+  occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([dealId])
+  @@index([orderId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+model Note {
+  id             String     @id @default(cuid())
+  organizationId String
+  content        String
+  isInternal     Boolean    @default(true)
+  authorId       String?
+  contactId      String?
+  companyId      String?
+  dealId         String?
+  orderId        String?
+  occurrenceId   String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  author       User?        @relation(fields: [authorId], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  company      Company?     @relation(fields: [companyId], references: [id])
+  deal         Deal?        @relation(fields: [dealId], references: [id])
+  order        Order?       @relation(fields: [orderId], references: [id])
+  occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([dealId])
+}
+
+model Tag {
+  id             String     @id @default(cuid())
+  organizationId String
+  name           String
+  color          String     @default("#7C3AED")
+  description    String?
+  entityType     EntityType @default(CONTACT)
+  status         String     @default("ACTIVE")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  contacts     ContactTag[]
+  deals        DealTag[]
+
+  @@unique([organizationId, name, entityType])
+  @@index([organizationId])
+}
+
+model ContactTag {
+  contactId String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+}
+
+model DealTag {
+  dealId    String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([dealId, tagId])
+}
+
+model CustomFieldDefinition {
+  id             String          @id @default(cuid())
+  organizationId String
+  entityType     EntityType
+  name           String
+  key            String
+  fieldType      CustomFieldType
+  options        Json?
+  required       Boolean         @default(false)
+  position       Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  values       CustomFieldValue[]
+
+  @@unique([organizationId, entityType, key])
+  @@index([organizationId, entityType])
+}
+
+model CustomFieldValue {
+  id         String  @id @default(cuid())
+  fieldId    String
+  contactId  String?
+  companyId  String?
+  dealId     String?
+  orderId    String?
+  valueText  String?
+  valueNumber Decimal? @db.Decimal(14, 4)
+  valueBool  Boolean?
+  valueJson  Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  field   CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  contact Contact?              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  deal    Deal?                 @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([fieldId])
+  @@index([contactId])
+  @@index([dealId])
+}
+
+model Channel {
+  id             String      @id @default(cuid())
+  organizationId String
+  type           ChannelType
+  name           String
+  isActive       Boolean     @default(true)
+  config         Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  conversations Conversation[]
+  messages      Message[]
+
+  @@index([organizationId])
+  @@index([type])
+}
+
+model Conversation {
+  id             String             @id @default(cuid())
+  organizationId String
+  contactId      String?
+  channelId      String?
+  assigneeId     String?
+  subject        String?
+  status         ConversationStatus @default(OPEN)
+  lastMessageAt  DateTime?
+  unreadCount    Int                @default(0)
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  channel      Channel?     @relation(fields: [channelId], references: [id])
+  assignee     User?        @relation("ConversationAssignee", fields: [assigneeId], references: [id])
+  messages     Message[]
+  deal         Deal?
+  activities   Activity[]
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  channelId      String?
+  senderId       String?
+  direction      MessageDirection
+  status         MessageStatus    @default(SENT)
+  body           String?
+  isInternal     Boolean          @default(false)
+  metadata       Json?
+  sentAt         DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  channel      Channel?            @relation(fields: [channelId], references: [id])
+  sender       User?               @relation("MessageSender", fields: [senderId], references: [id])
+  attachments  MessageAttachment[]
+
+  @@index([conversationId])
+  @@index([sentAt])
+  @@index([direction])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  fileName  String
+  mimeType  String?
+  fileSize  Int?
+  url       String
+  kind      String   @default("file")
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model ProductCollection {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  season         String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  products     Product[]
+
+  @@index([organizationId])
+}
+
+model Product {
+  id             String    @id @default(cuid())
+  organizationId String
+  collectionId   String?
+  name           String
+  sku            String
+  description    String?
+  price          Decimal   @db.Decimal(12, 2)
+  imageUrl       String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  collection   ProductCollection? @relation(fields: [collectionId], references: [id])
+  orderItems   OrderItem[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId])
+  @@index([collectionId])
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  organizationId String
+  number         String
+  contactId      String?
+  companyId      String?
+  ownerId        String?
+  dealId         String?
+  channel        String?
+  source         String?
+  campaign       String?
+  orderedAt      DateTime    @default(now())
+  grossValue     Decimal     @default(0) @db.Decimal(14, 2)
+  discount       Decimal     @default(0) @db.Decimal(14, 2)
+  coupon         String?
+  shippingCost   Decimal     @default(0) @db.Decimal(14, 2)
+  taxes          Decimal     @default(0) @db.Decimal(14, 2)
+  finalValue     Decimal     @default(0) @db.Decimal(14, 2)
+  status         OrderStatus @default(ORDER_PLACED)
+  expectedAt     DateTime?
+  trackingCode   String?
+  notes          String?
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  company      Company?     @relation(fields: [companyId], references: [id])
+  owner        User?        @relation("OrderOwner", fields: [ownerId], references: [id])
+  deal         Deal?        @relation(fields: [dealId], references: [id])
+  items        OrderItem[]
+  payments     Payment[]
+  shipments    Shipment[]
+  occurrences  Occurrence[]
+  tasks        Task[]
+  activities   Activity[]
+  notes        Note[]
+  attributions Attribution[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([status])
+  @@index([orderedAt])
+  @@index([ownerId])
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  productId   String?
+  productName String
+  sku         String?
+  collection  String?
+  quantity    Int     @default(1)
+  unitPrice   Decimal @db.Decimal(12, 2)
+  discount    Decimal @default(0) @db.Decimal(12, 2)
+  totalPrice  Decimal @db.Decimal(12, 2)
+  imageUrl    String?
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  orderId         String
+  amount          Decimal       @db.Decimal(14, 2)
+  method          PaymentMethod @default(PIX)
+  status          PaymentStatus @default(PENDING)
+  dueAt           DateTime?
+  paidAt          DateTime?
+  transactionCode String?
+  paymentLink     String?
+  receiptUrl      String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+model Shipment {
+  id             String         @id @default(cuid())
+  orderId        String
+  carrier        String?
+  trackingCode   String?
+  origin         String?
+  destination    String?
+  status         ShipmentStatus @default(PENDING)
+  postedAt       DateTime?
+  expectedAt     DateTime?
+  deliveredAt    DateTime?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+
+  order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events ShipmentEvent[]
+
+  @@index([orderId])
+  @@index([status])
+  @@index([trackingCode])
+}
+
+model ShipmentEvent {
+  id          String   @id @default(cuid())
+  shipmentId  String
+  status      String
+  description String?
+  location    String?
+  occurredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([occurredAt])
+}
+
+model Occurrence {
+  id             String           @id @default(cuid())
+  organizationId String
+  protocol       String
+  type           OccurrenceType
+  status         OccurrenceStatus @default(OPEN)
+  priority       TaskPriority     @default(MEDIUM)
+  contactId      String?
+  companyId      String?
+  orderId        String?
+  ownerId        String?
+  description    String?
+  value          Decimal?         @db.Decimal(14, 2)
+  dueAt          DateTime?
+  resolution     String?
+  products       Json?
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization           @relation(fields: [organizationId], references: [id])
+  contact      Contact?               @relation(fields: [contactId], references: [id])
+  company      Company?               @relation(fields: [companyId], references: [id])
+  order        Order?                 @relation(fields: [orderId], references: [id])
+  owner        User?                  @relation("OccurrenceOwner", fields: [ownerId], references: [id])
+  attachments  OccurrenceAttachment[]
+  tasks        Task[]
+  activities   Activity[]
+  notes        Note[]
+
+  @@unique([organizationId, protocol])
+  @@index([organizationId])
+  @@index([status])
+  @@index([contactId])
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+model OccurrenceAttachment {
+  id           String   @id @default(cuid())
+  occurrenceId String
+  fileName     String
+  mimeType     String?
+  url          String
+  kind         String   @default("file")
+  createdAt    DateTime @default(now())
+
+  occurrence Occurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+
+  @@index([occurrenceId])
+}
+
+model Campaign {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  source         String?
+  medium         String?
+  channel        String?
+  status         String    @default("ACTIVE")
+  budget         Decimal?  @db.Decimal(14, 2)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  attributions Attribution[]
+
+  @@index([organizationId])
+  @@index([source])
+}
+
+model Attribution {
+  id             String    @id @default(cuid())
+  organizationId String
+  contactId      String?
+  orderId        String?
+  campaignId     String?
+  source         String?
+  medium         String?
+  campaign       String?
+  content        String?
+  term           String?
+  adSet          String?
+  ad             String?
+  creative       String?
+  page           String?
+  form           String?
+  groupName      String?
+  live           String?
+  coupon         String?
+  influencer     String?
+  channel        String?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  order        Order?       @relation(fields: [orderId], references: [id])
+  campaignRef  Campaign?    @relation(fields: [campaignId], references: [id])
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([orderId])
+  @@index([source])
+}
+
+model Automation {
+  id             String           @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  status         AutomationStatus @default(DRAFT)
+  triggerType    String
+  config         Json?
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  nodes        AutomationNode[]
+  edges        AutomationEdge[]
+  executions   AutomationExecution[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model AutomationNode {
+  id           String @id @default(cuid())
+  automationId String
+  type         String
+  label        String?
+  config       Json?
+  positionX    Float  @default(0)
+  positionY    Float  @default(0)
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+}
+
+model AutomationEdge {
+  id           String  @id @default(cuid())
+  automationId String
+  sourceNodeId String
+  targetNodeId String
+  label        String?
+  condition    Json?
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId])
+}
+
+model AutomationExecution {
+  id           String   @id @default(cuid())
+  automationId String
+  status       String   @default("RUNNING")
+  startedAt    DateTime @default(now())
+  finishedAt   DateTime?
+  context      Json?
+  error        String?
+
+  automation Automation              @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  logs       AutomationExecutionLog[]
+
+  @@index([automationId])
+  @@index([startedAt])
+}
+
+model AutomationExecutionLog {
+  id          String   @id @default(cuid())
+  executionId String
+  nodeId      String?
+  level       String   @default("info")
+  message     String
+  data        Json?
+  createdAt   DateTime @default(now())
+
+  execution AutomationExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  type           NotificationType
+  title          String
+  body           String?
+  href           String?
+  entityType     String?
+  entityId       String?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([readAt])
+  @@index([createdAt])
+}
+
+model SavedView {
+  id             String     @id @default(cuid())
+  organizationId String
+  userId         String?
+  name           String
+  entityType     EntityType
+  filters        Json
+  columns        Json?
+  isShared       Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([entityType])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String?
+  before         Json?
+  after          Json?
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

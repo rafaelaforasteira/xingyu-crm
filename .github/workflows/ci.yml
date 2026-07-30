@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: xingyu
+          POSTGRES_PASSWORD: xingyu
+          POSTGRES_DB: xingyu_crm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U xingyu -d xingyu_crm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://xingyu:xingyu@localhost:5432/xingyu_crm?schema=public
+      DEMO_MODE: "true"
+      NEXT_PUBLIC_API_URL: http://localhost:3333
+      NEXT_PUBLIC_DEMO_MODE: "true"
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Migrate
+        run: pnpm db:migrate:deploy
+
+      - name: Seed
+        run: pnpm db:seed
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
