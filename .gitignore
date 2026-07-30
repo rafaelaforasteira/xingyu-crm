@@ -42,6 +42,9 @@ backups
 *.sql.gz
 .pgdata
 packages/database/.pgdata
+packages/database/.pgdata/
+packages/database/.pgdata-backup-*/
+packages/database/.pgdata-*/
 
 # Uploads & temp
 uploads

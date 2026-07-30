@@ -24,10 +24,34 @@ import { ActivitiesModule } from "./activities/activities.module";
 import { NotesModule } from "./notes/notes.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import path from "node:path";
+
+const rootEnvFile = path.resolve(__dirname, "../../../.env");
+
+function validateEnvironment(config: Record<string, unknown>) {
+  if (!config.DATABASE_URL) {
+    throw new Error(
+      "DATABASE_URL não foi definida. Execute pnpm setup:local ou configure o arquivo .env na raiz.",
+    );
+  }
+
+  for (const name of ["POSTGRES_PORT", "API_PORT", "WEB_PORT"] as const) {
+    const value = config[name];
+    if (value !== undefined && (!Number.isInteger(Number(value)) || Number(value) < 1)) {
+      throw new Error(`${name} deve ser uma porta válida.`);
+    }
+  }
+
+  return config;
+}
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: rootEnvFile,
+      validate: validateEnvironment,
+    }),
     PrismaModule,
     DashboardModule,
     HealthModule,
