@@ -63,6 +63,28 @@ export class TasksService {
     return task;
   }
 
+  async today(organizationId: string) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+
+    return this.prisma.task.findMany({
+      where: {
+        organizationId,
+        ...notDeleted,
+        dueAt: { gte: start, lt: end },
+        status: { not: "COMPLETED" },
+      },
+      orderBy: { dueAt: "asc" },
+      include: {
+        assignee: { select: { id: true, name: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
+        deal: { select: { id: true, name: true } },
+      },
+    });
+  }
+
   async create(organizationId: string, dto: CreateTaskDto, userId: string) {
     return this.prisma.task.create({
       data: {

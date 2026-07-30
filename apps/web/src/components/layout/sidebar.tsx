@@ -65,6 +65,7 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               title={item.label}
+              aria-current={active ? "page" : undefined}
               onClick={() => setMobileOpen(false)}
               className={cn(
                 "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",

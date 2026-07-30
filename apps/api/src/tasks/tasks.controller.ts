@@ -31,6 +31,12 @@ export class TasksController {
     return this.tasksService.findAll(orgId, query);
   }
 
+  @Get("today")
+  @ApiOperation({ summary: "List tasks due today" })
+  today(@OrganizationId() orgId: string) {
+    return this.tasksService.today(orgId);
+  }
+
   @Get(":id")
   @ApiOperation({ summary: "Get task" })
   findOne(@OrganizationId() orgId: string, @Param("id") id: string) {
