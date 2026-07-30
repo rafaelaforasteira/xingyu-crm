@@ -32,6 +32,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { cn, formatCurrency } from "@/lib/utils";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
 import { KanbanBoard } from "@/components/crm/kanban-board";
+import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
 import { DealWorkspaceDrawer } from "@/components/crm/deal-workspace";
 import { PipelineFormDialog } from "@/components/crm/pipeline-form-dialog";
 import { useUiStore } from "@/stores/ui";
@@ -179,11 +180,7 @@ function PipelineCard({
               <ExternalLink className="h-4 w-4" />
               Abrir
             </Link>
-            <MenuButton
-              icon={Pencil}
-              disabled={actionPending}
-              onClick={() => onEdit(pipeline)}
-            >
+            <MenuButton icon={Pencil} disabled={actionPending} onClick={() => onEdit(pipeline)}>
               Editar
             </MenuButton>
             <Link
@@ -270,9 +267,7 @@ function PipelineCard({
           </div>
           <div className="min-w-0 px-2 text-center">
             <p className="truncate text-sm font-semibold">
-              {pipeline.openValue == null
-                ? "—"
-                : formatCurrency(Number(pipeline.openValue))}
+              {pipeline.openValue == null ? "—" : formatCurrency(Number(pipeline.openValue))}
             </p>
             <p className="text-[11px] text-muted-foreground">em aberto</p>
           </div>
@@ -349,13 +344,7 @@ export function PipelinesListPage() {
   });
 
   const actionMutation = useMutation({
-    mutationFn: ({
-      action,
-      pipeline,
-    }: {
-      action: PipelineAction;
-      pipeline: Pipeline;
-    }) => {
+    mutationFn: ({ action, pipeline }: { action: PipelineAction; pipeline: Pipeline }) => {
       if (action === "duplicate") return pipelinesApi.duplicate(pipeline.id);
       if (action === "favorite") {
         return pipelinesApi.update(pipeline.id, {
@@ -521,16 +510,12 @@ export function PipelinesListPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            O pipeline <strong className="text-foreground">{pipelineToDelete?.name}</strong>{" "}
-            será removido da central. A API impedirá a operação se houver vínculos que
-            não possam ser preservados com segurança.
+            O pipeline <strong className="text-foreground">{pipelineToDelete?.name}</strong> será
+            removido da central. A API impedirá a operação se houver vínculos que não possam ser
+            preservados com segurança.
           </p>
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setPipelineToDelete(null)}
-            >
+            <Button type="button" variant="outline" onClick={() => setPipelineToDelete(null)}>
               Cancelar
             </Button>
             <Button
@@ -553,6 +538,7 @@ export function PipelinesListPage() {
 export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
   const openDealDrawer = useUiStore((state) => state.openDealDrawer);
+  const [createDealOpen, setCreateDealOpen] = React.useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.pipelines.board(pipelineId),
@@ -574,14 +560,27 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
         title={data?.name ?? "Pipeline"}
         description={data?.description ?? "Quadro Kanban"}
         actions={
-          <Link href="/pipelines" className="text-sm text-primary hover:underline">
-            Todos os pipelines
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/pipelines" className="text-sm text-primary hover:underline">
+              Todos os pipelines
+            </Link>
+            <Button
+              type="button"
+              disabled={!data?.stages?.length}
+              onClick={() => setCreateDealOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Criar card
+            </Button>
+          </div>
         }
       />
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       {isLoading ? <Skeleton className="h-96 w-full" /> : null}
       {data ? <KanbanBoard pipeline={data} onOpenDeal={onOpenDeal} /> : null}
+      {data ? (
+        <CreateDealDialog open={createDealOpen} onOpenChange={setCreateDealOpen} pipeline={data} />
+      ) : null}
       <DealWorkspaceDrawer />
     </div>
   );
