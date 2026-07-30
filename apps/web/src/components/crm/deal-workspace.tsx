@@ -97,12 +97,13 @@ function ConversationPane({ deal }: { deal: Deal }) {
 
   const resolvedId = conversationId ?? conversation?.id;
 
-  const { data: messages = [], isLoading } = useQuery({
+  const { data: messagePage, isLoading } = useQuery({
     queryKey: queryKeys.conversations.messages(resolvedId ?? "none"),
     queryFn: () => conversationsApi.messages(resolvedId!),
     enabled: !!resolvedId,
     retry: false,
   });
+  const messages = messagePage?.data ?? [];
 
   const { data: notes = [] } = useQuery({
     queryKey: queryKeys.notes("deal", deal.id),
