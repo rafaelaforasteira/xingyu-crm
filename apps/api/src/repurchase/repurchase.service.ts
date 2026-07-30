@@ -4,6 +4,8 @@ import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { QueryRepurchaseDto } from "./dto/repurchase.dto";
 import { fullName, toNumber } from "../common/mappers";
+import { CreateReactivationOpportunityDto } from "../reactivation/dto/reactivation.dto";
+import { createLifecycleOpportunity } from "../reactivation/reactivation-actions";
 
 type NumericValue = number | string | bigint | Prisma.Decimal;
 
@@ -297,5 +299,25 @@ export class RepurchaseService {
       });
 
     return paginate(data, total, page, pageSize);
+  }
+
+  createOpportunity(
+    organizationId: string,
+    contactId: string,
+    dto: CreateReactivationOpportunityDto,
+    actorId: string,
+  ) {
+    return createLifecycleOpportunity(
+      this.prisma,
+      organizationId,
+      contactId,
+      dto,
+      actorId,
+      {
+        source: "REPURCHASE",
+        kind: "REPURCHASE",
+        defaultNamePrefix: "Recompra",
+      },
+    );
   }
 }

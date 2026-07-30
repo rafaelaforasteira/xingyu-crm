@@ -404,6 +404,11 @@ export const ordersApi = {
 export const repurchaseApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<RepurchaseLead>>("/repurchase", query),
+  createOpportunity: (contactId: string, data: CreateLifecycleOpportunityInput) =>
+    api.post<LifecycleOpportunityResult>(
+      `/repurchase/${contactId}/opportunity`,
+      data,
+    ),
 };
 
 export const reactivationApi = {

@@ -55,6 +55,11 @@ function ScoreBadge({ score }: { score: number }) {
 
 export function RepurchasePage() {
   const [page, setPage] = React.useState(1);
+  const [createTarget, setCreateTarget] = React.useState<{
+    contactId: string;
+    contactName: string;
+    defaultOwnerId?: string | null;
+  } | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.repurchase({ page }),
     queryFn: () => repurchaseApi.list({ page, pageSize: 20 }),
@@ -68,27 +73,114 @@ export function RepurchasePage() {
         description="Contatos com alto potencial de novo pedido."
       />
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
-      <ScoreTable
-        loading={isLoading}
-        emptyIcon={RefreshCw}
-        emptyTitle="Nenhuma oportunidade de recompra"
-        rows={(data?.data ?? [])
-          .filter((r) => r.contact?.id)
-          .map((r) => ({
-          id: r.id,
-          href: `/contacts/${r.contact.id}`,
-          name: r.contact.name || "Contato",
-          score: r.score,
-          meta: r.reason || `${r.daysSinceOrder ?? "—"} dias desde o pedido`,
-          extra: r.predictedValue != null ? formatCurrency(r.predictedValue) : undefined,
-          status: r.status,
-        }))}
-      />
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium">Contato</th>
+              <th className="px-4 py-3 text-left font-medium">Score</th>
+              <th className="px-4 py-3 text-left font-medium">Motivo</th>
+              <th className="px-4 py-3 text-left font-medium">Valor previsto</th>
+              <th className="px-4 py-3 text-right font-medium">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-4 py-3" colSpan={5}>
+                      <Skeleton className="h-8 w-full" />
+                    </td>
+                  </tr>
+                ))
+              : null}
+            {!isLoading && (data?.data?.length ?? 0) === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-4">
+                  <EmptyState
+                    icon={RefreshCw}
+                    title="Nenhuma oportunidade de recompra"
+                  />
+                </td>
+              </tr>
+            ) : null}
+            {!isLoading
+              ? (data?.data ?? [])
+                  .filter((r) => r.contact?.id)
+                  .map((r) => (
+                    <tr
+                      key={r.id}
+                      className="border-b border-border/60 hover:bg-accent/40"
+                    >
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/contacts/${r.contact.id}`}
+                          className="font-medium hover:text-primary"
+                        >
+                          {r.contact.name || "Contato"}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {r.daysSinceOrder ?? "—"} dias desde o pedido
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <ScoreBadge score={r.score} />
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {r.reason || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.predictedValue != null
+                          ? formatCurrency(r.predictedValue)
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() =>
+                              setCreateTarget({
+                                contactId: r.contact.id,
+                                contactName: r.contact.name || "Contato",
+                                defaultOwnerId: r.owner?.id,
+                              })
+                            }
+                          >
+                            Criar oportunidade
+                          </Button>
+                          <Link
+                            href={`/contacts/${r.contact.id}`}
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-card px-2.5 text-xs font-medium hover:bg-accent"
+                          >
+                            Analisar
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+              : null}
+          </tbody>
+        </table>
+      </div>
       {data?.meta ? (
         <PaginationBar
           page={data.meta.page}
           totalPages={data.meta.totalPages}
           onPageChange={setPage}
+        />
+      ) : null}
+      {createTarget ? (
+        <CreateOpportunityDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setCreateTarget(null);
+          }}
+          contactId={createTarget.contactId}
+          contactName={createTarget.contactName}
+          defaultOwnerId={createTarget.defaultOwnerId}
+          createOpportunity={repurchaseApi.createOpportunity}
+          invalidateKeys={["repurchase"]}
         />
       ) : null}
     </div>

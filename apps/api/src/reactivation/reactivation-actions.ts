@@ -14,12 +14,19 @@ import {
  * Extends ReactivationService with opportunity conversion + workflow actions.
  * Mixed into the main service file via class merge pattern — appended methods.
  */
-export async function createReactivationOpportunity(
+export type LifecycleOpportunitySource = "REACTIVATION" | "REPURCHASE";
+
+export async function createLifecycleOpportunity(
   prisma: PrismaService,
   organizationId: string,
   contactId: string,
   dto: CreateReactivationOpportunityDto,
   actorId: string,
+  options: {
+    source: LifecycleOpportunitySource;
+    kind: "REACTIVATION" | "REPURCHASE";
+    defaultNamePrefix: string;
+  },
 ) {
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, organizationId, deletedAt: null },
@@ -82,7 +89,7 @@ export async function createReactivationOpportunity(
 
   const dealName =
     dto.name?.trim() ||
-    `Reativação — ${[contact.firstName, contact.lastName].filter(Boolean).join(" ")}`;
+    `${options.defaultNamePrefix} — ${[contact.firstName, contact.lastName].filter(Boolean).join(" ")}`;
 
   return prisma.$transaction(async (tx) => {
     let conversationId = dto.conversationId ?? null;
@@ -128,7 +135,7 @@ export async function createReactivationOpportunity(
         value: dto.value ?? 0,
         status: "OPEN",
         priority: "MEDIUM",
-        source: "REACTIVATION",
+        source: options.source,
         campaign: contact.campaign,
         enteredStageAt: new Date(),
         lastInteractionAt: new Date(),
@@ -149,7 +156,7 @@ export async function createReactivationOpportunity(
         dealId: deal.id,
         stageId: dto.stageId,
         movedById: actorId,
-        note: "Oportunidade criada a partir da Reativação",
+        note: `Oportunidade criada a partir de ${options.kind === "REACTIVATION" ? "Reativação" : "Recompra"}`,
       },
     });
 
@@ -157,12 +164,12 @@ export async function createReactivationOpportunity(
       data: {
         organizationId,
         type: "DEAL_CREATED",
-        title: `Oportunidade de reativação criada: ${deal.name}`,
+        title: `Oportunidade criada: ${deal.name}`,
         actorId,
         contactId,
         dealId: deal.id,
         conversationId: conversationId ?? undefined,
-        metadata: { source: "REACTIVATION" },
+        metadata: { source: options.source },
       },
     });
 
@@ -201,12 +208,12 @@ export async function createReactivationOpportunity(
       data: {
         organizationId,
         contactId,
-        kind: "REACTIVATION",
+        kind: options.kind,
         action: "CONVERTED",
         actorId,
         dealId: deal.id,
         conversationId: conversationId ?? undefined,
-        metadata: { source: "reactivation_opportunity" },
+        metadata: { source: `${options.source.toLowerCase()}_opportunity` },
       },
     });
 
@@ -224,6 +231,20 @@ export async function createReactivationOpportunity(
       taskId,
       conversationId,
     };
+  });
+}
+
+export async function createReactivationOpportunity(
+  prisma: PrismaService,
+  organizationId: string,
+  contactId: string,
+  dto: CreateReactivationOpportunityDto,
+  actorId: string,
+) {
+  return createLifecycleOpportunity(prisma, organizationId, contactId, dto, actorId, {
+    source: "REACTIVATION",
+    kind: "REACTIVATION",
+    defaultNamePrefix: "Reativação",
   });
 }
 
