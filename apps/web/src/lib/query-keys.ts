@@ -17,6 +17,7 @@ export const queryKeys = {
   },
   pipelines: {
     all: ["pipelines"] as const,
+    list: (params?: unknown) => ["pipelines", "list", params] as const,
     detail: (id: string) => ["pipelines", id] as const,
     board: (id: string) => ["pipelines", id, "board"] as const,
   },

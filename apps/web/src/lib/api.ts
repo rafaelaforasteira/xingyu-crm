@@ -18,12 +18,15 @@ import type {
   Order,
   PaginatedResponse,
   Pipeline,
+  PipelineInput,
+  PipelineListQuery,
   ReactivationLead,
   RepurchaseLead,
   SearchResult,
   SettingsOverview,
   Task,
   Team,
+  UserRef,
 } from "./types";
 import { normalizeMessages } from "./inbox-utils";
 
@@ -182,14 +185,34 @@ export const companiesApi = {
 };
 
 export const pipelinesApi = {
-  list: async () => {
+  list: async (query?: PipelineListQuery): Promise<PaginatedResponse<Pipeline>> => {
     const res = await api.get<Pipeline[] | PaginatedResponse<Pipeline>>("/pipelines", {
-      pageSize: 100,
+      page: query?.page,
+      pageSize: query?.pageSize ?? 20,
+      search: query?.search,
+      archived: query?.archived,
+      favorite: query?.favorite,
     });
-    return Array.isArray(res) ? res : res.data;
+    if (!Array.isArray(res)) return res;
+    return {
+      data: res,
+      meta: {
+        total: res.length,
+        page: query?.page ?? 1,
+        pageSize: query?.pageSize ?? Math.max(res.length, 1),
+        totalPages: 1,
+      },
+    };
   },
   get: (id: string) => api.get<Pipeline>(`/pipelines/${id}`),
   board: (id: string) => api.get<Pipeline>(`/pipelines/${id}/board`),
+  create: (data: PipelineInput) => api.post<Pipeline>("/pipelines", data),
+  update: (id: string, data: Partial<PipelineInput>) =>
+    api.patch<Pipeline>(`/pipelines/${id}`, data),
+  duplicate: (id: string) => api.post<Pipeline>(`/pipelines/${id}/duplicate`, {}),
+  archive: (id: string) => api.post<Pipeline>(`/pipelines/${id}/archive`),
+  restore: (id: string) => api.post<Pipeline>(`/pipelines/${id}/restore`),
+  remove: (id: string) => api.delete<void>(`/pipelines/${id}`),
 };
 
 export const dealsApi = {
@@ -324,7 +347,20 @@ export const notificationsApi = {
 
 export const settingsApi = {
   overview: () => api.get<SettingsOverview>("/settings"),
-  teams: () => api.get<Team[]>("/settings/teams"),
+  teams: async () => {
+    const response = await api.get<Team[] | PaginatedResponse<Team>>(
+      "/settings/teams",
+      { pageSize: 100 },
+    );
+    return Array.isArray(response) ? response : response.data;
+  },
+  users: async () => {
+    const response = await api.get<UserRef[] | PaginatedResponse<UserRef>>(
+      "/settings/users",
+      { pageSize: 100 },
+    );
+    return Array.isArray(response) ? response : response.data;
+  },
   update: (data: Partial<SettingsOverview>) => api.patch("/settings", data),
 };
 

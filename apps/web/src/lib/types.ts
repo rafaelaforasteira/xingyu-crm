@@ -63,15 +63,55 @@ export interface Pipeline {
   id: string;
   name: string;
   description?: string | null;
+  color?: string | null;
+  icon?: string | null;
   isDefault?: boolean;
+  favorite?: boolean;
+  archived?: boolean;
+  position?: number;
+  defaultTeamId?: string | null;
+  defaultTeam?: Team | null;
+  defaultOwnerId?: string | null;
+  defaultOwner?: UserRef | null;
   stages?: PipelineStage[];
   dealsCount?: number;
+  stagesCount?: number;
+  openValue?: number | string;
+  channels?: PipelineChannelSummary[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PipelineChannelSummary {
+  id: string;
+  name: string;
+  type?: string;
+  enabled?: boolean;
+}
+
+export interface PipelineListQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  archived?: boolean;
+  favorite?: boolean;
+}
+
+export interface PipelineInput {
+  name: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  defaultTeamId?: string | null;
+  defaultOwnerId?: string | null;
+  favorite?: boolean;
 }
 
 export interface PipelineStage {
   id: string;
   name: string;
   order: number;
+  position?: number;
   color?: string;
   probability?: number;
   deals?: Deal[];

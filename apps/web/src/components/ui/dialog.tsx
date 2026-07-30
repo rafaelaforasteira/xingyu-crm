@@ -24,6 +24,9 @@ export function Dialog({
   className,
   wide,
 }: DialogProps) {
+  const titleId = React.useId();
+  const descriptionId = React.useId();
+
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -45,7 +48,9 @@ export function Dialog({
       />
       <div
         role="dialog"
-        aria-modal
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
         className={cn(
           "relative z-10 w-full rounded-xl border border-border bg-card shadow-drawer",
           wide ? "max-w-2xl" : "max-w-lg",
@@ -54,9 +59,13 @@ export function Dialog({
       >
         <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <h2 className="text-base font-semibold">{title}</h2>
+            <h2 id={titleId} className="text-base font-semibold">
+              {title}
+            </h2>
             {description ? (
-              <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+              <p id={descriptionId} className="mt-0.5 text-sm text-muted-foreground">
+                {description}
+              </p>
             ) : null}
           </div>
           <Button
@@ -64,6 +73,7 @@ export function Dialog({
             size="icon"
             className="h-8 w-8 shrink-0"
             onClick={() => onOpenChange(false)}
+            aria-label="Fechar diálogo"
           >
             <X className="h-4 w-4" />
           </Button>

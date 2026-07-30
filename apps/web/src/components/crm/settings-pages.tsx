@@ -174,11 +174,11 @@ export function SettingsPipelinesPage() {
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       {isLoading ? (
         <Skeleton className="h-40 w-full" />
-      ) : (data ?? []).length === 0 ? (
+      ) : (data?.data?.length ?? 0) === 0 ? (
         <EmptyState icon={Kanban} title="Nenhum pipeline configurado" />
       ) : (
         <div className="space-y-2">
-          {(data ?? []).map((p) => (
+          {data?.data?.map((p) => (
             <Card key={p.id}>
               <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div>
