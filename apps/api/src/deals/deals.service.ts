@@ -16,6 +16,7 @@ import {
   UpdateDealDto,
   WinLoseDto,
 } from "./dto/deal.dto";
+import { toDealResponse } from "../common/mappers";
 
 type DbClient = Prisma.TransactionClient | PrismaService;
 
@@ -100,11 +101,12 @@ export class DealsService {
           company: { select: { id: true, legalName: true, tradeName: true } },
           stage: true,
           owner: { select: { id: true, name: true } },
+          tags: { include: { tag: true } },
         },
       }),
       this.prisma.deal.count({ where }),
     ]);
-    return paginate(data, total, page, pageSize);
+    return paginate(data.map(toDealResponse), total, page, pageSize);
   }
 
   async findOne(organizationId: string, id: string) {
@@ -123,11 +125,16 @@ export class DealsService {
           },
         },
         owner: { select: { id: true, name: true } },
+        tags: { include: { tag: true } },
         activities: { take: 20, orderBy: { createdAt: "desc" } },
       },
     });
     if (!deal) throw new NotFoundException(`Deal ${id} not found`);
-    return deal;
+    return {
+      ...toDealResponse(deal),
+      pipeline: deal.pipeline,
+      activities: deal.activities,
+    };
   }
 
   async create(organizationId: string, dto: CreateDealDto, userId: string) {
@@ -416,24 +423,8 @@ export class DealsService {
       ...pipeline,
       stages: pipeline.stages.map((stage) => ({
         ...stage,
-        deals: stage.deals.map((deal) => ({
-          ...deal,
-          value: Number(deal.value),
-          unreadCount: deal.unreadMessages,
-          contact: deal.contact
-            ? {
-                ...deal.contact,
-                name: [deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(" "),
-              }
-            : null,
-          company: deal.company
-            ? {
-                ...deal.company,
-                name: deal.company.tradeName ?? deal.company.legalName,
-              }
-            : null,
-          tags: deal.tags.map(({ tag }) => tag),
-        })),
+        position: stage.position,
+        deals: stage.deals.map((deal) => toDealResponse(deal)),
       })),
     };
   }

@@ -16,6 +16,7 @@ import {
   MergeContactsDto,
   DuplicateCheckDto,
 } from "./dto/contact.dto";
+import { toContactResponse, toDealResponse } from "../common/mappers";
 
 @Injectable()
 export class ContactsService {
@@ -64,7 +65,7 @@ export class ContactsService {
       this.prisma.contact.count({ where }),
     ]);
 
-    return paginate(data, total, page, pageSize);
+    return paginate(data.map(toContactResponse), total, page, pageSize);
   }
 
   async findOne(organizationId: string, id: string) {
@@ -79,12 +80,17 @@ export class ContactsService {
       },
     });
     if (!contact) throw new NotFoundException(`Contact ${id} not found`);
-    return contact;
+    const { notes: noteRecords, deals, ...rest } = contact;
+    return {
+      ...toContactResponse(rest),
+      noteRecords,
+      deals: deals.map((deal) => toDealResponse(deal)),
+    };
   }
 
   async create(organizationId: string, dto: CreateContactDto, userId: string) {
     const { tagIds, notes, ...data } = dto as CreateContactDto & { notes?: string; tagIds?: string[] };
-    return this.prisma.contact.create({
+    const created = await this.prisma.contact.create({
       data: {
         ...data,
         observations: notes,
@@ -96,14 +102,19 @@ export class ContactsService {
           ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } }
           : {}),
       } as never,
-      include: { tags: { include: { tag: true } }, company: true },
+      include: {
+        tags: { include: { tag: true } },
+        company: true,
+        owner: { select: { id: true, name: true } },
+      },
     });
+    return toContactResponse(created);
   }
 
   async update(organizationId: string, id: string, dto: UpdateContactDto) {
-    await this.findOne(organizationId, id);
+    await this.requireContact(organizationId, id);
     const { tagIds, notes, ...data } = dto as UpdateContactDto & { notes?: string; tagIds?: string[] };
-    return this.prisma.contact.update({
+    const updated = await this.prisma.contact.update({
       where: { id },
       data: {
         ...data,
@@ -119,22 +130,36 @@ export class ContactsService {
             }
           : {}),
       } as never,
-      include: { tags: { include: { tag: true } }, company: true },
+      include: {
+        tags: { include: { tag: true } },
+        company: true,
+        owner: { select: { id: true, name: true } },
+      },
     });
+    return toContactResponse(updated);
   }
 
   async remove(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
+    await this.requireContact(organizationId, id);
     return this.prisma.contact.update({
       where: { id },
       data: softDeleteData(),
     });
   }
 
+  private async requireContact(organizationId: string, id: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      select: { id: true },
+    });
+    if (!contact) throw new NotFoundException(`Contact ${id} not found`);
+    return contact;
+  }
+
   async bulkTags(organizationId: string, dto: BulkTagsDto) {
     const mode = dto.mode ?? "add";
     for (const contactId of dto.contactIds) {
-      await this.findOne(organizationId, contactId);
+      await this.requireContact(organizationId, contactId);
       if (mode === "set") {
         await this.prisma.contactTag.deleteMany({ where: { contactId } });
         await this.prisma.contactTag.createMany({
@@ -175,8 +200,8 @@ export class ContactsService {
     if (dto.primaryId === dto.secondaryId) {
       throw new BadRequestException("Cannot merge a contact with itself");
     }
-    const primary = await this.findOne(organizationId, dto.primaryId);
-    const secondary = await this.findOne(organizationId, dto.secondaryId);
+    const primary = await this.requireContact(organizationId, dto.primaryId);
+    const secondary = await this.requireContact(organizationId, dto.secondaryId);
 
     await this.prisma.$transaction([
       this.prisma.deal.updateMany({

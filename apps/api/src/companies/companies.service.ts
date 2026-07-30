@@ -3,6 +3,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
 import { CreateCompanyDto, UpdateCompanyDto, QueryCompaniesDto } from "./dto/company.dto";
+import { toCompanyResponse, toContactResponse, toDealResponse } from "../common/mappers";
 
 @Injectable()
 export class CompaniesService {
@@ -40,7 +41,7 @@ export class CompaniesService {
       }),
       this.prisma.company.count({ where }),
     ]);
-    return paginate(data, total, page, pageSize);
+    return paginate(data.map(toCompanyResponse), total, page, pageSize);
   }
 
   async findOne(organizationId: string, id: string) {
@@ -49,36 +50,63 @@ export class CompaniesService {
       include: {
         owner: { select: { id: true, name: true } },
         contacts: { where: notDeleted, take: 50 },
-        deals: { where: notDeleted, take: 20, orderBy: { updatedAt: "desc" } },
+        deals: {
+          where: notDeleted,
+          take: 20,
+          orderBy: { updatedAt: "desc" },
+          include: {
+            tags: { include: { tag: true } },
+            contact: true,
+            company: true,
+            stage: true,
+          },
+        },
       },
     });
     if (!company) throw new NotFoundException(`Company ${id} not found`);
-    return company;
+    return {
+      ...toCompanyResponse(company),
+      contacts: company.contacts.map(toContactResponse),
+      deals: company.deals.map(toDealResponse),
+    };
   }
 
   async create(organizationId: string, dto: CreateCompanyDto, userId: string) {
     const { notes, ...rest } = dto as CreateCompanyDto & { notes?: string };
-    return this.prisma.company.create({
+    const created = await this.prisma.company.create({
       data: {
         ...rest,
         observations: notes,
         organizationId,
         ownerId: dto.ownerId ?? userId,
       } as never,
+      include: { owner: { select: { id: true, name: true } } },
     });
+    return toCompanyResponse(created);
   }
 
   async update(organizationId: string, id: string, dto: UpdateCompanyDto) {
-    await this.findOne(organizationId, id);
+    await this.requireCompany(organizationId, id);
     const { notes, ...rest } = dto as UpdateCompanyDto & { notes?: string };
-    return this.prisma.company.update({
+    const updated = await this.prisma.company.update({
       where: { id },
       data: { ...rest, ...(notes !== undefined ? { observations: notes } : {}) } as never,
+      include: { owner: { select: { id: true, name: true } } },
     });
+    return toCompanyResponse(updated);
   }
 
   async remove(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
+    await this.requireCompany(organizationId, id);
     return this.prisma.company.update({ where: { id }, data: softDeleteData() });
+  }
+
+  private async requireCompany(organizationId: string, id: string) {
+    const company = await this.prisma.company.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      select: { id: true },
+    });
+    if (!company) throw new NotFoundException(`Company ${id} not found`);
+    return company;
   }
 }
