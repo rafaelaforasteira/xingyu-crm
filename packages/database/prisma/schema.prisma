@@ -968,6 +968,9 @@ model Conversation {
   @@index([assigneeId])
   @@index([status])
   @@index([lastMessageAt])
+  @@index([organizationId, lastMessageAt])
+  @@index([organizationId, channelId, lastMessageAt])
+  @@index([organizationId, assigneeId, status])
 }
 
 model Message {
@@ -993,6 +996,7 @@ model Message {
   @@index([conversationId])
   @@index([sentAt])
   @@index([direction])
+  @@index([conversationId, sentAt])
 }
 
 model MessageAttachment {

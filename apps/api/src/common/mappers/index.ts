@@ -24,3 +24,11 @@ export {
   type PipelineStageMapperInput,
   type PipelineStageResponse,
 } from "./pipeline.mapper";
+export {
+  toChannelSummary,
+  toContactSummary,
+  toConversationListItem,
+  toCurrentDealSummary,
+  mergeConversationTags,
+  type ConversationListInput,
+} from "./conversation.mapper";
