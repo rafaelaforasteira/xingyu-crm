@@ -49,14 +49,18 @@ export class MarketingService {
   async create(organizationId: string, dto: CreateCampaignDto) {
     return this.prisma.campaign.create({
       data: {
-        ...dto,
+        name: dto.name,
         organizationId,
         status: dto.status ?? "DRAFT",
         channel: dto.channel ?? "meta_ads",
-        startAt: dto.startAt ? new Date(dto.startAt) : undefined,
-        endAt: dto.endAt ? new Date(dto.endAt) : undefined,
-        utmParams: dto.utmParams ?? {},
-      },
+        budget: dto.budget,
+        startsAt: dto.startAt ? new Date(dto.startAt) : undefined,
+        endsAt: dto.endAt ? new Date(dto.endAt) : undefined,
+        metadata: {
+          description: dto.description,
+          utmParams: dto.utmParams ?? {},
+        } as never,
+      } as never,
     });
   }
 
@@ -65,10 +69,17 @@ export class MarketingService {
     return this.prisma.campaign.update({
       where: { id },
       data: {
-        ...dto,
-        startAt: dto.startAt ? new Date(dto.startAt) : undefined,
-        endAt: dto.endAt ? new Date(dto.endAt) : undefined,
-      },
+        name: dto.name,
+        status: dto.status,
+        channel: dto.channel,
+        budget: dto.budget,
+        startsAt: dto.startAt ? new Date(dto.startAt) : undefined,
+        endsAt: dto.endAt ? new Date(dto.endAt) : undefined,
+        metadata: {
+          description: dto.description,
+          utmParams: dto.utmParams ?? {},
+        } as never,
+      } as never,
     });
   }
 
@@ -84,45 +95,36 @@ export class MarketingService {
 
     const where: Record<string, unknown> = {
       organizationId,
-      ...notDeleted,
       ...(query.campaignId ? { campaignId: query.campaignId } : {}),
       ...(query.source ? { source: query.source } : {}),
-      source: { not: null },
     };
 
-    const [deals, total] = await Promise.all([
-      this.prisma.deal.findMany({
+    const [rows, total] = await Promise.all([
+      this.prisma.attribution.findMany({
         where,
         skip,
         take,
         orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          title: true,
-          value: true,
-          status: true,
-          source: true,
-          campaignId: true,
-          createdAt: true,
-          contact: { select: { id: true, name: true } },
+        include: {
+          contact: { select: { id: true, firstName: true, lastName: true } },
+          order: { select: { id: true, number: true, finalValue: true } },
+          campaignRef: { select: { id: true, name: true } },
         },
       }),
-      this.prisma.deal.count({ where }),
+      this.prisma.attribution.count({ where }),
     ]);
 
-    const bySource = await this.prisma.deal.groupBy({
+    const bySource = await this.prisma.attribution.groupBy({
       by: ["source"],
-      where: { organizationId, ...notDeleted, source: { not: null } },
+      where: { organizationId },
       _count: true,
-      _sum: { value: true },
     });
 
     return {
-      ...paginate(deals, total, page, pageSize),
+      ...paginate(rows, total, page, pageSize),
       summary: bySource.map((row) => ({
         source: row.source,
         count: row._count,
-        totalValue: row._sum.value ?? 0,
       })),
     };
   }

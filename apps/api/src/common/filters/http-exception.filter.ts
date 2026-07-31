@@ -28,11 +28,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = body;
       } else if (typeof body === "object" && body !== null) {
         const obj = body as Record<string, unknown>;
+        if (
+          status === HttpStatus.SERVICE_UNAVAILABLE &&
+          obj.status === "degraded" &&
+          obj.database === "down"
+        ) {
+          response.status(status).json(obj);
+          return;
+        }
         message = (obj.message as string | string[]) ?? message;
         error = (obj.error as string) ?? error;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
       this.logger.error(exception.message, exception.stack);
     }
 

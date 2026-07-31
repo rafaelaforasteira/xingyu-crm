@@ -13,7 +13,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30_000,
+            staleTime: 60_000,
+            gcTime: 5 * 60_000,
             refetchOnWindowFocus: false,
             retry: 1,
           },
@@ -31,7 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background" data-app-shell="true">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />

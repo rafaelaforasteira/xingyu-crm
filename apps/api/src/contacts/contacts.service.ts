@@ -16,10 +16,23 @@ import {
   MergeContactsDto,
   DuplicateCheckDto,
 } from "./dto/contact.dto";
+import { toContactResponse, toDealResponse } from "../common/mappers";
 
 @Injectable()
 export class ContactsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private contactNameFilter(search: string) {
+    return {
+      OR: [
+        { firstName: { contains: search, mode: "insensitive" as const } },
+        { lastName: { contains: search, mode: "insensitive" as const } },
+        { email: { contains: search, mode: "insensitive" as const } },
+        { phone: { contains: search, mode: "insensitive" as const } },
+        { whatsapp: { contains: search, mode: "insensitive" as const } },
+      ],
+    };
+  }
 
   async findAll(organizationId: string, query: QueryContactsDto) {
     const page = query.page ?? 1;
@@ -33,18 +46,8 @@ export class ContactsService {
       ...(query.teamId ? { teamId: query.teamId } : {}),
       ...(query.companyId ? { companyId: query.companyId } : {}),
       ...(query.status ? { status: query.status } : {}),
-      ...(query.archived !== undefined ? { archived: query.archived } : { archived: false }),
       ...(query.tagId ? { tags: { some: { tagId: query.tagId } } } : {}),
-      ...(query.search
-        ? {
-            OR: [
-              { name: { contains: query.search, mode: "insensitive" } },
-              { email: { contains: query.search, mode: "insensitive" } },
-              { phone: { contains: query.search, mode: "insensitive" } },
-              { whatsapp: { contains: query.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
+      ...(query.search ? this.contactNameFilter(query.search) : {}),
     };
 
     const [data, total] = await Promise.all([
@@ -62,7 +65,7 @@ export class ContactsService {
       this.prisma.contact.count({ where }),
     ]);
 
-    return paginate(data, total, page, pageSize);
+    return paginate(data.map(toContactResponse), total, page, pageSize);
   }
 
   async findOne(organizationId: string, id: string) {
@@ -77,31 +80,47 @@ export class ContactsService {
       },
     });
     if (!contact) throw new NotFoundException(`Contact ${id} not found`);
-    return contact;
+    const { notes: noteRecords, deals, ...rest } = contact;
+    return {
+      ...toContactResponse(rest),
+      noteRecords,
+      deals: deals.map((deal) => toDealResponse(deal)),
+    };
   }
 
   async create(organizationId: string, dto: CreateContactDto, userId: string) {
-    const { tagIds, ...data } = dto;
-    return this.prisma.contact.create({
+    const { tagIds, notes, ...data } = dto as CreateContactDto & { notes?: string; tagIds?: string[] };
+    const created = await this.prisma.contact.create({
       data: {
         ...data,
+        observations: notes,
         organizationId,
         ownerId: data.ownerId ?? userId,
+        type: data.type as never,
+        status: data.status as never,
         ...(tagIds?.length
           ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } }
           : {}),
+      } as never,
+      include: {
+        tags: { include: { tag: true } },
+        company: true,
+        owner: { select: { id: true, name: true } },
       },
-      include: { tags: { include: { tag: true } }, company: true },
     });
+    return toContactResponse(created);
   }
 
   async update(organizationId: string, id: string, dto: UpdateContactDto) {
-    await this.findOne(organizationId, id);
-    const { tagIds, ...data } = dto;
-    return this.prisma.contact.update({
+    await this.requireContact(organizationId, id);
+    const { tagIds, notes, ...data } = dto as UpdateContactDto & { notes?: string; tagIds?: string[] };
+    const updated = await this.prisma.contact.update({
       where: { id },
       data: {
         ...data,
+        ...(notes !== undefined ? { observations: notes } : {}),
+        type: data.type as never,
+        status: data.status as never,
         ...(tagIds
           ? {
               tags: {
@@ -110,23 +129,37 @@ export class ContactsService {
               },
             }
           : {}),
+      } as never,
+      include: {
+        tags: { include: { tag: true } },
+        company: true,
+        owner: { select: { id: true, name: true } },
       },
-      include: { tags: { include: { tag: true } }, company: true },
     });
+    return toContactResponse(updated);
   }
 
   async remove(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
+    await this.requireContact(organizationId, id);
     return this.prisma.contact.update({
       where: { id },
       data: softDeleteData(),
     });
   }
 
+  private async requireContact(organizationId: string, id: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      select: { id: true },
+    });
+    if (!contact) throw new NotFoundException(`Contact ${id} not found`);
+    return contact;
+  }
+
   async bulkTags(organizationId: string, dto: BulkTagsDto) {
     const mode = dto.mode ?? "add";
     for (const contactId of dto.contactIds) {
-      await this.findOne(organizationId, contactId);
+      await this.requireContact(organizationId, contactId);
       if (mode === "set") {
         await this.prisma.contactTag.deleteMany({ where: { contactId } });
         await this.prisma.contactTag.createMany({
@@ -158,7 +191,7 @@ export class ContactsService {
   async bulkArchive(organizationId: string, dto: BulkArchiveDto) {
     await this.prisma.contact.updateMany({
       where: { id: { in: dto.contactIds }, organizationId, ...notDeleted },
-      data: { archived: dto.archived ?? true },
+      data: { status: dto.archived === false ? "ACTIVE_CUSTOMER" : "ARCHIVED" },
     });
     return { updated: dto.contactIds.length };
   }
@@ -167,8 +200,8 @@ export class ContactsService {
     if (dto.primaryId === dto.secondaryId) {
       throw new BadRequestException("Cannot merge a contact with itself");
     }
-    const primary = await this.findOne(organizationId, dto.primaryId);
-    const secondary = await this.findOne(organizationId, dto.secondaryId);
+    const primary = await this.requireContact(organizationId, dto.primaryId);
+    const secondary = await this.requireContact(organizationId, dto.secondaryId);
 
     await this.prisma.$transaction([
       this.prisma.deal.updateMany({
@@ -193,7 +226,7 @@ export class ContactsService {
       }),
       this.prisma.contact.update({
         where: { id: secondary.id },
-        data: { ...softDeleteData(), archived: true, mergedIntoId: primary.id },
+        data: softDeleteData(),
       }),
     ]);
 
@@ -205,7 +238,9 @@ export class ContactsService {
     if (dto.email) or.push({ email: { equals: dto.email, mode: "insensitive" } });
     if (dto.phone) or.push({ phone: dto.phone });
     if (dto.whatsapp) or.push({ whatsapp: dto.whatsapp });
-    if (dto.name) or.push({ name: { equals: dto.name, mode: "insensitive" } });
+    if (dto.firstName) {
+      or.push({ firstName: { equals: dto.firstName, mode: "insensitive" } });
+    }
     if (!or.length) return { duplicates: [] };
 
     const duplicates = await this.prisma.contact.findMany({
@@ -213,7 +248,8 @@ export class ContactsService {
       take: 20,
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
         email: true,
         phone: true,
         whatsapp: true,

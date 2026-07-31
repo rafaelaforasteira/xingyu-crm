@@ -16,6 +16,7 @@ import {
   CreateConversationDto,
   UpdateConversationDto,
   QueryConversationsDto,
+  QueryMessagesDto,
   SendMessageDto,
 } from "./dto/conversation.dto";
 
@@ -26,13 +27,39 @@ export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 
   @Get()
-  @ApiOperation({ summary: "List conversations" })
+  @ApiOperation({ summary: "List conversations (light inbox payload)" })
   findAll(@OrganizationId() orgId: string, @Query() query: QueryConversationsDto) {
     return this.conversationsService.findAll(orgId, query);
   }
 
+  @Get(":id/context")
+  @ApiOperation({
+    summary: "Lead context panel summary",
+    description:
+      "Returns counts and summaries only. Use notes/tasks/orders APIs with entity ids from this payload for full lists.",
+  })
+  getContext(@OrganizationId() orgId: string, @Param("id") id: string) {
+    return this.conversationsService.getContext(orgId, id);
+  }
+
+  @Get(":id/messages")
+  @ApiOperation({ summary: "List messages with cursor pagination" })
+  listMessages(
+    @OrganizationId() orgId: string,
+    @Param("id") id: string,
+    @Query() query: QueryMessagesDto,
+  ) {
+    return this.conversationsService.listMessages(orgId, id, query);
+  }
+
+  @Patch(":id/read")
+  @ApiOperation({ summary: "Mark conversation as read" })
+  markAsRead(@OrganizationId() orgId: string, @Param("id") id: string) {
+    return this.conversationsService.markAsRead(orgId, id);
+  }
+
   @Get(":id")
-  @ApiOperation({ summary: "Get conversation" })
+  @ApiOperation({ summary: "Get conversation detail (no message history)" })
   findOne(@OrganizationId() orgId: string, @Param("id") id: string) {
     return this.conversationsService.findOne(orgId, id);
   }
@@ -61,16 +88,6 @@ export class ConversationsController {
   @ApiOperation({ summary: "Soft-delete conversation" })
   remove(@OrganizationId() orgId: string, @Param("id") id: string) {
     return this.conversationsService.remove(orgId, id);
-  }
-
-  @Get(":id/messages")
-  @ApiOperation({ summary: "List messages" })
-  listMessages(
-    @OrganizationId() orgId: string,
-    @Param("id") id: string,
-    @Query() query: QueryConversationsDto,
-  ) {
-    return this.conversationsService.listMessages(orgId, id, query);
   }
 
   @Post(":id/messages")

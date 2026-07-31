@@ -45,11 +45,23 @@ enum DealPriority {
   URGENT
 }
 
+enum PipelineStageType {
+  OPEN
+  WON
+  LOST
+}
+
 enum TaskStatus {
   PENDING
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum TaskStatusCategory {
+  OPEN
+  IN_PROGRESS
+  DONE
 }
 
 enum TaskType {
@@ -99,8 +111,24 @@ enum ChannelType {
   WHATSAPP
   INSTAGRAM
   SITE_CHAT
+  WEB_CHAT
   EMAIL
+  SHOPIFY
+  FORM
+  WEBHOOK
   MANUAL
+}
+
+enum PipelineDuplicateStrategy {
+  MERGE
+  CREATE_NEW
+  REJECT
+}
+
+enum PipelineRoutingMode {
+  PIPELINE_DEFAULTS
+  FIXED
+  ROUND_ROBIN
 }
 
 enum OrderStatus {
@@ -238,6 +266,18 @@ enum ActivityType {
   OTHER
 }
 
+enum LifecycleKind {
+  REACTIVATION
+  REPURCHASE
+}
+
+enum LifecycleActionType {
+  APPROACHED
+  POSTPONED
+  DISCARDED
+  CONVERTED
+}
+
 model Organization {
   id        String    @id @default(cuid())
   name      String
@@ -248,30 +288,33 @@ model Organization {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  users            User[]
-  teams            Team[]
-  roles            Role[]
-  contacts         Contact[]
-  companies        Company[]
-  pipelines        Pipeline[]
-  deals            Deal[]
-  tasks            Task[]
-  activities       Activity[]
-  notes            Note[]
-  tags             Tag[]
-  customFields     CustomFieldDefinition[]
-  conversations    Conversation[]
-  channels         Channel[]
-  orders           Order[]
-  products         Product[]
-  collections      ProductCollection[]
-  occurrences      Occurrence[]
-  campaigns        Campaign[]
-  automations      Automation[]
-  notifications    Notification[]
-  savedViews       SavedView[]
-  auditLogs        AuditLog[]
-  attributions     Attribution[]
+  users                      User[]
+  teams                      Team[]
+  roles                      Role[]
+  contacts                   Contact[]
+  companies                  Company[]
+  pipelines                  Pipeline[]
+  deals                      Deal[]
+  tasks                      Task[]
+  activities                 Activity[]
+  notes                      Note[]
+  tags                       Tag[]
+  customFields               CustomFieldDefinition[]
+  conversations              Conversation[]
+  channels                   Channel[]
+  pipelineChannelConnections PipelineChannelConnection[]
+  orders                     Order[]
+  products                   Product[]
+  collections                ProductCollection[]
+  occurrences                Occurrence[]
+  campaigns                  Campaign[]
+  automations                Automation[]
+  notifications              Notification[]
+  savedViews                 SavedView[]
+  auditLogs                  AuditLog[]
+  attributions               Attribution[]
+  lifecycleActions           LifecycleAction[]
+  taskStatusDefinitions      TaskStatusDefinition[]
 }
 
 model Role {
@@ -301,11 +344,13 @@ model Team {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  members      User[]
-  contacts     Contact[]
-  deals        Deal[]
-  tasks        Task[]
+  organization               Organization                @relation(fields: [organizationId], references: [id])
+  members                    User[]
+  contacts                   Contact[]
+  deals                      Deal[]
+  tasks                      Task[]
+  defaultPipelines           Pipeline[]                  @relation("PipelineDefaultTeam")
+  pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultTeam")
 
   @@index([organizationId])
 }
@@ -333,19 +378,22 @@ model User {
   manager      User?        @relation("UserManager", fields: [managerId], references: [id])
   reports      User[]       @relation("UserManager")
 
-  ownedContacts       Contact[]      @relation("ContactOwner")
-  ownedCompanies      Company[]      @relation("CompanyOwner")
-  ownedDeals          Deal[]         @relation("DealOwner")
-  assignedTasks       Task[]         @relation("TaskAssignee")
-  createdTasks        Task[]         @relation("TaskCreator")
-  assignedConversations Conversation[] @relation("ConversationAssignee")
-  sentMessages        Message[]      @relation("MessageSender")
-  ownedOrders         Order[]        @relation("OrderOwner")
-  ownedOccurrences    Occurrence[]   @relation("OccurrenceOwner")
-  notifications       Notification[]
-  activities          Activity[]     @relation("ActivityActor")
-  notes               Note[]
-  auditLogs           AuditLog[]
+  ownedContacts              Contact[]                   @relation("ContactOwner")
+  ownedCompanies             Company[]                   @relation("CompanyOwner")
+  ownedDeals                 Deal[]                      @relation("DealOwner")
+  assignedTasks              Task[]                      @relation("TaskAssignee")
+  createdTasks               Task[]                      @relation("TaskCreator")
+  assignedConversations      Conversation[]              @relation("ConversationAssignee")
+  sentMessages               Message[]                   @relation("MessageSender")
+  ownedOrders                Order[]                     @relation("OrderOwner")
+  ownedOccurrences           Occurrence[]                @relation("OccurrenceOwner")
+  notifications              Notification[]
+  activities                 Activity[]                  @relation("ActivityActor")
+  notes                      Note[]
+  auditLogs                  AuditLog[]
+  defaultPipelines           Pipeline[]                  @relation("PipelineDefaultOwner")
+  pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultOwner")
+  lifecycleActions           LifecycleAction[]           @relation("LifecycleActionActor")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -373,7 +421,7 @@ model Company {
   totalPurchased Decimal   @default(0) @db.Decimal(14, 2)
   averageTicket  Decimal   @default(0) @db.Decimal(14, 2)
   lastPurchaseAt DateTime?
-  notes          String?
+  observations   String?
   createdById    String?
   updatedById    String?
   createdAt      DateTime  @default(now())
@@ -388,6 +436,7 @@ model Company {
   occurrences  Occurrence[]
   activities   Activity[]
   notes        Note[]
+  tasks        Task[]
 
   @@index([organizationId])
   @@index([cnpj])
@@ -398,55 +447,56 @@ model Company {
 }
 
 model Contact {
-  id                String        @id @default(cuid())
-  organizationId    String
-  companyId         String?
-  ownerId           String?
-  teamId            String?
-  firstName         String
-  lastName          String?
-  phone             String?
-  whatsapp          String?
-  email             String?
-  instagram         String?
-  city              String?
-  state             String?
-  country           String?       @default("Brasil")
-  cnpj              String?
-  cpf               String?
-  type              ContactType   @default(OTHER)
-  status            ContactStatus @default(LEAD)
-  source            String?
-  campaign          String?
-  notes             String?
-  firstInteractionAt DateTime?
-  firstPurchaseAt   DateTime?
-  lastPurchaseAt    DateTime?
-  totalPurchased    Decimal       @default(0) @db.Decimal(14, 2)
-  averageTicket     Decimal       @default(0) @db.Decimal(14, 2)
-  orderCount        Int           @default(0)
+  id                  String        @id @default(cuid())
+  organizationId      String
+  companyId           String?
+  ownerId             String?
+  teamId              String?
+  firstName           String
+  lastName            String?
+  phone               String?
+  whatsapp            String?
+  email               String?
+  instagram           String?
+  city                String?
+  state               String?
+  country             String?       @default("Brasil")
+  cnpj                String?
+  cpf                 String?
+  type                ContactType   @default(OTHER)
+  status              ContactStatus @default(LEAD)
+  source              String?
+  campaign            String?
+  observations        String?
+  firstInteractionAt  DateTime?
+  firstPurchaseAt     DateTime?
+  lastPurchaseAt      DateTime?
+  totalPurchased      Decimal       @default(0) @db.Decimal(14, 2)
+  averageTicket       Decimal       @default(0) @db.Decimal(14, 2)
+  orderCount          Int           @default(0)
   daysWithoutPurchase Int?
-  nextContactAt     DateTime?
-  createdById       String?
-  updatedById       String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  deletedAt         DateTime?
+  nextContactAt       DateTime?
+  createdById         String?
+  updatedById         String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
 
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  company       Company?       @relation(fields: [companyId], references: [id])
-  owner         User?          @relation("ContactOwner", fields: [ownerId], references: [id])
-  team          Team?          @relation(fields: [teamId], references: [id])
-  tags          ContactTag[]
-  deals         Deal[]
-  tasks         Task[]
-  conversations Conversation[]
-  orders        Order[]
-  occurrences   Occurrence[]
-  activities    Activity[]
-  notes         Note[]
-  attributions  Attribution[]
-  customValues  CustomFieldValue[]
+  organization     Organization       @relation(fields: [organizationId], references: [id])
+  company          Company?           @relation(fields: [companyId], references: [id])
+  owner            User?              @relation("ContactOwner", fields: [ownerId], references: [id])
+  team             Team?              @relation(fields: [teamId], references: [id])
+  tags             ContactTag[]
+  deals            Deal[]
+  tasks            Task[]
+  conversations    Conversation[]
+  orders           Order[]
+  occurrences      Occurrence[]
+  activities       Activity[]
+  notes            Note[]
+  attributions     Attribution[]
+  customValues     CustomFieldValue[]
+  lifecycleActions LifecycleAction[]
 
   @@index([organizationId])
   @@index([phone])
@@ -468,90 +518,112 @@ model Pipeline {
   name           String
   description    String?
   color          String?   @default("#7C3AED")
+  icon           String?
   isDefault      Boolean   @default(false)
+  favorite       Boolean   @default(false)
   position       Int       @default(0)
   archived       Boolean   @default(false)
+  defaultTeamId  String?
+  defaultOwnerId String?
   createdById    String?
   updatedById    String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization    @relation(fields: [organizationId], references: [id])
-  stages       PipelineStage[]
-  deals        Deal[]
+  organization       Organization                @relation(fields: [organizationId], references: [id])
+  defaultTeam        Team?                       @relation("PipelineDefaultTeam", fields: [defaultTeamId], references: [id], onDelete: SetNull)
+  defaultOwner       User?                       @relation("PipelineDefaultOwner", fields: [defaultOwnerId], references: [id], onDelete: SetNull)
+  stages             PipelineStage[]
+  deals              Deal[]
+  tasks              Task[]
+  channelConnections PipelineChannelConnection[]
 
   @@index([organizationId])
   @@index([archived])
+  @@index([defaultTeamId])
+  @@index([defaultOwnerId])
+  @@index([organizationId, deletedAt, archived, favorite])
 }
 
 model PipelineStage {
-  id             String    @id @default(cuid())
-  organizationId String
-  pipelineId     String
-  name           String
-  color          String?   @default("#A78BFA")
-  position       Int       @default(0)
-  isWon          Boolean   @default(false)
-  isLost         Boolean   @default(false)
-  maxDaysInStage Int?
-  rules          Json?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
+  id                 String            @id @default(cuid())
+  organizationId     String
+  pipelineId         String
+  name               String
+  description        String?
+  color              String?           @default("#A78BFA")
+  position           Int               @default(0)
+  type               PipelineStageType @default(OPEN)
+  isInitial          Boolean           @default(false)
+  maxDurationMinutes Int?
+  probability        Int?
+  archived           Boolean           @default(false)
+  isWon              Boolean           @default(false)
+  isLost             Boolean           @default(false)
+  maxDaysInStage     Int?
+  rules              Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deletedAt          DateTime?
 
-  pipeline Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  deals    Deal[]
-  history  DealStageHistory[]
+  pipeline                   Pipeline                    @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals                      Deal[]
+  tasks                      Task[]
+  history                    DealStageHistory[]
+  pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultStage")
 
   @@index([pipelineId])
   @@index([organizationId])
   @@index([position])
+  @@index([pipelineId, deletedAt, archived, position])
+  @@index([pipelineId, type])
 }
 
 model Deal {
-  id              String       @id @default(cuid())
-  organizationId  String
-  pipelineId      String
-  stageId         String
-  contactId       String?
-  companyId       String?
-  ownerId         String?
-  teamId          String?
-  conversationId  String?      @unique
-  name            String
-  value           Decimal      @default(0) @db.Decimal(14, 2)
-  status          DealStatus   @default(OPEN)
-  priority        DealPriority @default(MEDIUM)
-  source          String?
-  campaign        String?
-  lostReason      String?
-  enteredStageAt  DateTime     @default(now())
-  closedAt        DateTime?
-  nextTaskAt      DateTime?
+  id                String       @id @default(cuid())
+  organizationId    String
+  pipelineId        String
+  stageId           String
+  contactId         String?
+  companyId         String?
+  ownerId           String?
+  teamId            String?
+  conversationId    String?      @unique
+  name              String
+  value             Decimal      @default(0) @db.Decimal(14, 2)
+  status            DealStatus   @default(OPEN)
+  priority          DealPriority @default(MEDIUM)
+  source            String?
+  campaign          String?
+  lostReason        String?
+  enteredStageAt    DateTime     @default(now())
+  closedAt          DateTime?
+  nextTaskAt        DateTime?
   lastInteractionAt DateTime?
-  unreadMessages  Int          @default(0)
-  createdById     String?
-  updatedById     String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  deletedAt       DateTime?
+  unreadMessages    Int          @default(0)
+  createdById       String?
+  updatedById       String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  deletedAt         DateTime?
 
-  organization Organization      @relation(fields: [organizationId], references: [id])
-  pipeline     Pipeline          @relation(fields: [pipelineId], references: [id])
-  stage        PipelineStage     @relation(fields: [stageId], references: [id])
-  contact      Contact?          @relation(fields: [contactId], references: [id])
-  company      Company?          @relation(fields: [companyId], references: [id])
-  owner        User?             @relation("DealOwner", fields: [ownerId], references: [id])
-  team         Team?             @relation(fields: [teamId], references: [id])
-  conversation Conversation?     @relation(fields: [conversationId], references: [id])
-  tags         DealTag[]
-  stageHistory DealStageHistory[]
-  tasks        Task[]
-  orders       Order[]
-  activities   Activity[]
-  notes        Note[]
-  customValues CustomFieldValue[]
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  pipeline        Pipeline           @relation(fields: [pipelineId], references: [id])
+  stage           PipelineStage      @relation(fields: [stageId], references: [id])
+  contact         Contact?           @relation(fields: [contactId], references: [id])
+  company         Company?           @relation(fields: [companyId], references: [id])
+  owner           User?              @relation("DealOwner", fields: [ownerId], references: [id])
+  team            Team?              @relation(fields: [teamId], references: [id])
+  conversation    Conversation?      @relation(fields: [conversationId], references: [id])
+  tags            DealTag[]
+  stageHistory    DealStageHistory[]
+  tasks           Task[]
+  orders          Order[]
+  activities      Activity[]
+  notes           Note[]
+  customValues    CustomFieldValue[]
+  lifecycleAction LifecycleAction?
 
   @@index([organizationId])
   @@index([pipelineId])
@@ -565,13 +637,13 @@ model Deal {
 }
 
 model DealStageHistory {
-  id        String   @id @default(cuid())
-  dealId    String
-  stageId   String
+  id          String   @id @default(cuid())
+  dealId      String
+  stageId     String
   fromStageId String?
-  movedById String?
-  movedAt   DateTime @default(now())
-  note      String?
+  movedById   String?
+  movedAt     DateTime @default(now())
+  note        String?
 
   deal  Deal          @relation(fields: [dealId], references: [id], onDelete: Cascade)
   stage PipelineStage @relation(fields: [stageId], references: [id])
@@ -581,50 +653,80 @@ model DealStageHistory {
   @@index([movedAt])
 }
 
-model Task {
-  id             String       @id @default(cuid())
+model TaskStatusDefinition {
+  id             String             @id @default(cuid())
   organizationId String
-  title          String
-  description    String?
-  type           TaskType     @default(FOLLOW_UP)
-  status         TaskStatus   @default(PENDING)
-  priority       TaskPriority @default(MEDIUM)
-  dueAt          DateTime?
-  reminderAt     DateTime?
-  completedAt    DateTime?
-  result         String?
-  completionNote String?
-  recurrenceRule String?
-  assigneeId     String?
-  createdById    String?
-  updatedById    String?
-  contactId      String?
-  companyId      String?
-  dealId         String?
-  orderId        String?
-  occurrenceId   String?
-  teamId         String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  name           String
+  slug           String
+  color          String             @default("#64748B")
+  position       Int                @default(0)
+  category       TaskStatusCategory @default(OPEN)
+  active         Boolean            @default(true)
+  archived       Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   deletedAt      DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  creator      User?        @relation("TaskCreator", fields: [createdById], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
-  company      Company?     @relation(fields: [companyId], references: [id])
-  deal         Deal?        @relation(fields: [dealId], references: [id])
-  order        Order?       @relation(fields: [orderId], references: [id])
-  occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
-  team         Team?        @relation(fields: [teamId], references: [id])
-  activities   Activity[]
+  tasks        Task[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, active, position])
+}
+
+model Task {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  title              String
+  description        String?
+  type               TaskType     @default(FOLLOW_UP)
+  status             TaskStatus   @default(PENDING)
+  statusDefinitionId String?
+  priority           TaskPriority @default(MEDIUM)
+  dueAt              DateTime?
+  reminderAt         DateTime?
+  completedAt        DateTime?
+  result             String?
+  completionNote     String?
+  recurrenceRule     String?
+  assigneeId         String?
+  createdById        String?
+  updatedById        String?
+  contactId          String?
+  companyId          String?
+  dealId             String?
+  pipelineId         String?
+  stageId            String?
+  orderId            String?
+  occurrenceId       String?
+  teamId             String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
+
+  organization     Organization         @relation(fields: [organizationId], references: [id])
+  statusDefinition TaskStatusDefinition? @relation(fields: [statusDefinitionId], references: [id], onDelete: SetNull)
+  assignee         User?                @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator          User?                @relation("TaskCreator", fields: [createdById], references: [id])
+  contact          Contact?             @relation(fields: [contactId], references: [id])
+  company          Company?             @relation(fields: [companyId], references: [id])
+  deal             Deal?                @relation(fields: [dealId], references: [id])
+  pipeline         Pipeline?            @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  stage            PipelineStage?       @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  order            Order?               @relation(fields: [orderId], references: [id])
+  occurrence       Occurrence?          @relation(fields: [occurrenceId], references: [id])
+  team             Team?                @relation(fields: [teamId], references: [id])
+  activities       Activity[]
 
   @@index([organizationId])
   @@index([assigneeId])
   @@index([status])
+  @@index([statusDefinitionId])
   @@index([dueAt])
   @@index([contactId])
   @@index([dealId])
+  @@index([pipelineId])
+  @@index([stageId])
   @@index([createdAt])
 }
 
@@ -645,14 +747,14 @@ model Activity {
   conversationId String?
   createdAt      DateTime     @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  actor        User?        @relation("ActivityActor", fields: [actorId], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
-  company      Company?     @relation(fields: [companyId], references: [id])
-  deal         Deal?        @relation(fields: [dealId], references: [id])
-  order        Order?       @relation(fields: [orderId], references: [id])
-  task         Task?        @relation(fields: [taskId], references: [id])
-  occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  actor        User?         @relation("ActivityActor", fields: [actorId], references: [id])
+  contact      Contact?      @relation(fields: [contactId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id])
+  deal         Deal?         @relation(fields: [dealId], references: [id])
+  order        Order?        @relation(fields: [orderId], references: [id])
+  task         Task?         @relation(fields: [taskId], references: [id])
+  occurrence   Occurrence?   @relation(fields: [occurrenceId], references: [id])
   conversation Conversation? @relation(fields: [conversationId], references: [id])
 
   @@index([organizationId])
@@ -663,19 +765,44 @@ model Activity {
   @@index([type])
 }
 
+model LifecycleAction {
+  id             String              @id @default(cuid())
+  organizationId String
+  contactId      String
+  actorId        String?
+  kind           LifecycleKind
+  action         LifecycleActionType
+  reason         String?
+  snoozedUntil   DateTime?
+  dealId         String?             @unique
+  conversationId String?
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  contact      Contact       @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  actor        User?         @relation("LifecycleActionActor", fields: [actorId], references: [id], onDelete: Restrict)
+  deal         Deal?         @relation(fields: [dealId], references: [id], onDelete: Restrict)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, contactId, kind, createdAt], map: "LifecycleAction_latest_idx")
+  @@index([organizationId, kind, action, snoozedUntil], map: "LifecycleAction_queue_idx")
+  @@index([conversationId], map: "LifecycleAction_conversationId_idx")
+}
+
 model Note {
-  id             String     @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   content        String
-  isInternal     Boolean    @default(true)
+  isInternal     Boolean   @default(true)
   authorId       String?
   contactId      String?
   companyId      String?
   dealId         String?
   orderId        String?
   occurrenceId   String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -755,18 +882,18 @@ model CustomFieldDefinition {
 }
 
 model CustomFieldValue {
-  id         String  @id @default(cuid())
-  fieldId    String
-  contactId  String?
-  companyId  String?
-  dealId     String?
-  orderId    String?
-  valueText  String?
+  id          String   @id @default(cuid())
+  fieldId     String
+  contactId   String?
+  companyId   String?
+  dealId      String?
+  orderId     String?
+  valueText   String?
   valueNumber Decimal? @db.Decimal(14, 4)
-  valueBool  Boolean?
-  valueJson  Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  valueBool   Boolean?
+  valueJson   Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   field   CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
   contact Contact?              @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -778,22 +905,76 @@ model CustomFieldValue {
 }
 
 model Channel {
-  id             String      @id @default(cuid())
-  organizationId String
-  type           ChannelType
-  name           String
-  isActive       Boolean     @default(true)
-  config         Json?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?
+  id                String      @id @default(cuid())
+  organizationId    String
+  type              ChannelType
+  name              String
+  provider          String?
+  externalAccountId String?
+  displayName       String?
+  status            String      @default("ACTIVE")
+  isActive          Boolean     @default(true)
+  /// Non-sensitive account configuration. Credentials must be referenced by
+  /// secretReference and never persisted in this JSON field.
+  config            Json?
+  secretReference   String?
+  lastSyncAt        DateTime?
+  lastErrorAt       DateTime?
+  lastErrorMessage  String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  deletedAt         DateTime?
 
-  organization  Organization   @relation(fields: [organizationId], references: [id])
-  conversations Conversation[]
-  messages      Message[]
+  organization        Organization                @relation(fields: [organizationId], references: [id])
+  conversations       Conversation[]
+  messages            Message[]
+  pipelineConnections PipelineChannelConnection[]
 
   @@index([organizationId])
   @@index([type])
+  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, provider, externalAccountId])
+}
+
+/// Routes one existing Channel integration account into one pipeline. Channel
+/// deliberately serves as IntegrationAccount so credentials and provider state
+/// are not duplicated across CRM domains.
+model PipelineChannelConnection {
+  id                 String                    @id @default(cuid())
+  organizationId     String
+  pipelineId         String
+  channelId          String
+  defaultStageId     String?
+  defaultOwnerId     String?
+  defaultTeamId      String?
+  defaultTagIds      Json                      @default("[]")
+  source             String?
+  campaignId         String?
+  active             Boolean                   @default(true)
+  createContact      Boolean                   @default(true)
+  createConversation Boolean                   @default(true)
+  createDeal         Boolean                   @default(true)
+  duplicateStrategy  PipelineDuplicateStrategy @default(MERGE)
+  routingMode        PipelineRoutingMode       @default(PIPELINE_DEFAULTS)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  deletedAt          DateTime?
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline     Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  channel      Channel        @relation(fields: [channelId], references: [id], onDelete: Restrict)
+  defaultStage PipelineStage? @relation("PipelineChannelDefaultStage", fields: [defaultStageId], references: [id], onDelete: SetNull)
+  defaultOwner User?          @relation("PipelineChannelDefaultOwner", fields: [defaultOwnerId], references: [id], onDelete: SetNull)
+  defaultTeam  Team?          @relation("PipelineChannelDefaultTeam", fields: [defaultTeamId], references: [id], onDelete: SetNull)
+  campaign     Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([pipelineId, deletedAt, active])
+  @@index([channelId])
+  @@index([defaultStageId])
+  @@index([defaultOwnerId])
+  @@index([defaultTeamId])
+  @@index([campaignId])
 }
 
 model Conversation {
@@ -812,19 +993,23 @@ model Conversation {
   updatedAt      DateTime           @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
-  channel      Channel?     @relation(fields: [channelId], references: [id])
-  assignee     User?        @relation("ConversationAssignee", fields: [assigneeId], references: [id])
-  messages     Message[]
-  deal         Deal?
-  activities   Activity[]
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  contact          Contact?          @relation(fields: [contactId], references: [id])
+  channel          Channel?          @relation(fields: [channelId], references: [id])
+  assignee         User?             @relation("ConversationAssignee", fields: [assigneeId], references: [id])
+  messages         Message[]
+  deal             Deal?
+  activities       Activity[]
+  lifecycleActions LifecycleAction[]
 
   @@index([organizationId])
   @@index([contactId])
   @@index([assigneeId])
   @@index([status])
   @@index([lastMessageAt])
+  @@index([organizationId, lastMessageAt])
+  @@index([organizationId, channelId, lastMessageAt])
+  @@index([organizationId, assigneeId, status])
 }
 
 model Message {
@@ -850,6 +1035,7 @@ model Message {
   @@index([conversationId])
   @@index([sentAt])
   @@index([direction])
+  @@index([conversationId, sentAt])
 }
 
 model MessageAttachment {
@@ -897,7 +1083,7 @@ model Product {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization      @relation(fields: [organizationId], references: [id])
+  organization Organization       @relation(fields: [organizationId], references: [id])
   collection   ProductCollection? @relation(fields: [collectionId], references: [id])
   orderItems   OrderItem[]
 
@@ -927,18 +1113,18 @@ model Order {
   status         OrderStatus @default(ORDER_PLACED)
   expectedAt     DateTime?
   trackingCode   String?
-  notes          String?
+  observations   String?
   createdById    String?
   updatedById    String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
-  company      Company?     @relation(fields: [companyId], references: [id])
-  owner        User?        @relation("OrderOwner", fields: [ownerId], references: [id])
-  deal         Deal?        @relation(fields: [dealId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  contact      Contact?      @relation(fields: [contactId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id])
+  owner        User?         @relation("OrderOwner", fields: [ownerId], references: [id])
+  deal         Deal?         @relation(fields: [dealId], references: [id])
   items        OrderItem[]
   payments     Payment[]
   shipments    Shipment[]
@@ -1000,20 +1186,20 @@ model Payment {
 }
 
 model Shipment {
-  id             String         @id @default(cuid())
-  orderId        String
-  carrier        String?
-  trackingCode   String?
-  origin         String?
-  destination    String?
-  status         ShipmentStatus @default(PENDING)
-  postedAt       DateTime?
-  expectedAt     DateTime?
-  deliveredAt    DateTime?
-  notes          String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  deletedAt      DateTime?
+  id           String         @id @default(cuid())
+  orderId      String
+  carrier      String?
+  trackingCode String?
+  origin       String?
+  destination  String?
+  status       ShipmentStatus @default(PENDING)
+  postedAt     DateTime?
+  expectedAt   DateTime?
+  deliveredAt  DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
 
   order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   events ShipmentEvent[]
@@ -1108,15 +1294,16 @@ model Campaign {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  attributions Attribution[]
+  organization               Organization                @relation(fields: [organizationId], references: [id])
+  attributions               Attribution[]
+  pipelineChannelConnections PipelineChannelConnection[]
 
   @@index([organizationId])
   @@index([source])
 }
 
 model Attribution {
-  id             String    @id @default(cuid())
+  id             String   @id @default(cuid())
   organizationId String
   contactId      String?
   orderId        String?
@@ -1136,7 +1323,7 @@ model Attribution {
   coupon         String?
   influencer     String?
   channel        String?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
   contact      Contact?     @relation(fields: [contactId], references: [id])
@@ -1163,7 +1350,7 @@ model Automation {
   updatedAt      DateTime         @updatedAt
   deletedAt      DateTime?
 
-  organization Organization         @relation(fields: [organizationId], references: [id])
+  organization Organization          @relation(fields: [organizationId], references: [id])
   nodes        AutomationNode[]
   edges        AutomationEdge[]
   executions   AutomationExecution[]
@@ -1173,13 +1360,13 @@ model Automation {
 }
 
 model AutomationNode {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   automationId String
   type         String
   label        String?
   config       Json?
-  positionX    Float  @default(0)
-  positionY    Float  @default(0)
+  positionX    Float   @default(0)
+  positionY    Float   @default(0)
 
   automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
 
@@ -1200,15 +1387,15 @@ model AutomationEdge {
 }
 
 model AutomationExecution {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   automationId String
-  status       String   @default("RUNNING")
-  startedAt    DateTime @default(now())
+  status       String    @default("RUNNING")
+  startedAt    DateTime  @default(now())
   finishedAt   DateTime?
   context      Json?
   error        String?
 
-  automation Automation              @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  automation Automation               @relation(fields: [automationId], references: [id], onDelete: Cascade)
   logs       AutomationExecutionLog[]
 
   @@index([automationId])

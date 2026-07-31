@@ -8,27 +8,27 @@ import {
   closestCorners,
   useSensor,
   useSensors,
+  type DragCancelEvent,
   type DragEndEvent,
   type DragStartEvent,
   useDroppable,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { dealsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Pipeline, PipelineStage } from "@/lib/types";
-import { cn, formatCurrency, formatRelative } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { useUiStore } from "@/stores/ui";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Kanban } from "lucide-react";
+import { MoveDealDialog, sortPipelineStages } from "@/components/crm/deal-board-dialogs";
+import { ArrowRightLeft, Kanban } from "lucide-react";
 
 const PRIORITY_LABEL: Record<string, string> = {
   LOW: "Baixa",
@@ -47,15 +47,19 @@ export function DealCard({
   deal,
   dragging,
   onOpen,
+  onMove,
 }: {
   deal: Deal;
   dragging?: boolean;
   onOpen: (deal: Deal) => void;
+  onMove?: (deal: Deal) => void;
 }) {
   const pointerDown = React.useRef<{ x: number; y: number } | null>(null);
 
   return (
     <article
+      data-testid="deal-card"
+      data-deal-id={deal.id}
       role="button"
       tabIndex={0}
       className={cn(
@@ -67,10 +71,7 @@ export function DealCard({
       }}
       onClick={(e) => {
         const start = pointerDown.current;
-        if (
-          start &&
-          Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6
-        ) {
+        if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
           return;
         }
         onOpen(deal);
@@ -84,11 +85,31 @@ export function DealCard({
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug">{deal.name}</p>
-        {(deal.unreadCount ?? 0) > 0 ? (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-            {deal.unreadCount}
-          </span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1">
+          {(deal.unreadCount ?? 0) > 0 ? (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              {deal.unreadCount}
+            </span>
+          ) : null}
+          {onMove ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label={`Mover ${deal.name}`}
+              title="Mover card"
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMove(deal);
+              }}
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+        </div>
       </div>
       <p className="mt-1 truncate text-xs text-muted-foreground">
         {deal.contact?.name ?? deal.company?.name ?? "Sem contato"}
@@ -112,9 +133,22 @@ export function DealCard({
         ))}
       </div>
       <div className="mt-2 space-y-0.5 text-[11px] text-muted-foreground">
-        <p>Última interação: {formatRelative(deal.lastInteractionAt)}</p>
         <p>
-          Próxima tarefa:{" "}
+          Última interação:{" "}
+          <ClientRelativeTime value={deal.lastInteractionAt} />
+        </p>
+        <p
+          className={
+            deal.nextTask?.dueAt &&
+            new Date(deal.nextTask.dueAt).getTime() < Date.now()
+              ? "font-medium text-destructive"
+              : undefined
+          }
+        >
+          {deal.nextTask?.dueAt &&
+          new Date(deal.nextTask.dueAt).getTime() < Date.now()
+            ? "Tarefa vencida: "
+            : "Próxima tarefa: "}
           {deal.nextTask?.title ? deal.nextTask.title : "—"}
         </p>
       </div>
@@ -125,12 +159,16 @@ export function DealCard({
 function SortableDealCard({
   deal,
   onOpen,
+  onMove,
 }: {
   deal: Deal;
   onOpen: (deal: Deal) => void;
+  onMove: (deal: Deal) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: deal.id, data: { type: "deal", deal } });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: deal.id,
+    data: { type: "deal", deal },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -139,7 +177,7 @@ function SortableDealCard({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <DealCard deal={deal} dragging={isDragging} onOpen={onOpen} />
+      <DealCard deal={deal} dragging={isDragging} onOpen={onOpen} onMove={onMove} />
     </div>
   );
 }
@@ -147,9 +185,11 @@ function SortableDealCard({
 function StageColumn({
   stage,
   onOpen,
+  onMove,
 }: {
   stage: PipelineStage;
   onOpen: (deal: Deal) => void;
+  onMove: (deal: Deal) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -161,6 +201,8 @@ function StageColumn({
   return (
     <div
       ref={setNodeRef}
+      data-testid="kanban-stage"
+      data-stage-id={stage.id}
       className={cn(
         "flex w-72 shrink-0 flex-col rounded-xl border border-border/70 bg-muted/40",
         isOver && "ring-2 ring-primary/40",
@@ -183,7 +225,7 @@ function StageColumn({
       <SortableContext items={deals.map((d) => d.id)} strategy={verticalListSortingStrategy}>
         <div className="scrollbar-thin flex max-h-[calc(100vh-14rem)] flex-col gap-2 overflow-y-auto p-2">
           {deals.map((deal) => (
-            <SortableDealCard key={deal.id} deal={deal} onOpen={onOpen} />
+            <SortableDealCard key={deal.id} deal={deal} onOpen={onOpen} onMove={onMove} />
           ))}
           {deals.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">
@@ -206,25 +248,40 @@ export function KanbanBoard({
   const queryClient = useQueryClient();
   const openDealDrawer = useUiStore((s) => s.openDealDrawer);
   const [activeDeal, setActiveDeal] = React.useState<Deal | null>(null);
-  const [stages, setStages] = React.useState<PipelineStage[]>(pipeline.stages ?? []);
+  const [dealToMove, setDealToMove] = React.useState<Deal | null>(null);
+  const [stages, setStages] = React.useState<PipelineStage[]>(sortPipelineStages(pipeline.stages));
+  const suppressOpenUntil = React.useRef(0);
 
   React.useEffect(() => {
-    setStages(pipeline.stages ?? []);
+    setStages(sortPipelineStages(pipeline.stages));
   }, [pipeline]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const moveMutation = useMutation({
-    mutationFn: ({ dealId, stageId }: { dealId: string; stageId: string }) =>
-      dealsApi.move(dealId, stageId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.board(pipeline.id) });
+    mutationFn: ({
+      dealId,
+      stageId,
+    }: {
+      dealId: string;
+      stageId: string;
+      previousStages: PipelineStage[];
+    }) => dealsApi.move(dealId, stageId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.pipelines.board(pipeline.id),
+      });
       toast.success("Negócio movido");
     },
-    onError: (err: Error) => {
-      setStages(pipeline.stages ?? []);
+    onError: (
+      err: Error,
+      variables: {
+        dealId: string;
+        stageId: string;
+        previousStages: PipelineStage[];
+      },
+    ) => {
+      setStages(variables.previousStages);
       toast.error(err.message || "Falha ao mover negócio");
     },
   });
@@ -234,13 +291,17 @@ export function KanbanBoard({
 
   const onDragStart = (event: DragStartEvent) => {
     const deal = event.active.data.current?.deal as Deal | undefined;
-    if (deal) setActiveDeal(deal);
+    if (deal) {
+      suppressOpenUntil.current = Number.POSITIVE_INFINITY;
+      setActiveDeal(deal);
+    }
   };
 
   const onDragEnd = (event: DragEndEvent) => {
+    suppressOpenUntil.current = Date.now() + 250;
     setActiveDeal(null);
     const { active, over } = event;
-    if (!over) return;
+    if (!over || moveMutation.isPending) return;
 
     const dealId = String(active.id);
     const fromStage = findStageOfDeal(dealId);
@@ -248,15 +309,18 @@ export function KanbanBoard({
 
     let toStageId = String(over.id);
     const overDealStage = findStageOfDeal(toStageId);
-    if (overDealStage) toStageId = overStageId(overDealStage);
+    if (overDealStage) toStageId = overDealStage.id;
 
-    if (fromStage.id === toStageId) return;
+    if (fromStage.id === toStageId || !stages.some((stage) => stage.id === toStageId)) {
+      return;
+    }
 
     const deal = fromStage.deals?.find((d) => d.id === dealId);
     if (!deal) return;
 
-    setStages((prev) =>
-      prev.map((stage) => {
+    const previousStages = stages;
+    setStages(
+      previousStages.map((stage) => {
         if (stage.id === fromStage.id) {
           return {
             ...stage,
@@ -273,16 +337,40 @@ export function KanbanBoard({
       }),
     );
 
-    moveMutation.mutate({ dealId, stageId: toStageId });
+    moveMutation.mutate({ dealId, stageId: toStageId, previousStages });
   };
 
-  function overStageId(stage: PipelineStage) {
-    return stage.id;
-  }
+  const onDragCancel = (_event: DragCancelEvent) => {
+    suppressOpenUntil.current = Date.now() + 250;
+    setActiveDeal(null);
+  };
 
   const handleOpen = (deal: Deal) => {
+    if (Date.now() < suppressOpenUntil.current) return;
     if (onOpenDeal) onOpenDeal(deal);
     else openDealDrawer(deal.id);
+  };
+
+  const handleDialogMove = (deal: Deal, targetPipelineId: string, targetStageId: string) => {
+    setStages((current) =>
+      current.map((stage) => {
+        const remainingDeals = (stage.deals ?? []).filter((item) => item.id !== deal.id);
+        if (targetPipelineId === pipeline.id && stage.id === targetStageId) {
+          return {
+            ...stage,
+            deals: [
+              ...remainingDeals,
+              {
+                ...deal,
+                pipelineId: targetPipelineId,
+                stageId: targetStageId,
+              },
+            ],
+          };
+        }
+        return { ...stage, deals: remainingDeals };
+      }),
+    );
   };
 
   if (!stages.length) {
@@ -301,18 +389,24 @@ export function KanbanBoard({
       collisionDetection={closestCorners}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragCancel={onDragCancel}
     >
       <div className="flex gap-3 overflow-x-auto pb-2">
-        {stages
-          .slice()
-          .sort((a, b) => a.order - b.order)
-          .map((stage) => (
-            <StageColumn key={stage.id} stage={stage} onOpen={handleOpen} />
-          ))}
+        {stages.map((stage) => (
+          <StageColumn key={stage.id} stage={stage} onOpen={handleOpen} onMove={setDealToMove} />
+        ))}
       </div>
       <DragOverlay>
         {activeDeal ? <DealCard deal={activeDeal} dragging onOpen={() => undefined} /> : null}
       </DragOverlay>
+      <MoveDealDialog
+        deal={dealToMove}
+        pipeline={{ ...pipeline, stages }}
+        onOpenChange={(open) => {
+          if (!open) setDealToMove(null);
+        }}
+        onMoved={handleDialogMove}
+      />
     </DndContext>
   );
 }

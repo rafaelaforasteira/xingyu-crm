@@ -6,7 +6,7 @@ export class CreateCompanyDto {
   @ApiProperty()
   @IsString()
   @MaxLength(200)
-  name!: string;
+  legalName!: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -16,7 +16,7 @@ export class CreateCompanyDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  document?: string;
+  cnpj?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -36,7 +36,7 @@ export class CreateCompanyDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  industry?: string;
+  segment?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -75,5 +75,5 @@ export class QueryCompaniesDto extends PaginationQueryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  industry?: string;
+  segment?: string;
 }

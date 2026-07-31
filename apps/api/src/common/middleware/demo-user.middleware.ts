@@ -10,18 +10,14 @@ import {
 } from "../constants";
 import type { DemoUser } from "../decorators/demo-user.decorator";
 
-declare global {
-  namespace Express {
-    interface Request {
-      demoUser?: DemoUser;
-      organizationId?: string;
-    }
-  }
-}
+type DemoRequest = Request & {
+  demoUser?: DemoUser;
+  organizationId?: string;
+};
 
 @Injectable()
 export class DemoUserMiddleware implements NestMiddleware {
-  use(req: Request, _res: Response, next: NextFunction) {
+  use(req: DemoRequest, _res: Response, next: NextFunction) {
     const userId =
       (req.headers[DEMO_USER_HEADER] as string | undefined) ?? DEMO_USER_ID;
 
@@ -30,12 +26,14 @@ export class DemoUserMiddleware implements NestMiddleware {
       name: userId === DEMO_USER_ID ? DEMO_USER_NAME : userId,
       role: "Administradora",
       teamId: DEMO_TEAM_ID,
-      team: "Gestão",
+      team: "Gestao",
     };
 
     req.organizationId =
       (req.headers[ORG_HEADER] as string | undefined) ??
-      (req.query.organizationId as string | undefined) ??
+      (typeof req.query.organizationId === "string"
+        ? req.query.organizationId
+        : undefined) ??
       DEMO_ORG_ID;
 
     next();

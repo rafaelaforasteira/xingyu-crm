@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  Query,
-} from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiHeader } from "@nestjs/swagger";
 import { DealsService } from "./deals.service";
 import { OrganizationId } from "../common/decorators/organization.decorator";
@@ -41,8 +32,12 @@ export class DealsController {
 
   @Post("bulk/move")
   @ApiOperation({ summary: "Bulk move deals to stage" })
-  bulkMove(@OrganizationId() orgId: string, @Body() dto: BulkMoveDealsDto) {
-    return this.dealsService.bulkMove(orgId, dto);
+  bulkMove(
+    @OrganizationId() orgId: string,
+    @DemoUser() user: DemoUserType,
+    @Body() dto: BulkMoveDealsDto,
+  ) {
+    return this.dealsService.bulkMove(orgId, dto, user.id);
   }
 
   @Get(":id")
@@ -65,16 +60,17 @@ export class DealsController {
   @ApiOperation({ summary: "Update deal" })
   update(
     @OrganizationId() orgId: string,
+    @DemoUser() user: DemoUserType,
     @Param("id") id: string,
     @Body() dto: UpdateDealDto,
   ) {
-    return this.dealsService.update(orgId, id, dto);
+    return this.dealsService.update(orgId, id, dto, user.id);
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Soft-delete deal" })
-  remove(@OrganizationId() orgId: string, @Param("id") id: string) {
-    return this.dealsService.remove(orgId, id);
+  remove(@OrganizationId() orgId: string, @DemoUser() user: DemoUserType, @Param("id") id: string) {
+    return this.dealsService.remove(orgId, id, user.id);
   }
 
   @Post(":id/move")

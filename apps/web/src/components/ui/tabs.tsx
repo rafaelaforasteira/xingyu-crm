@@ -17,13 +17,13 @@ export function Tabs({
   children,
   className,
 }: {
-  defaultValue: string;
+  defaultValue?: string;
   value?: string;
   onValueChange?: (v: string) => void;
   children: React.ReactNode;
   className?: string;
 }) {
-  const [uncontrolled, setUncontrolled] = React.useState(defaultValue);
+  const [uncontrolled, setUncontrolled] = React.useState(defaultValue ?? controlled ?? "");
   const value = controlled ?? uncontrolled;
   const setValue = (v: string) => {
     setUncontrolled(v);
