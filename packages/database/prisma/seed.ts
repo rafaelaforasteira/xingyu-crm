@@ -1,3 +1,6 @@
+import path from "node:path";
+import { config as loadEnv } from "dotenv";
+import * as argon2 from "argon2";
 import {
   PrismaClient,
   ContactStatus,
@@ -22,12 +25,120 @@ import {
   EntityType,
   ActivityType,
   UserStatus,
+  AuthRole,
 } from "@prisma/client";
+
+loadEnv({ path: path.resolve(__dirname, "../../../.env") });
 
 const prisma = new PrismaClient();
 
 const ORG_ID = "org-xingyu";
 const NOW = new Date();
+
+const ARGON2_OPTIONS = {
+  type: argon2.argon2id as 0 | 1 | 2,
+  memoryCost: 19456,
+  timeCost: 2,
+  parallelism: 1,
+};
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function authRoleFromRoleId(roleId: string): AuthRole {
+  if (roleId === "role-admin") return AuthRole.ADMIN;
+  if (roleId === "role-manager") return AuthRole.MANAGER;
+  return AuthRole.CONSULTANT;
+}
+
+function requireAdminSeedCredentials(): { email: string; password: string } {
+  const email = process.env.ADMIN_EMAIL?.trim();
+  const password = process.env.ADMIN_INITIAL_PASSWORD;
+
+  const missing: string[] = [];
+  if (!email) missing.push("ADMIN_EMAIL");
+  if (!password) missing.push("ADMIN_INITIAL_PASSWORD");
+
+  if (missing.length > 0) {
+    throw new Error(
+      [
+        "Seed de autenticação incompleto: variáveis obrigatórias ausentes.",
+        `Defina no .env da raiz: ${missing.join(", ")}.`,
+        "Nenhuma senha fixa é versionada no repositório.",
+        "Exemplo: ADMIN_EMAIL=admin@xingyu.local e ADMIN_INITIAL_PASSWORD=<senha-forte>.",
+      ].join(" "),
+    );
+  }
+
+  if (password!.length < 8) {
+    throw new Error(
+      "ADMIN_INITIAL_PASSWORD deve ter pelo menos 8 caracteres. A senha não será exibida.",
+    );
+  }
+
+  return { email: normalizeEmail(email!), password: password! };
+}
+
+async function ensureAdminAuthUser(): Promise<void> {
+  const { email, password } = requireAdminSeedCredentials();
+  const passwordHash = await argon2.hash(password, ARGON2_OPTIONS);
+
+  const existingByEmail = await prisma.user.findFirst({
+    where: { organizationId: ORG_ID, email },
+  });
+
+  if (existingByEmail) {
+    await prisma.user.update({
+      where: { id: existingByEmail.id },
+      data: {
+        name: "Administradora Xingyu",
+        passwordHash,
+        authRole: AuthRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        deletedAt: null,
+      },
+    });
+    console.log(`Admin de autenticação atualizado: ${email}`);
+    return;
+  }
+
+  const demoAdmin = await prisma.user.findUnique({ where: { id: "demo-admin" } });
+  if (demoAdmin) {
+    await prisma.user.update({
+      where: { id: "demo-admin" },
+      data: {
+        name: "Administradora Xingyu",
+        email,
+        passwordHash,
+        authRole: AuthRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        roleId: "role-admin",
+        teamId: "team-gestao",
+        deletedAt: null,
+      },
+    });
+    console.log(`Admin de autenticação configurado no usuário demo-admin: ${email}`);
+    return;
+  }
+
+  await prisma.user.create({
+    data: {
+      id: "demo-admin",
+      organizationId: ORG_ID,
+      name: "Administradora Xingyu",
+      email,
+      title: "Administradora",
+      teamId: "team-gestao",
+      roleId: "role-admin",
+      authRole: AuthRole.ADMIN,
+      passwordHash,
+      status: UserStatus.ACTIVE,
+      monthlyGoal: 0,
+    },
+  });
+  console.log(`Admin de autenticação criado: ${email}`);
+}
 
 function daysAgo(n: number): Date {
   const d = new Date(NOW);
@@ -46,12 +157,21 @@ function hoursAgo(n: number): Date {
 }
 
 async function main() {
+  const nodeEnv = process.env.NODE_ENV ?? "development";
+  if (nodeEnv === "production") {
+    throw new Error(
+      "Seed de autenticação/homologação não deve rodar com NODE_ENV=production.",
+    );
+  }
+
   const existingOrganization = await prisma.organization.findUnique({
     where: { id: ORG_ID },
     select: { id: true },
   });
   if (existingOrganization) {
+    await ensureAdminAuthUser();
     console.log("Demo seed already exists; preserving existing and manually created data.");
+    console.log("Credenciais de admin sincronizadas a partir de ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD.");
     return;
   }
 
@@ -125,10 +245,11 @@ async function main() {
         id: u.id,
         organizationId: ORG_ID,
         name: u.name,
-        email: u.email,
+        email: normalizeEmail(u.email),
         title: u.title,
         teamId: u.teamId,
         roleId: u.roleId,
+        authRole: authRoleFromRoleId(u.roleId),
         phone: u.phone,
         status: UserStatus.ACTIVE,
         monthlyGoal: u.monthlyGoal,
@@ -136,6 +257,8 @@ async function main() {
       },
     });
   }
+
+  await ensureAdminAuthUser();
 
   //  Channels 
   const channelWhatsApp = await prisma.channel.create({
@@ -1491,7 +1614,8 @@ async function main() {
   for (const [entity, count] of Object.entries(counts)) {
     console.log(`  ${entity.padEnd(22)} ${count}`);
   }
-  console.log(`\nDemo login user: demo-admin (raffaela@xingyu.demo)`);
+  const adminEmail = normalizeEmail(process.env.ADMIN_EMAIL!);
+  console.log(`\nAdmin de autenticação: ${adminEmail} (senha via ADMIN_INITIAL_PASSWORD)`);
   console.log(`Organization: ${ORG_ID} / Xingyu\n`);
 }
 
