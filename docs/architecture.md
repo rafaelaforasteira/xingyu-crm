@@ -14,5 +14,8 @@ Fluxo local:
 4. O health executa `SELECT 1`.
 5. A web inicia somente após health HTTP 200 com `database: up`.
 
-`DEMO_MODE` simula apenas integrações externas; dados do CRM continuam vindo do
-PostgreSQL real.
+`DEMO_MODE` simula apenas integrações externas e só é permitido em
+`development`/`test`. Em `production`, `DEMO_MODE=true` impede o bootstrap.
+A autenticação de homologação usa JWT de acesso + refresh opaco com cookies
+HttpOnly; rotas são privadas por padrão (`AuthGuard` global + `@Public()`).
+Detalhes em [homologation-auth.md](./homologation-auth.md).
