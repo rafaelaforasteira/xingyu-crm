@@ -34,7 +34,7 @@ export class IntegrationsController {
     return {
       mode: "mock",
       adapters: ["shopify", "whatsapp", "instagram", "metaAds", "googleAnalytics", "webhooks"],
-      demoMode: process.env.DEMO_MODE !== "false",
+      demoMode: process.env.DEMO_MODE === "true",
     };
   }
 

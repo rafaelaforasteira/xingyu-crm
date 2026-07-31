@@ -1,7 +1,3 @@
-import {
-  DEMO_ORG_ID,
-  DEMO_USER_ID,
-} from "@xingyu/config";
 import type {
   Activity,
   Automation,
@@ -54,7 +50,7 @@ import { normalizeReactivationResponse } from "./reactivation-utils";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
-  (process.env.NODE_ENV === "development" ? "http://localhost:3333/api" : "");
+  (process.env.NODE_ENV === "development" ? "http://localhost:3000/api" : "");
 const REQUEST_TIMEOUT_MS = 10_000;
 
 if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL não foi definida.");
@@ -90,11 +86,51 @@ function buildUrl(path: string, query?: Record<string, QueryValue>) {
   return url.toString();
 }
 
+function isAuthPath(path: string): boolean {
+  const normalized = path.replace(/^\/api/, "");
+  return (
+    normalized.startsWith("/auth/login") ||
+    normalized.startsWith("/auth/refresh") ||
+    normalized.startsWith("/auth/logout")
+  );
+}
+
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshSession(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch(buildUrl("/auth/refresh"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
+function redirectToLogin() {
+  if (typeof window === "undefined") return;
+  const next = `${window.location.pathname}${window.location.search}`;
+  const target = next && next !== "/login" ? `/login?next=${encodeURIComponent(next)}` : "/login";
+  if (window.location.pathname !== "/login") {
+    window.location.assign(target);
+  }
+}
+
 async function request<T>(
   path: string,
-  options: RequestInit & { query?: Record<string, QueryValue> } = {},
+  options: RequestInit & { query?: Record<string, QueryValue>; _retried?: boolean } = {},
 ): Promise<T> {
-  const { query, headers, ...rest } = options;
+  const { query, headers, _retried, ...rest } = options;
   const url = buildUrl(path, query);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -103,10 +139,9 @@ async function request<T>(
   try {
     response = await fetch(url, {
       ...rest,
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
-        "x-demo-user-id": DEMO_USER_ID,
-        "x-organization-id": DEMO_ORG_ID,
         ...headers,
       },
       cache: "no-store",
@@ -119,6 +154,15 @@ async function request<T>(
     );
   } finally {
     clearTimeout(timeout);
+  }
+
+  if (response.status === 401 && !_retried && !isAuthPath(path)) {
+    const refreshed = await tryRefreshSession();
+    if (refreshed) {
+      return request<T>(path, { ...options, _retried: true });
+    }
+    redirectToLogin();
+    throw new ApiError("Sessão expirada.", 401);
   }
 
   if (response.status === 204) {

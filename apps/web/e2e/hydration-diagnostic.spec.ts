@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import path from "node:path";
+import fs from "node:fs";
 
 /**
  * Hydration diagnostics for the CRM AppShell.
@@ -14,12 +16,28 @@ import { expect, test, type Page } from "@playwright/test";
  * Therefore this test asserts shell stability + real hydration errors, and does
  * NOT require byte-for-byte equality of the full AppShell DOM tree (which changes
  * after Suspense, dynamic imports, and React Query).
+ *
+ * Auth: uses the Playwright storageState produced by auth.setup.ts so the
+ * server layout can render AppShell (cookie-gated) even with JS disabled.
  */
 
 const APP_SHELL = '[data-app-shell="true"]';
 const SIDEBAR = `${APP_SHELL} aside`;
 const HEADER = `${APP_SHELL} header`;
 const MAIN = `${APP_SHELL} main`;
+const authFile = path.join(__dirname, ".auth/user.json");
+
+function readStorageState() {
+  if (!fs.existsSync(authFile)) {
+    throw new Error(
+      `Missing ${authFile}. Run the Playwright setup project before this diagnostic.`,
+    );
+  }
+  return JSON.parse(fs.readFileSync(authFile, "utf8")) as {
+    cookies: unknown[];
+    origins: unknown[];
+  };
+}
 
 function collectErrors(page: Page) {
   const consoleErrors: string[] = [];
@@ -56,8 +74,13 @@ async function waitForHydratedShell(page: Page) {
 test("AppShell hydrates without hydration errors and keeps stable shell structure", async ({
   browser,
 }) => {
+  const storageState = readStorageState();
+
   // --- Pre-hydration document (JS off): shell landmarks must already exist ---
-  const preContext = await browser.newContext({ javaScriptEnabled: false });
+  const preContext = await browser.newContext({
+    javaScriptEnabled: false,
+    storageState,
+  });
   const prePage = await preContext.newPage();
   const preResponse = await prePage.goto("/dashboard", { waitUntil: "domcontentloaded" });
   expect(preResponse?.ok()).toBe(true);
@@ -75,7 +98,6 @@ test("AppShell hydrates without hydration errors and keeps stable shell structur
     .count();
   const preHasSuspenseTemplate = await prePage.locator(`${MAIN} template[id^="B:"]`).count();
 
-  // Document the known Suspense/loading shape so regressions are obvious in logs.
   console.log(
     JSON.stringify(
       {
@@ -96,13 +118,26 @@ test("AppShell hydrates without hydration errors and keeps stable shell structur
   await preContext.close();
 
   // --- Hydrated document: deterministic API stubs (no infinite hang) ---
-  const context = await browser.newContext();
+  const context = await browser.newContext({ storageState });
   const page = await context.newPage();
   const { consoleErrors, pageErrors } = collectErrors(page);
 
   await page.route("**/api/**", async (route) => {
     const url = route.request().url();
-    // Lightweight empty payloads so React Query settles without inventing UI.
+    if (url.includes("/auth/me")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "demo-admin",
+          name: "Administradora Xingyu",
+          email: "admin@xingyu.local",
+          role: "ADMIN",
+          status: "ACTIVE",
+        }),
+      });
+      return;
+    }
     if (url.includes("/dashboard/")) {
       await route.fulfill({
         status: 200,
@@ -129,7 +164,6 @@ test("AppShell hydrates without hydration errors and keeps stable shell structur
   await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
   await waitForHydratedShell(page);
 
-  // Capture immediately after React fiber attaches (first hydrated shell).
   const atHydration = {
     shell: await page.locator(APP_SHELL).count(),
     sidebar: await page.locator(SIDEBAR).count(),
@@ -140,7 +174,6 @@ test("AppShell hydrates without hydration errors and keeps stable shell structur
     bodyAttributes: await attrs(page, "body"),
   };
 
-  // Wait for Suspense/(app)/loading.tsx to resolve into page content.
   await expect(page.locator(`${MAIN} [aria-label="Carregando"]`)).toHaveCount(0, {
     timeout: 10_000,
   });
@@ -175,13 +208,11 @@ test("AppShell hydrates without hydration errors and keeps stable shell structur
     ),
   );
 
-  // Stable document attributes across pre-JS HTML and hydrated document.
   expect(atHydration.htmlAttributes).toEqual(preHtmlAttributes);
   expect(atHydration.bodyAttributes).toEqual(preBodyAttributes);
   expect(afterSuspense.htmlAttributes).toEqual(preHtmlAttributes);
   expect(afterSuspense.bodyAttributes).toEqual(preBodyAttributes);
 
-  // Shell landmarks survive hydration and Suspense resolution.
   expect(atHydration.shell).toBe(1);
   expect(atHydration.sidebar).toBeGreaterThanOrEqual(1);
   expect(atHydration.header).toBe(1);
@@ -192,7 +223,6 @@ test("AppShell hydrates without hydration errors and keeps stable shell structur
   expect(afterSuspense.main).toBe(1);
   expect(afterSuspense.mainChildCount).toBeGreaterThanOrEqual(1);
 
-  // Real hydration / runtime failures only.
   expect(hydrationErrors).toEqual([]);
   expect(pageErrors).toEqual([]);
 

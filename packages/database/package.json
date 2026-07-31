@@ -30,11 +30,13 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^6.1.0"
+    "@prisma/client": "^6.1.0",
+    "argon2": "^0.45.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@xingyu/typescript-config": "workspace:*",
+    "dotenv": "^17.4.2",
     "embedded-postgres": "^17.6.0-beta.15",
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",

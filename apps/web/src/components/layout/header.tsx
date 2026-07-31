@@ -7,6 +7,7 @@ import {
   Bell,
   CheckSquare,
   ChevronDown,
+  LogOut,
   Menu,
   Plus,
   Search,
@@ -23,8 +24,11 @@ import { useUiStore } from "@/stores/ui";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth/auth-provider";
+import { AUTH_ROLE_LABEL } from "@/lib/auth-types";
 
 export function Header() {
+  const { user, logout } = useAuth();
   const setCommandOpen = useUiStore((s) => s.setCommandOpen);
   const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen);
   const selectedTeamId = useUiStore((s) => s.selectedTeamId);
@@ -33,6 +37,10 @@ export function Header() {
   const [novoOpen, setNovoOpen] = React.useState(false);
   const [notifOpen, setNotifOpen] = React.useState(false);
   const [teamOpen, setTeamOpen] = React.useState(false);
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  const displayName = user?.name ?? DEMO_USER_NAME;
+  const roleLabel = user ? AUTH_ROLE_LABEL[user.role] : "—";
 
   const { data: notifications = [] } = useQuery({
     queryKey: queryKeys.notifications,
@@ -234,11 +242,30 @@ export function Header() {
       </div>
 
       <div className="hidden items-center gap-2 border-l border-border pl-2 md:flex">
-        <Avatar name={DEMO_USER_NAME} size="sm" />
+        <Avatar name={displayName} size="sm" />
         <div className="leading-tight">
-          <p className="text-sm font-medium">{DEMO_USER_NAME}</p>
-          <p className="text-[11px] text-muted-foreground">Demo</p>
+          <p className="text-sm font-medium">{displayName}</p>
+          <p className="text-[11px] text-muted-foreground">{roleLabel}</p>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="ml-1"
+          disabled={loggingOut}
+          onClick={async () => {
+            setLoggingOut(true);
+            try {
+              await logout();
+            } finally {
+              setLoggingOut(false);
+            }
+          }}
+          aria-label="Sair"
+        >
+          <LogOut className="h-4 w-4" />
+          Sair
+        </Button>
       </div>
     </header>
   );
