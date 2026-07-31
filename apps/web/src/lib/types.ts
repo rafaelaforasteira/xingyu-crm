@@ -433,6 +433,12 @@ export interface Conversation {
   unreadCount?: number;
   assignee?: UserRef | null;
   messages?: Message[];
+  awaitingReply?: boolean;
+  waitingKind?: "first_response" | "follow_up" | string;
+  waitingKindLabel?: string;
+  waitingMinutes?: number;
+  waitingDurationLabel?: string;
+  lastClientMessageAt?: string | null;
 }
 
 export interface MessageQuery {
@@ -840,12 +846,39 @@ export interface DashboardMetrics {
   pipelineValue: number;
   tasksToday: number;
   unreadConversations: number;
+  unansweredLeads?: number;
+  waitingConversations?: number;
   ordersInTransit: number;
+  ordersInProgress?: number;
   repurchaseReady: number;
+  repurchaseReadyRule?: string;
   afterSalesOpen: number;
-  conversionRate?: number;
+  conversionRate?: number | null;
   wonThisMonth?: number;
   lostThisMonth?: number;
+  confirmedRevenue?: number;
+  confirmedRevenueDeltaPct?: number | null;
+  negotiatingValue?: number;
+  awaitingPaymentValue?: number;
+  awaitingPaymentCount?: number;
+  awaitingPaymentStageId?: string | null;
+  awaitingPaymentPipelineId?: string | null;
+  conversionDeltaPp?: number | null;
+  monthlyGoal?: number | null;
+  monthlyGoalProgress?: number | null;
+  overdueTasks?: number;
+  stalledDeals?: number;
+  afterSalesCritical?: number;
+  ordersDelayed?: number | null;
+  ordersStaleTracking?: number;
+  atRiskCustomers?: number;
+  reactivationInProgress?: number;
+  pendingPayments?: number;
+  revenue?: number;
+  averageTicket?: number;
+  wonInPeriod?: number;
+  lostInPeriod?: number;
+  conversionDenominator?: number;
 }
 
 export interface ChartPoint {
@@ -854,10 +887,90 @@ export interface ChartPoint {
   secondary?: number;
 }
 
+export interface FunnelStagePoint {
+  id: string;
+  label: string;
+  count: number;
+  value: number;
+  conversionFromPrevious: number;
+  barWidthPct: number;
+  pipelineId: string;
+}
+
+export interface ChannelPerformancePoint {
+  label: string;
+  revenue: number;
+  sales: number;
+  leads: number;
+  conversionRate: number | null;
+  sharePct: number;
+  avgFirstResponseMinutes: number | null;
+}
+
+export interface TeamPerformancePoint {
+  id: string;
+  name: string;
+  openDeals: number;
+  revenue: number;
+  conversionRate: number | null;
+  averageTicket: number;
+  overdueTasks: number;
+  waitingConversations: number;
+}
+
 export interface DashboardCharts {
   pipelineByStage: ChartPoint[];
   revenueTrend: ChartPoint[];
   channelMix: ChartPoint[];
+  funnel?: FunnelStagePoint[];
+  funnelStats?: {
+    avgCloseDays: number | null;
+    averageTicket: number;
+    lostValue: number;
+  };
+  revenueByPeriod?: ChartPoint[];
+  channelPerformance?: ChannelPerformancePoint[];
+  performanceByOwner?: TeamPerformancePoint[];
+}
+
+export interface DashboardJourneySummaries {
+  repurchase: {
+    ready: number;
+    approached: number | null;
+    completed: number | null;
+    revenue: number | null;
+    readyRule?: string;
+    href: string;
+  };
+  reactivation: {
+    inactive: number;
+    inProgress: number;
+    recovered: number;
+    revenue: number | null;
+    href: string;
+  };
+  afterSales: {
+    open: number;
+    delayed: number | null;
+    critical: number;
+    avgResolutionDays: number | null;
+    href: string;
+  };
+  ecommerce: {
+    awaitingSeparation: number;
+    inTransit: number;
+    delayed: number | null;
+    missingTracking: number | null;
+    staleTrackingLabel?: string;
+    href: string;
+  };
+}
+
+export interface DealActionItem extends Deal {
+  stage?: { id: string; name: string } | null;
+  idleDays?: number;
+  reason?: string;
+  actionPriority?: "HIGH" | "MEDIUM" | "LOW" | string;
 }
 
 export interface Team {

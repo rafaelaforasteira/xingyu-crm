@@ -71,6 +71,15 @@ export function TasksPage() {
 
   React.useEffect(() => {
     if (searchParams.get("new") === "1") setOpen(true);
+    const overdue = searchParams.get("overdue") === "1";
+    const due = searchParams.get("view") === "today" ? "today" : "";
+    if (overdue || due) {
+      setFilters((current) => ({
+        ...current,
+        overdue: overdue || current.overdue,
+        due: due || current.due,
+      }));
+    }
   }, [searchParams]);
 
   const boardParams = React.useMemo(

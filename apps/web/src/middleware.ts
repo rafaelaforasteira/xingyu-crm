@@ -47,6 +47,7 @@ export const config = {
     "/occurrences/:path*",
     "/repurchase/:path*",
     "/reactivation/:path*",
+    "/after-sales/:path*",
     "/automations/:path*",
     "/marketing/:path*",
     "/reports/:path*",

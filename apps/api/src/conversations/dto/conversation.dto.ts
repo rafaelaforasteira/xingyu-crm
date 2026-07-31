@@ -94,6 +94,15 @@ export class QueryConversationsDto extends PaginationQueryDto {
   @IsBoolean()
   unreadOnly?: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      "OPEN conversations whose latest non-internal message is INBOUND (awaiting team reply)",
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  awaitingReply?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Boolean)

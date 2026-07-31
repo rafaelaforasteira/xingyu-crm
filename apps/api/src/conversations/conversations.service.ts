@@ -226,6 +226,29 @@ export class ConversationsService {
     const pageSize = query.pageSize ?? 20;
     let where = this.buildListWhere(organizationId, query);
 
+    if (query.awaitingReply) {
+      const awaitingIds = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT c.id
+        FROM "Conversation" c
+        INNER JOIN LATERAL (
+          SELECT m.direction
+          FROM "Message" m
+          WHERE m."conversationId" = c.id
+            AND m."deletedAt" IS NULL
+            AND m."isInternal" = false
+          ORDER BY m."sentAt" DESC
+          LIMIT 1
+        ) last_msg ON true
+        WHERE c."organizationId" = ${organizationId}
+          AND c."deletedAt" IS NULL
+          AND c.status = 'OPEN'
+          AND last_msg.direction = 'INBOUND'
+      `;
+      where = {
+        AND: [where, { id: { in: awaitingIds.map((row) => row.id) } }],
+      };
+    }
+
     if (query.cursor) {
       where = await this.applyListCursor(where, organizationId, query.cursor);
     }

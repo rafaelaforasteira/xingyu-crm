@@ -8,6 +8,7 @@ export interface ConversationFiltersState {
   channelId: string;
   pipelineId: string;
   unreadOnly: boolean;
+  awaitingReply: boolean;
 }
 
 export function ConversationFilters({
@@ -70,6 +71,15 @@ export function ConversationFilters({
             onChange={(event) => onChange({ unreadOnly: event.target.checked })}
           />
           Não lidas
+        </label>
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="rounded border-input"
+            checked={filters.awaitingReply}
+            onChange={(event) => onChange({ awaitingReply: event.target.checked })}
+          />
+          Aguardando resposta
         </label>
       </div>
     </div>

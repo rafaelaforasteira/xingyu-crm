@@ -10,7 +10,9 @@ import type {
   ConversationListQuery,
   DashboardCharts,
   DashboardMetrics,
+  DashboardJourneySummaries,
   Deal,
+  DealActionItem,
   Message,
   MessageCursorPage,
   MessageQuery,
@@ -216,15 +218,22 @@ export const healthApi = {
 };
 
 export const dashboardApi = {
-  metrics: () => api.get<DashboardMetrics>("/dashboard/metrics"),
-  charts: () => api.get<DashboardCharts>("/dashboard/charts"),
-  lists: () =>
+  metrics: (query?: Record<string, QueryValue>) =>
+    api.get<DashboardMetrics>("/dashboard/metrics", query),
+  charts: (query?: Record<string, QueryValue>) =>
+    api.get<DashboardCharts>("/dashboard/charts", query),
+  lists: (query?: Record<string, QueryValue>) =>
     api.get<{
       tasksToday: Task[];
+      overdueTasks?: Task[];
       unread: Conversation[];
+      waitingConversations?: Conversation[];
       recentDeals: Deal[];
+      dealsRequiringAction?: DealActionItem[];
       afterSales: Occurrence[];
-    }>("/dashboard/lists"),
+      pendingPayments?: unknown[];
+      journeys?: DashboardJourneySummaries;
+    }>("/dashboard/lists", query),
 };
 
 export const contactsApi = {

@@ -4,15 +4,17 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, X, type LucideIcon } from "lucide-react";
-import { APP_NAME, DEMO_USER_NAME } from "@xingyu/config";
+import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, LogOut, X, type LucideIcon } from "lucide-react";
+import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS } from "@/lib/nav";
+import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
 import { formatPipelineNavLabel, resolvePipelineIcon } from "@/lib/pipeline-icons";
-import { pipelinesApi } from "@/lib/api";
+import { dashboardApi, pipelinesApi, settingsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { useUiStore } from "@/stores/ui";
+import { useAuth } from "@/components/auth/auth-provider";
+import { AUTH_ROLE_LABEL } from "@/lib/auth-types";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 
@@ -25,6 +27,7 @@ function SidebarNavLink({
   icon: Icon,
   collapsed,
   active,
+  count,
   onNavigate,
   onPrefetch,
 }: {
@@ -33,6 +36,7 @@ function SidebarNavLink({
   icon: LucideIcon;
   collapsed: boolean;
   active: boolean;
+  count?: number;
   onNavigate: (href: string) => void;
   onPrefetch: (href: string) => void;
 }) {
@@ -45,37 +49,48 @@ function SidebarNavLink({
       onMouseEnter={() => onPrefetch(href)}
       onFocus={() => onPrefetch(href)}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+        "flex items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors",
         active
-          ? "bg-sidebar-accent text-primary"
-          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-foreground",
+          ? "bg-white/10 text-white"
+          : "text-sidebar-foreground/75 hover:bg-white/5 hover:text-white",
         collapsed && "justify-center px-0",
       )}
     >
-      <Icon className={cn("h-4 w-4 shrink-0", active && "text-primary")} />
-      {!collapsed ? <span className="truncate">{label}</span> : null}
+      <Icon className={cn("h-4 w-4 shrink-0", active && "text-white")} />
+      {!collapsed ? (
+        <>
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {count && count > 0 ? (
+            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+              {count > 99 ? "99+" : count}
+            </span>
+          ) : null}
+        </>
+      ) : null}
     </Link>
   );
 }
 
 function PipelinesNavSection({
+  item,
   collapsed,
   pathname,
   pendingHref,
   onNavigate,
   onPrefetch,
 }: {
+  item: NavItem;
   collapsed: boolean;
   pathname: string;
   pendingHref: string | null;
   onNavigate: (href: string) => void;
   onPrefetch: (href: string) => void;
 }) {
-  const pipelinesItem = NAV_ITEMS.find((item) => item.href === PIPELINES_HREF);
   const isPipelinesSection = pathname.startsWith(`${PIPELINES_HREF}/`) || pathname === PIPELINES_HREF;
   const [expanded, setExpanded] = React.useState(isPipelinesSection);
   const activePipelineId = extractPipelineIdFromPath(pathname);
   const sectionActive = isNavActive(pathname, PIPELINES_HREF, pendingHref);
+  const Icon = item.icon;
 
   React.useEffect(() => {
     if (isPipelinesSection) setExpanded(true);
@@ -88,122 +103,57 @@ function PipelinesNavSection({
     enabled: expanded || isPipelinesSection,
   });
 
-  if (!pipelinesItem) return null;
-
-  const Icon = pipelinesItem.icon;
-
   if (collapsed) {
     return (
-      <div className="space-y-0.5">
-        <Link
-          href={PIPELINES_HREF}
-          title={pipelinesItem.label}
-          aria-current={sectionActive ? "page" : undefined}
-          onClick={() => onNavigate(PIPELINES_HREF)}
-          onMouseEnter={() => onPrefetch(PIPELINES_HREF)}
-          onFocus={() => onPrefetch(PIPELINES_HREF)}
-          className={cn(
-            "flex items-center justify-center rounded-lg px-0 py-2 text-sm font-medium transition-colors",
-            sectionActive
-              ? "bg-sidebar-accent text-primary"
-              : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-foreground",
-          )}
-        >
-          <Icon className={cn("h-4 w-4 shrink-0", sectionActive && "text-primary")} />
-        </Link>
-        {navigation.data?.length ? (
-          <div
-            className="space-y-0.5"
-            role="menu"
-            aria-label="Pipelines"
-          >
-            {navigation.data.map((pipeline) => {
-              const href = `/pipelines/${pipeline.id}`;
-              const active =
-                activePipelineId === pipeline.id ||
-                pendingHref === href ||
-                pendingHref?.startsWith(`${href}/`) === true;
-              const PipelineIcon = resolvePipelineIcon(pipeline.icon);
-              const label = formatPipelineNavLabel(
-                pipeline.name,
-                pipeline.index ?? pipeline.position + 1,
-              );
-              return (
-                <Link
-                  key={pipeline.id}
-                  href={href}
-                  title={label}
-                  role="menuitem"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => onNavigate(href)}
-                  onMouseEnter={() => onPrefetch(href)}
-                  onFocus={() => onPrefetch(href)}
-                  className={cn(
-                    "mx-auto flex h-7 w-7 items-center justify-center rounded-md transition-colors",
-                    active
-                      ? "bg-sidebar-accent ring-1 ring-primary/30"
-                      : "hover:bg-sidebar-accent/70",
-                  )}
-                >
-                  <PipelineIcon
-                    className="h-3.5 w-3.5"
-                    style={{ color: pipeline.color ?? "#7c3aed" }}
-                  />
-                </Link>
-              );
-            })}
-          </div>
-        ) : null}
-      </div>
+      <Link
+        href={PIPELINES_HREF}
+        title={item.label}
+        aria-current={sectionActive ? "page" : undefined}
+        onClick={() => onNavigate(PIPELINES_HREF)}
+        onMouseEnter={() => onPrefetch(PIPELINES_HREF)}
+        className={cn(
+          "flex items-center justify-center rounded-[11px] py-2.5 transition-colors",
+          sectionActive ? "bg-white/10 text-white" : "text-sidebar-foreground/75 hover:bg-white/5",
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </Link>
     );
   }
 
   return (
     <div className="space-y-0.5">
-      <div
-        className={cn(
-          "flex items-center gap-1 rounded-lg pr-1",
-          sectionActive && "bg-sidebar-accent/40",
-        )}
-      >
+      <div className={cn("flex items-center gap-1 rounded-[11px]", sectionActive && "bg-white/5")}>
         <Link
           href={PIPELINES_HREF}
-          aria-current={pathname === PIPELINES_HREF && pendingHref == null ? "page" : undefined}
           onClick={() => onNavigate(PIPELINES_HREF)}
           onMouseEnter={() => onPrefetch(PIPELINES_HREF)}
-          onFocus={() => onPrefetch(PIPELINES_HREF)}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
-            sectionActive
-              ? "text-primary"
-              : "text-sidebar-foreground/80 hover:bg-sidebar-accent/70 hover:text-foreground",
+            "flex min-w-0 flex-1 items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors",
+            sectionActive ? "text-white" : "text-sidebar-foreground/75 hover:text-white",
           )}
         >
-          <Icon className={cn("h-4 w-4 shrink-0", sectionActive && "text-primary")} />
-          <span className="truncate">{pipelinesItem.label}</span>
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{item.label}</span>
         </Link>
         <button
           type="button"
           aria-expanded={expanded}
           aria-label={expanded ? "Recolher pipelines" : "Expandir pipelines"}
           onClick={() => setExpanded((value) => !value)}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-sidebar-accent/70 hover:text-foreground"
+          className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-muted transition hover:bg-white/10 hover:text-white"
         >
-          <ChevronDown
-            className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")}
-          />
+          <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
         </button>
       </div>
 
       {expanded ? (
-        <div className="ml-3 space-y-0.5 border-l border-sidebar-border pl-2">
-          {navigation.isLoading ? (
-            <div className="space-y-1 px-2.5 py-1">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className="h-7 animate-pulse rounded-md bg-sidebar-accent/50" />
-              ))}
-            </div>
-          ) : null}
+        <div className="ml-3 space-y-0.5 border-l border-white/10 pl-2">
+          {navigation.isLoading
+            ? Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="h-7 animate-pulse rounded-md bg-white/5" />
+              ))
+            : null}
           {navigation.data?.map((pipeline) => {
             const href = `/pipelines/${pipeline.id}`;
             const active =
@@ -223,43 +173,25 @@ function PipelinesNavSection({
                 aria-current={active ? "page" : undefined}
                 onClick={() => onNavigate(href)}
                 onMouseEnter={() => onPrefetch(href)}
-                onFocus={() => onPrefetch(href)}
                 className={cn(
                   "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold tracking-wide transition-colors",
                   active
-                    ? "bg-sidebar-accent text-primary"
-                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-foreground",
+                    ? "bg-white/10 text-white"
+                    : "text-sidebar-foreground/65 hover:bg-white/5 hover:text-white",
                 )}
               >
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: pipeline.color ?? "#7c3aed" }}
-                  aria-hidden
-                />
                 <PipelineIcon
                   className="h-3.5 w-3.5 shrink-0 opacity-80"
                   style={{ color: pipeline.color ?? undefined }}
                 />
                 <span className="min-w-0 flex-1 truncate uppercase">{label}</span>
-                {pipeline.unreadCount ? (
-                  <span className="ml-auto rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                    {pipeline.unreadCount}
-                  </span>
-                ) : null}
               </Link>
             );
           })}
           <Link
             href={`${PIPELINES_HREF}?view=leads`}
             onClick={() => onNavigate(`${PIPELINES_HREF}?view=leads`)}
-            onMouseEnter={() => onPrefetch(PIPELINES_HREF)}
-            onFocus={() => onPrefetch(PIPELINES_HREF)}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-sidebar-accent/70 hover:text-foreground",
-              pathname === PIPELINES_HREF &&
-                pendingHref == null &&
-                "text-primary",
-            )}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-sidebar-muted transition-colors hover:bg-white/5 hover:text-white"
           >
             <ListChecks className="h-3.5 w-3.5" />
             Todos os leads
@@ -270,14 +202,89 @@ function PipelinesNavSection({
   );
 }
 
+function SidebarTeamSwitch() {
+  const selectedTeamId = useUiStore((s) => s.selectedTeamId);
+  const setSelectedTeamId = useUiStore((s) => s.setSelectedTeamId);
+  const [open, setOpen] = React.useState(false);
+  const { data: settings } = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: () => settingsApi.overview(),
+    retry: false,
+  });
+  const teams = settings?.teams ?? [{ id: "team-gestao", name: "Gestão" }];
+  const selectedTeam = teams.find((t) => t.id === selectedTeamId) ?? teams[0];
+
+  if (teams.length <= 1) {
+    return (
+      <p className="px-2 text-[11px] text-sidebar-muted">
+        Equipe: <span className="text-sidebar-foreground/80">{selectedTeam?.name}</span>
+      </p>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-sidebar-muted transition hover:bg-white/5 hover:text-white"
+      >
+        <span className="truncate">
+          Equipe: <span className="text-sidebar-foreground/80">{selectedTeam?.name}</span>
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40"
+            aria-label="Fechar"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute bottom-full left-0 z-50 mb-1 w-full overflow-hidden rounded-xl border border-sidebar-border bg-[#1a1528] py-1 shadow-card">
+            {teams.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                className={cn(
+                  "flex w-full px-3 py-2 text-left text-xs hover:bg-white/5",
+                  team.id === selectedTeamId
+                    ? "text-white"
+                    : "text-sidebar-muted",
+                )}
+                onClick={() => {
+                  setSelectedTeamId(team.id);
+                  setOpen(false);
+                }}
+              >
+                {team.name}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [pendingHref, setPendingHref] = React.useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = React.useState(false);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const mobileOpen = useUiStore((s) => s.sidebarMobileOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen);
+
+  const counts = useQuery({
+    queryKey: queryKeys.dashboard.metrics({ scope: "nav-counts" }),
+    queryFn: () => dashboardApi.metrics({ period: "30d" }),
+  staleTime: 30_000,
+  retry: false,
+  });
 
   React.useEffect(() => {
     if (
@@ -303,6 +310,20 @@ export function Sidebar() {
     [router],
   );
 
+  const resolveCount = (item: NavItem) => {
+    if (!item.countKey || !counts.data) return undefined;
+    if (item.countKey === "openDeals") return counts.data.openDeals;
+    if (item.countKey === "waitingConversations") {
+      return (
+        counts.data.waitingConversations ??
+        counts.data.unansweredLeads ??
+        counts.data.unreadConversations
+      );
+    }
+    if (item.countKey === "tasksToday") return counts.data.tasksToday;
+    return undefined;
+  };
+
   const content = (
     <aside
       className={cn(
@@ -314,24 +335,22 @@ export function Sidebar() {
         <Link
           href="/dashboard"
           className="flex min-w-0 items-center gap-2.5"
-          onClick={() => {
-            handleNavigate("/dashboard");
-          }}
+          onClick={() => handleNavigate("/dashboard")}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-sm font-bold text-primary-foreground shadow-soft">
             X
           </div>
           {!collapsed ? (
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold tracking-tight">{APP_NAME}</p>
-              <p className="truncate text-[11px] text-muted-foreground">Operação comercial</p>
+              <p className="truncate text-sm font-semibold tracking-tight text-white">{APP_NAME}</p>
+              <p className="truncate text-[11px] text-sidebar-muted">Operação comercial</p>
             </div>
           ) : null}
         </Link>
         <Button
           variant="ghost"
           size="icon"
-          className="hidden h-7 w-7 shrink-0 lg:inline-flex"
+          className="hidden h-7 w-7 shrink-0 text-sidebar-muted hover:bg-white/10 hover:text-white lg:inline-flex"
           onClick={toggleSidebar}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
         >
@@ -340,54 +359,104 @@ export function Sidebar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 lg:hidden"
+          className="h-7 w-7 text-sidebar-muted hover:bg-white/10 hover:text-white lg:hidden"
           onClick={() => setMobileOpen(false)}
         >
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      <nav className="scrollbar-thin flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-        {NAV_ITEMS.map((item) => {
-          if (item.href === PIPELINES_HREF) {
-            return (
-              <PipelinesNavSection
-                key={item.href}
-                collapsed={collapsed}
-                pathname={pathname}
-                pendingHref={pendingHref}
-                onNavigate={handleNavigate}
-                onPrefetch={handlePrefetch}
-              />
-            );
-          }
+      <nav className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-2 py-4">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.id} className="space-y-1.5">
+            {!collapsed ? (
+              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
+                {group.label}
+              </p>
+            ) : null}
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
+                if (item.expandablePipelines) {
+                  return (
+                    <PipelinesNavSection
+                      key={`${group.id}-${item.label}`}
+                      item={item}
+                      collapsed={collapsed}
+                      pathname={pathname}
+                      pendingHref={pendingHref}
+                      onNavigate={handleNavigate}
+                      onPrefetch={handlePrefetch}
+                    />
+                  );
+                }
 
-          const active = isNavActive(pathname, item.href, pendingHref);
-          return (
-            <SidebarNavLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              collapsed={collapsed}
-              active={active}
-              onNavigate={handleNavigate}
-              onPrefetch={handlePrefetch}
-            />
-          );
-        })}
+                const active = item.exact
+                  ? pathname === item.href || pendingHref === item.href
+                  : isNavActive(pathname, item.href, pendingHref);
+                return (
+                  <SidebarNavLink
+                    key={`${group.id}-${item.href}-${item.label}`}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    collapsed={collapsed}
+                    active={active && !item.expandablePipelines}
+                    count={resolveCount(item)}
+                    onNavigate={handleNavigate}
+                    onPrefetch={handlePrefetch}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
-        <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
-          <Avatar name={DEMO_USER_NAME} size="sm" />
+        <div
+          className={cn(
+            "flex items-center gap-2.5 rounded-xl bg-white/5 p-2",
+            collapsed && "justify-center bg-transparent p-0",
+          )}
+        >
+          <Avatar name={user?.name ?? "Usuário"} size="sm" />
           {!collapsed ? (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{DEMO_USER_NAME}</p>
-              <p className="truncate text-[11px] text-muted-foreground">Administradora</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-white">{user?.name ?? "Usuário"}</p>
+              <p className="truncate text-[11px] text-sidebar-muted">
+                {user ? AUTH_ROLE_LABEL[user.role] : "—"}
+              </p>
             </div>
           ) : null}
         </div>
+        {!collapsed ? (
+          <div className="mt-2 space-y-1.5">
+            <SidebarTeamSwitch />
+            <Link
+              href="/settings"
+              onClick={() => handleNavigate("/settings")}
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-sidebar-muted transition hover:bg-white/5 hover:text-white"
+            >
+              Configurações e perfil
+            </Link>
+            <button
+              type="button"
+              onClick={async () => {
+                setLoggingOut(true);
+                try {
+                  await logout();
+                } finally {
+                  setLoggingOut(false);
+                }
+              }}
+              disabled={loggingOut}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-sidebar-muted transition hover:bg-white/5 hover:text-white disabled:opacity-60"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              {loggingOut ? "Saindo…" : "Sair"}
+            </button>
+          </div>
+        ) : null}
       </div>
     </aside>
   );
@@ -399,7 +468,7 @@ export function Sidebar() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="absolute inset-0 bg-foreground/30"
+            className="absolute inset-0 bg-foreground/40"
             aria-label="Fechar menu"
             onClick={() => setMobileOpen(false)}
           />

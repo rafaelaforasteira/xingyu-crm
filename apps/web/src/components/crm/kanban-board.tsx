@@ -241,20 +241,43 @@ function StageColumn({
 export function KanbanBoard({
   pipeline,
   onOpenDeal,
+  filterStageId,
+  idleDays,
 }: {
   pipeline: Pipeline;
   onOpenDeal?: (deal: Deal) => void;
+  filterStageId?: string;
+  idleDays?: number;
 }) {
   const queryClient = useQueryClient();
   const openDealDrawer = useUiStore((s) => s.openDealDrawer);
   const [activeDeal, setActiveDeal] = React.useState<Deal | null>(null);
   const [dealToMove, setDealToMove] = React.useState<Deal | null>(null);
-  const [stages, setStages] = React.useState<PipelineStage[]>(sortPipelineStages(pipeline.stages));
+
+  const filteredStages = React.useMemo(() => {
+    const cutoff =
+      idleDays != null
+        ? Date.now() - idleDays * 86_400_000
+        : null;
+    return sortPipelineStages(pipeline.stages)
+      .filter((stage) => !filterStageId || stage.id === filterStageId)
+      .map((stage) => ({
+        ...stage,
+        deals: (stage.deals ?? []).filter((deal) => {
+          if (cutoff == null) return true;
+          const reference = deal.lastInteractionAt ?? deal.updatedAt ?? deal.createdAt;
+          if (!reference) return true;
+          return new Date(reference).getTime() < cutoff;
+        }),
+      }));
+  }, [pipeline.stages, filterStageId, idleDays]);
+
+  const [stages, setStages] = React.useState<PipelineStage[]>(filteredStages);
   const suppressOpenUntil = React.useRef(0);
 
   React.useEffect(() => {
-    setStages(sortPipelineStages(pipeline.stages));
-  }, [pipeline]);
+    setStages(filteredStages);
+  }, [filteredStages]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 

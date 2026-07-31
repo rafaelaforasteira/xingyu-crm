@@ -18,7 +18,7 @@ setup("authenticate as admin", async ({ page }) => {
 
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard/, { timeout: 60_000 });
-  await expect(page.getByRole("heading", { name: /visão geral|dashboard/i })).toBeVisible({
+  await expect(page.getByTestId("dashboard-page")).toBeVisible({
     timeout: 30_000,
   });
 

@@ -1,8 +1,9 @@
 export const queryKeys = {
   dashboard: {
-    metrics: ["dashboard", "metrics"] as const,
-    charts: ["dashboard", "charts"] as const,
-    lists: ["dashboard", "lists"] as const,
+    all: ["dashboard"] as const,
+    metrics: (params?: unknown) => ["dashboard", "metrics", params] as const,
+    charts: (params?: unknown) => ["dashboard", "charts", params] as const,
+    lists: (params?: unknown) => ["dashboard", "lists", params] as const,
   },
   contacts: {
     all: ["contacts"] as const,

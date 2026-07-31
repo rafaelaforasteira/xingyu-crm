@@ -48,6 +48,11 @@ const config: Config = {
           foreground: "hsl(var(--sidebar-foreground))",
           border: "hsl(var(--sidebar-border))",
           accent: "hsl(var(--sidebar-accent))",
+          muted: "hsl(var(--sidebar-muted))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
         },
       },
       borderRadius: {

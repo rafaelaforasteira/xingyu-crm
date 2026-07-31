@@ -1277,10 +1277,7 @@ export function PipelineChannelsPage({ pipelineId }: { pipelineId: string }) {
           queryKey: queryKeys.conversations.all,
         }),
         queryClient.invalidateQueries({
-          queryKey: queryKeys.dashboard.metrics,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.dashboard.lists,
+          queryKey: queryKeys.dashboard.all,
         }),
         ...(result.conversation
           ? [

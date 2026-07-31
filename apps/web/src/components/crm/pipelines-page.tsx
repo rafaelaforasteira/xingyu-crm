@@ -3,7 +3,7 @@
 import * as React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
@@ -328,6 +328,7 @@ function PipelineCard({
 
 export function PipelinesListPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [tab, setTab] = React.useState<PipelineTab>("active");
   const [search, setSearch] = React.useState("");
@@ -350,6 +351,18 @@ export function PipelinesListPage() {
     queryFn: () => pipelinesApi.list(params),
     retry: false,
   });
+
+  React.useEffect(() => {
+    const idleDays = searchParams.get("idleDays");
+    const stageId = searchParams.get("stageId");
+    if (!idleDays && !stageId) return;
+    const first = list.data?.data?.[0];
+    if (!first) return;
+    const next = new URLSearchParams();
+    if (idleDays) next.set("idleDays", idleDays);
+    if (stageId) next.set("stageId", stageId);
+    router.replace(`/pipelines/${first.id}?${next.toString()}`);
+  }, [list.data?.data, router, searchParams]);
 
   const actionMutation = useMutation({
     mutationFn: ({ action, pipeline }: { action: PipelineAction; pipeline: Pipeline }) => {
@@ -545,8 +558,16 @@ export function PipelinesListPage() {
 
 export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const openDealDrawer = useUiStore((state) => state.openDealDrawer);
   const [createDealOpen, setCreateDealOpen] = React.useState(false);
+  const stageId = searchParams.get("stageId") || undefined;
+  const idleDaysRaw = searchParams.get("idleDays");
+  const idleDays = idleDaysRaw ? Number(idleDaysRaw) : undefined;
+  const idleDaysFilter =
+    idleDays != null && Number.isFinite(idleDays) && idleDays > 0
+      ? idleDays
+      : undefined;
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.pipelines.board(pipelineId),
@@ -560,6 +581,10 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
       return;
     }
     openDealDrawer(deal.id);
+  };
+
+  const clearBoardFilters = () => {
+    router.replace(`/pipelines/${pipelineId}`);
   };
 
   return (
@@ -584,9 +609,29 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
           </div>
         }
       />
+      {stageId || idleDaysFilter ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm shadow-soft">
+          <p className="text-muted-foreground">
+            {stageId ? "Exibindo apenas a etapa selecionada. " : null}
+            {idleDaysFilter
+              ? `Exibindo negócios sem movimentação há ${idleDaysFilter}+ dias.`
+              : null}
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={clearBoardFilters}>
+            Limpar filtro
+          </Button>
+        </div>
+      ) : null}
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       {isLoading ? <Skeleton className="h-96 w-full" /> : null}
-      {data ? <KanbanBoard pipeline={data} onOpenDeal={onOpenDeal} /> : null}
+      {data ? (
+        <KanbanBoard
+          pipeline={data}
+          onOpenDeal={onOpenDeal}
+          filterStageId={stageId}
+          idleDays={idleDaysFilter}
+        />
+      ) : null}
       {data ? (
         <CreateDealDialog open={createDealOpen} onOpenChange={setCreateDealOpen} pipeline={data} />
       ) : null}
