@@ -477,7 +477,8 @@ export const occurrencesApi = {
 };
 
 export const automationsApi = {
-  list: () => api.get<Automation[]>("/automations"),
+  list: async () =>
+    unwrapData(await api.get<Automation[] | PaginatedResponse<Automation>>("/automations")),
   get: (id: string) => api.get<Automation>(`/automations/${id}`),
   create: (data: Partial<Automation>) => api.post<Automation>("/automations", data),
   update: (id: string, data: Partial<Automation>) =>

@@ -2,26 +2,27 @@ import { expect, test } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+/** Transitions along the simplified main sidebar (feature/crm-v1-complete). */
 const SIDEBAR_STEPS = [
   { from: "/dashboard", to: "/inbox", label: "dashboard→inbox" },
-  { from: "/inbox", to: "/contacts", label: "inbox→contacts" },
-  { from: "/contacts", to: "/pipelines", label: "contacts→pipelines" },
-  { from: "/pipelines", to: "/reactivation", label: "pipelines→reactivation" },
-  { from: "/reactivation", to: "/repurchase", label: "reactivation→repurchase" },
-  { from: "/repurchase", to: "/after-sales", label: "repurchase→after-sales" },
-  { from: "/after-sales", to: "/orders", label: "after-sales→orders" },
+  { from: "/inbox", to: "/tasks", label: "inbox→tasks" },
+  { from: "/tasks", to: "/pipelines", label: "tasks→pipelines" },
+  { from: "/pipelines", to: "/automations", label: "pipelines→automations" },
+  { from: "/automations", to: "/marketing", label: "automations→marketing" },
+  { from: "/marketing", to: "/reports", label: "marketing→reports" },
+  { from: "/reports", to: "/settings", label: "reports→settings" },
 ];
 
 function navLabel(href: string) {
   const map: Record<string, RegExp> = {
     "/dashboard": /visão geral|dashboard/i,
     "/inbox": /^Inbox$/i,
-    "/contacts": /^Contatos$/i,
+    "/tasks": /^Tarefas$/i,
     "/pipelines": /^Pipelines$/i,
-    "/reactivation": /^Reativação$/i,
-    "/repurchase": /^Recompra$/i,
-    "/after-sales": /^Pós-venda$/i,
-    "/orders": /^Pedidos$/i,
+    "/automations": /^Automação$/i,
+    "/marketing": /^Marketing$/i,
+    "/reports": /^Relatórios$/i,
+    "/settings": /^Configurações$/i,
   };
   return map[href] ?? new RegExp(href);
 }
@@ -57,8 +58,10 @@ test("measure CRM sidebar route transitions", async ({ page }) => {
       () => performance.getEntriesByType("navigation").length,
     );
     const sidebar = page.locator("div.hidden.lg\\:block aside").first();
-    const link = sidebar.getByRole("link", { name: navLabel(step.to) }).first();
+    // Prefer href so pipeline submenu labels cannot shadow main-nav text matches.
+    const link = sidebar.locator(`a[href="${step.to}"]`).first();
     await expect(link).toBeVisible({ timeout: 10_000 });
+    await expect(link).toHaveAccessibleName(navLabel(step.to));
 
     apiUrls.length = 0;
     const t0 = Date.now();

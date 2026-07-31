@@ -26,16 +26,24 @@ Route transitions still felt slow after v2, and the main menu was overloaded wit
 
 ## Metrics
 
-### Before (v2 doc, warm SPA, `next dev`)
+Instrument: `apps/web/e2e/navigation-perf.spec.ts` (serial).  
+Path follows the **simplified main sidebar**:
+
+Dashboard → Inbox → Tarefas → Pipelines → Automação → Marketing → Relatórios → Configurações  
+(+ optional `pipelines→board` via central list)
+
+Secondary modules (Contatos, Empresas, Pedidos, Recompra, Reativação, Pós-venda) remain routable but are **not** measured via sidebar clicks.
+
+### Before (v2 doc, warm SPA, `next dev` — legacy menu path)
 
 | Transition | Active (ms) | Notes |
 |------------|-------------|-------|
 | dashboard→inbox | ~718 | SPA |
-| inbox→contacts | ~1373 | SPA |
+| inbox→contacts | ~1373 | SPA (contacts no longer in main nav) |
 | contacts→pipelines | ~863 | SPA |
 | cold after-sales/orders | 11–18s | compile |
 
-### After (this round, qualitative + targeted checks)
+### After (this round)
 
 | Check | Result |
 |-------|--------|
@@ -44,8 +52,9 @@ Route transitions still felt slow after v2, and the main menu was overloaded wit
 | Main nav item count | 14 → **8** |
 | Pipelines submenu payload | light navigation DTO only |
 | Tasks / Automação first paint | segmented skeleton |
+| Perf E2E path | aligned with simplified sidebar |
 
-Re-measure with Playwright `navigation-perf` against production local (`pnpm build && pnpm start`) for absolute budgets when validating release.
+Re-measure with Playwright `navigation-perf` against production local (`pnpm build && pnpm start`) for absolute budgets when validating release. Raw JSON is written to `docs/_nav-perf-{mode}.json`.
 
 ## Operational note
 

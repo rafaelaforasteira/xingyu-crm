@@ -74,6 +74,8 @@ API issue (instrumented this cycle):
 Instrument: `apps/web/e2e/navigation-perf.spec.ts` (serial, warm server on `:3000`).  
 Raw JSON: `docs/_nav-perf-dev-after.json` (measuredAt in file).
 
+> **Note (later):** the main sidebar was simplified. Contatos / Empresas / Pedidos / Recompra / Reativação / Pós-venda left the primary nav. Current `navigation-perf.spec.ts` measures Dashboard → Inbox → Tarefas → Pipelines → Automação → Marketing → Relatórios → Configurações. Historical rows below reflect the **legacy** menu path.
+
 | Transition | Active (ms) | URL (ms) | Main (ms) | Settled (ms) | Full reload |
 |------------|-------------|----------|-----------|--------------|-------------|
 | dashboard→inbox | 718 | 668 | 764 | 1572 | no |
