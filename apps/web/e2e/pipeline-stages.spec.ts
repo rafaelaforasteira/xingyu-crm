@@ -117,7 +117,9 @@ test("manages pipeline stages and safely moves deals before deletion", async ({
     await expect(
       page.getByRole("heading", { name: "Etapas do pipeline", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(pipelineName, { exact: false })).toBeVisible();
+    await expect(
+      page.locator("main").getByText(pipelineName, { exact: false }),
+    ).toBeVisible();
     await expect(stageCard(page, baseName)).toHaveCount(1);
 
     const discovery = await createStage(page, discoveryName, {

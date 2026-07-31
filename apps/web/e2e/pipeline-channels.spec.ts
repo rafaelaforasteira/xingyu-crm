@@ -104,7 +104,9 @@ test("connects, persists, tests, pauses, resumes and disconnects a pipeline chan
     await expect(
       page.getByRole("heading", { name: "Canais do pipeline", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(pipelineName, { exact: false })).toBeVisible();
+    await expect(
+      page.locator("main").getByText(pipelineName, { exact: false }),
+    ).toBeVisible();
 
     await page
       .getByRole("button", { name: "Conectar canal", exact: true })
