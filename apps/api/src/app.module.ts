@@ -1,7 +1,17 @@
-import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import {
+  Module,
+  NestModule,
+  MiddlewareConsumer,
+} from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { PrismaModule } from "./prisma/prisma.module";
 import { DemoUserMiddleware } from "./common/middleware/demo-user.middleware";
+import { validateEnvironment } from "./common/env.validation";
+import { AuthModule } from "./auth/auth.module";
+import { AuthGuard } from "./auth/guards/auth.guard";
+import { RolesGuard } from "./auth/guards/roles.guard";
 import { HealthModule } from "./health/health.module";
 import { ContactsModule } from "./contacts/contacts.module";
 import { CompaniesModule } from "./companies/companies.module";
@@ -28,23 +38,6 @@ import path from "node:path";
 
 const rootEnvFile = path.resolve(__dirname, "../../../.env");
 
-function validateEnvironment(config: Record<string, unknown>) {
-  if (!config.DATABASE_URL) {
-    throw new Error(
-      "DATABASE_URL não foi definida. Execute pnpm setup:local ou configure o arquivo .env na raiz.",
-    );
-  }
-
-  for (const name of ["POSTGRES_PORT", "API_PORT", "WEB_PORT"] as const) {
-    const value = config[name];
-    if (value !== undefined && (!Number.isInteger(Number(value)) || Number(value) < 1)) {
-      throw new Error(`${name} deve ser uma porta válida.`);
-    }
-  }
-
-  return config;
-}
-
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -52,7 +45,17 @@ function validateEnvironment(config: Record<string, unknown>) {
       envFilePath: rootEnvFile,
       validate: validateEnvironment,
     }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          ttl: Number(config.get("RATE_LIMIT_TTL") ?? 60) * 1000,
+          limit: Number(config.get("RATE_LIMIT_MAX") ?? 200),
+        },
+      ],
+    }),
     PrismaModule,
+    AuthModule,
     DashboardModule,
     HealthModule,
     ContactsModule,
@@ -75,6 +78,11 @@ function validateEnvironment(config: Record<string, unknown>) {
     ActivitiesModule,
     NotesModule,
     IntegrationsModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule implements NestModule {
