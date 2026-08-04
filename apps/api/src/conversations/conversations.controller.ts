@@ -7,11 +7,18 @@ import {
   Body,
   Param,
   Query,
+  UploadedFiles,
+  UseInterceptors,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiHeader } from "@nestjs/swagger";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { ApiTags, ApiOperation, ApiHeader, ApiConsumes, ApiBody } from "@nestjs/swagger";
+import { memoryStorage } from "multer";
 import { ConversationsService } from "./conversations.service";
 import { OrganizationId } from "../common/decorators/organization.decorator";
 import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/demo-user.decorator";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../auth/types";
+import { uploadMaxBytes } from "../common/upload/upload.util";
 import {
   CreateConversationDto,
   UpdateConversationDto,
@@ -91,13 +98,32 @@ export class ConversationsController {
   }
 
   @Post(":id/messages")
-  @ApiOperation({ summary: "Send message (demo mode)" })
+  @ApiOperation({
+    summary: "Send message (text and/or CRM-only attachments)",
+    description:
+      "Attachments are stored in the CRM only. They are not forwarded to WhatsApp/Meta in this phase.",
+  })
+  @ApiConsumes("application/json", "multipart/form-data")
+  @ApiBody({ type: SendMessageDto })
+  @UseInterceptors(
+    FilesInterceptor("files", 10, {
+      storage: memoryStorage(),
+      limits: { fileSize: uploadMaxBytes(), files: 10 },
+    }),
+  )
   sendMessage(
     @OrganizationId() orgId: string,
-    @DemoUser() user: DemoUserType,
+    @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
     @Body() dto: SendMessageDto,
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
-    return this.conversationsService.sendMessage(orgId, id, dto, user.id);
+    return this.conversationsService.sendMessage(
+      orgId,
+      id,
+      dto,
+      user.id,
+      files ?? [],
+    );
   }
 }

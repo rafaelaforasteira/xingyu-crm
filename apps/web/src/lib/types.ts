@@ -501,16 +501,29 @@ export interface ConversationContext {
   counts: ConversationContextCounts;
 }
 
+export interface MessageAttachment {
+  id: string;
+  fileName: string;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  url: string;
+  kind: "image" | "video" | "audio" | "document" | string;
+  createdAt?: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
-  body: string;
+  body: string | null;
   direction: "INBOUND" | "OUTBOUND" | "INTERNAL";
   channel?: string;
   authorId?: string | null;
   author?: UserRef | null;
+  senderType?: string | null;
   createdAt: string;
   status?: string;
+  attachments?: MessageAttachment[];
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface Note {

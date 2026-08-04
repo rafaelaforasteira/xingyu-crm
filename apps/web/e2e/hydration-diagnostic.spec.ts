@@ -177,10 +177,11 @@ test("AppShell hydrates without hydration errors and keeps stable shell structur
   await expect(page.locator(`${MAIN} [aria-label="Carregando"]`)).toHaveCount(0, {
     timeout: 10_000,
   });
-  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible({
+  await expect(
+    page.getByRole("heading", { name: /Visão geral|Dashboard/i }).first(),
+  ).toBeVisible({
     timeout: 10_000,
   });
-
   const afterSuspense = {
     shell: await page.locator(APP_SHELL).count(),
     sidebar: await page.locator(SIDEBAR).count(),

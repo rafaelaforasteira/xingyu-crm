@@ -139,11 +139,13 @@ async function request<T>(
 
   let response: Response;
   try {
+    const isFormData =
+      typeof FormData !== "undefined" && rest.body instanceof FormData;
     response = await fetch(url, {
       ...rest,
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...headers,
       },
       cache: "no-store",
@@ -205,7 +207,15 @@ export const api = {
   get: <T>(path: string, query?: Record<string, QueryValue>) =>
     request<T>(path, { method: "GET", query }),
   post: <T>(path: string, data?: unknown) =>
-    request<T>(path, { method: "POST", body: data ? JSON.stringify(data) : undefined }),
+    request<T>(path, {
+      method: "POST",
+      body:
+        data == null
+          ? undefined
+          : typeof FormData !== "undefined" && data instanceof FormData
+            ? data
+            : JSON.stringify(data),
+    }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: "PATCH", body: data ? JSON.stringify(data) : undefined }),
   put: <T>(path: string, data?: unknown) =>
@@ -433,6 +443,22 @@ export const conversationsApi = {
     api.patch<{ id: string; unreadCount: number }>(`/conversations/${id}/read`),
   sendMessage: async (id: string, body: string) => {
     const raw = await api.post<unknown>(`/conversations/${id}/messages`, { body });
+    const messages = normalizeMessages(raw);
+    if (!messages[0]) {
+      throw new ApiError("Resposta de mensagem inválida.", 500, raw);
+    }
+    return messages[0];
+  },
+  sendMessageWithAttachments: async (
+    id: string,
+    payload: { body?: string; files: File[] },
+  ) => {
+    const form = new FormData();
+    if (payload.body?.trim()) form.append("body", payload.body.trim());
+    for (const file of payload.files) {
+      form.append("files", file, file.name);
+    }
+    const raw = await api.post<unknown>(`/conversations/${id}/messages`, form);
     const messages = normalizeMessages(raw);
     if (!messages[0]) {
       throw new ApiError("Resposta de mensagem inválida.", 500, raw);

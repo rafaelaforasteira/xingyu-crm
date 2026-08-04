@@ -2,26 +2,51 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Send } from "lucide-react";
+import {
+  Loader2,
+  Send,
+  Smile,
+  Paperclip,
+  Mic,
+  Square,
+  Image as ImageIcon,
+  FileText,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/components/auth/auth-provider";
 import { conversationsApi } from "@/lib/api";
 import {
-  isValidMessageBody,
+  canSendMessage,
+  shouldSendOnEnter,
   sortMessagesChronologically,
 } from "@/lib/inbox-utils";
 import { queryKeys } from "@/lib/query-keys";
 import type { Message, MessageCursorPage } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   appendOptimisticMessage,
   patchConversationListItem,
   removeOptimisticMessage,
   replaceOptimisticMessage,
 } from "./conversation-cache";
+import { ConversationEmojiPicker } from "./conversation-emoji-picker";
+import {
+  classifyFile,
+  ConversationAttachmentPreview,
+  type PendingAttachment,
+} from "./conversation-attachment-preview";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function resizeTextarea(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
 }
 
 export function ConversationComposer({
@@ -31,91 +56,476 @@ export function ConversationComposer({
   conversationId: string;
   listQueryKey: readonly unknown[];
 }) {
+  const { user } = useAuth();
   const [body, setBody] = React.useState("");
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = React.useState(false);
+  const [pending, setPending] = React.useState<PendingAttachment[]>([]);
+  const [recording, setRecording] = React.useState(false);
+  const [recordingSeconds, setRecordingSeconds] = React.useState(0);
+  const [audioPreview, setAudioPreview] = React.useState<PendingAttachment | null>(
+    null,
+  );
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const mediaInputRef = React.useRef<HTMLInputElement | null>(null);
+  const docInputRef = React.useRef<HTMLInputElement | null>(null);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = React.useRef<MediaStream | null>(null);
+  const chunksRef = React.useRef<Blob[]>([]);
+  const timerRef = React.useRef<number | null>(null);
   const queryClient = useQueryClient();
+
+  const clearRecordingResources = React.useCallback(() => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    chunksRef.current = [];
+    setRecording(false);
+    setRecordingSeconds(0);
+  }, []);
 
   React.useEffect(() => {
     setBody("");
-  }, [conversationId]);
+    setPending((current) => {
+      current.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      return [];
+    });
+    setAudioPreview((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    setEmojiOpen(false);
+    setAttachMenuOpen(false);
+    clearRecordingResources();
+    resizeTextarea(textareaRef.current);
+  }, [conversationId, clearRecordingResources]);
+
+  React.useEffect(() => () => clearRecordingResources(), [clearRecordingResources]);
 
   const sendMutation = useMutation({
-    mutationFn: async ({ text, tempId }: { text: string; tempId: string }) => {
-      const message = await conversationsApi.sendMessage(conversationId, text);
+    mutationFn: async ({
+      text,
+      files,
+      tempId,
+    }: {
+      text: string;
+      files: File[];
+      tempId: string;
+    }) => {
+      const message =
+        files.length > 0
+          ? await conversationsApi.sendMessageWithAttachments(conversationId, {
+              body: text,
+              files,
+            })
+          : await conversationsApi.sendMessage(conversationId, text);
       return { message, tempId, text };
     },
-    onMutate: async ({ text, tempId }) => {
+    onMutate: async ({ text, files, tempId }) => {
       const now = new Date().toISOString();
       const optimistic: Message = {
         id: tempId,
         conversationId,
-        body: text,
+        body: text || null,
         direction: "OUTBOUND",
         createdAt: now,
         status: "SENDING",
+        authorId: user?.id ?? null,
+        author: user ? { id: user.id, name: user.name } : null,
+        attachments: files.map((file, index) => ({
+          id: `${tempId}-att-${index}`,
+          fileName: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+          url: URL.createObjectURL(file),
+          kind: classifyFile(file),
+        })),
       };
       appendOptimisticMessage(queryClient, conversationId, optimistic);
       patchConversationListItem(queryClient, listQueryKey, conversationId, {
-        lastMessagePreview: text,
+        lastMessagePreview: text || (files[0] ? `Anexo: ${files[0].name}` : "Nova mensagem"),
         lastMessageAt: now,
         unreadCount: 0,
       });
       setBody("");
+      setPending((current) => {
+        current.forEach((item) => {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        });
+        return [];
+      });
+      setAudioPreview((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return null;
+      });
+      requestAnimationFrame(() => {
+        resizeTextarea(textareaRef.current);
+        textareaRef.current?.focus();
+      });
       return { tempId };
     },
     onSuccess: ({ message, tempId, text }) => {
       replaceOptimisticMessage(queryClient, conversationId, tempId, message);
       patchConversationListItem(queryClient, listQueryKey, conversationId, {
-        lastMessagePreview: text,
+        lastMessagePreview:
+          text ||
+          message.attachments?.[0]?.fileName ||
+          message.body ||
+          "Nova mensagem",
         lastMessageAt: message.createdAt,
         unreadCount: 0,
       });
       toast.success("Mensagem enviada.");
+      textareaRef.current?.focus();
     },
-    onError: (error, _variables, context) => {
+    onError: (error, variables, context) => {
       if (context?.tempId) {
         removeOptimisticMessage(queryClient, conversationId, context.tempId);
       }
+      setBody(variables.text);
       toast.error(errorMessage(error, "Não foi possível enviar a mensagem."));
+      requestAnimationFrame(() => textareaRef.current?.focus());
     },
   });
 
+  const allPending = audioPreview ? [...pending, audioPreview] : pending;
+  const canSend =
+    canSendMessage(body, allPending.length) && !sendMutation.isPending && !recording;
+
   const submitMessage = () => {
     const text = body.trim();
-    if (!isValidMessageBody(text) || sendMutation.isPending) return;
+    if (!canSendMessage(text, allPending.length) || sendMutation.isPending || recording) {
+      return;
+    }
     sendMutation.mutate({
       text,
+      files: allPending.map((item) => item.file),
       tempId: `optimistic-${Date.now()}`,
     });
   };
 
+  const insertEmoji = (emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setBody((current) => `${current}${emoji}`);
+      return;
+    }
+    const start = el.selectionStart ?? body.length;
+    const end = el.selectionEnd ?? body.length;
+    const next = `${body.slice(0, start)}${emoji}${body.slice(end)}`;
+    setBody(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const cursor = start + emoji.length;
+      el.setSelectionRange(cursor, cursor);
+      resizeTextarea(el);
+    });
+    setEmojiOpen(false);
+  };
+
+  const addFiles = (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    const next: PendingAttachment[] = Array.from(fileList).map((file) => {
+      const kind = classifyFile(file);
+      return {
+        id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+        file,
+        kind,
+        previewUrl: kind === "image" ? URL.createObjectURL(file) : undefined,
+      };
+    });
+    setPending((current) => [...current, ...next]);
+    setAttachMenuOpen(false);
+  };
+
+  const removePending = (id: string) => {
+    setPending((current) => {
+      const target = current.find((item) => item.id === id);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+    setAudioPreview((current) => {
+      if (current?.id !== id) return current;
+      if (current.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  };
+
+  const startRecording = async () => {
+    if (recording || sendMutation.isPending) return;
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      toast.error("Gravação de áudio não é suportada neste navegador.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        const ext = blob.type.includes("mp4") ? "m4a" : "webm";
+        const file = new File([blob], `audio-${Date.now()}.${ext}`, {
+          type: blob.type || "audio/webm",
+        });
+        const previewUrl = URL.createObjectURL(blob);
+        setAudioPreview({
+          id: `audio-${Date.now()}`,
+          file,
+          kind: "audio",
+          previewUrl,
+        });
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        chunksRef.current = [];
+        if (timerRef.current) {
+          window.clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        setRecording(false);
+      };
+      recorder.start();
+      setRecording(true);
+      setRecordingSeconds(0);
+      timerRef.current = window.setInterval(() => {
+        setRecordingSeconds((value) => value + 1);
+      }, 1000);
+    } catch {
+      clearRecordingResources();
+      toast.error("Permissão do microfone negada ou indisponível.");
+    }
+  };
+
+  const stopRecording = () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      clearRecordingResources();
+      return;
+    }
+    recorder.stop();
+  };
+
+  const cancelAudioPreview = () => {
+    setAudioPreview((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  };
+
   return (
-    <form
-      className="flex gap-2 border-t border-border p-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submitMessage();
-      }}
-    >
-      <Input
-        aria-label="Mensagem"
-        value={body}
-        onChange={(event) => setBody(event.target.value)}
-        placeholder="Responder…"
-        disabled={sendMutation.isPending}
-      />
-      <Button
-        type="submit"
-        size="icon"
-        aria-label="Enviar mensagem"
-        disabled={!isValidMessageBody(body) || sendMutation.isPending}
+    <div className="border-t border-border bg-card" data-testid="conversation-composer">
+      <ConversationAttachmentPreview items={pending} onRemove={removePending} />
+      {audioPreview ? (
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <audio controls src={audioPreview.previewUrl} className="min-w-0 flex-1" />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Cancelar áudio"
+            onClick={cancelAudioPreview}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : null}
+
+      {recording ? (
+        <div
+          className="flex items-center gap-2 border-b border-border bg-destructive/5 px-3 py-2 text-xs"
+          data-testid="recording-indicator"
+        >
+          <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
+          Gravando… {String(Math.floor(recordingSeconds / 60)).padStart(2, "0")}:
+          {String(recordingSeconds % 60).padStart(2, "0")}
+          <Button type="button" size="sm" variant="outline" onClick={stopRecording}>
+            <Square className="mr-1 h-3 w-3" />
+            Parar
+          </Button>
+        </div>
+      ) : null}
+
+      <form
+        className="flex items-end gap-1.5 p-2 sm:gap-2 sm:p-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitMessage();
+        }}
       >
-        {sendMutation.isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+        <div className="relative">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Inserir emoji"
+            title="Emoji"
+            disabled={sendMutation.isPending || recording}
+            onClick={() => {
+              setAttachMenuOpen(false);
+              setEmojiOpen((open) => !open);
+            }}
+          >
+            <Smile className="h-4 w-4" />
+          </Button>
+          <ConversationEmojiPicker
+            open={emojiOpen}
+            onClose={() => setEmojiOpen(false)}
+            onSelect={insertEmoji}
+          />
+        </div>
+
+        <div className="relative">
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Anexar arquivo"
+            title="Anexar"
+            disabled={sendMutation.isPending || recording}
+            onClick={() => {
+              setEmojiOpen(false);
+              setAttachMenuOpen((open) => !open);
+            }}
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+          {attachMenuOpen ? (
+            <div
+              role="menu"
+              className="absolute bottom-full left-0 z-40 mb-2 w-44 rounded-xl border border-border bg-card p-1 shadow-lg"
+              data-testid="attach-menu"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
+                onClick={() => mediaInputRef.current?.click()}
+              >
+                <ImageIcon className="h-4 w-4" />
+                Foto ou vídeo
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
+                onClick={() => docInputRef.current?.click()}
+              >
+                <FileText className="h-4 w-4" />
+                Documento
+              </button>
+            </div>
+          ) : null}
+          <input
+            ref={mediaInputRef}
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+          <input
+            ref={docInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,text/plain,text/csv"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              addFiles(event.target.files);
+              event.target.value = "";
+            }}
+          />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <Textarea
+            ref={textareaRef}
+            aria-label="Mensagem"
+            value={body}
+            rows={1}
+            placeholder="Responder…"
+            disabled={sendMutation.isPending || recording}
+            className={cn(
+              "max-h-[150px] min-h-[40px] resize-none overflow-y-auto py-2.5 leading-5",
+            )}
+            onChange={(event) => {
+              setBody(event.target.value);
+              resizeTextarea(event.target);
+            }}
+            onKeyDown={(event) => {
+              if (shouldSendOnEnter(event)) {
+                event.preventDefault();
+                submitMessage();
+              }
+            }}
+          />
+          <p className="mt-1 px-0.5 text-[10px] text-muted-foreground">
+            Enter para enviar · Shift + Enter para quebrar linha
+          </p>
+        </div>
+
+        {recording ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="destructive"
+            aria-label="Parar gravação"
+            title="Parar"
+            onClick={stopRecording}
+          >
+            <Square className="h-4 w-4" />
+          </Button>
         ) : (
-          <Send className="h-4 w-4" />
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Gravar áudio"
+            title="Áudio"
+            disabled={sendMutation.isPending}
+            onClick={() => void startRecording()}
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
         )}
-      </Button>
-    </form>
+
+        <Button
+          type="submit"
+          size="icon"
+          aria-label="Enviar mensagem"
+          title="Enviar"
+          disabled={!canSend}
+        >
+          {sendMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      </form>
+    </div>
   );
 }
 

@@ -134,10 +134,13 @@ export class QueryMessagesDto {
 }
 
 export class SendMessageDto {
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description: "Optional when one or more files are attached",
+  })
+  @IsOptional()
   @IsString()
   @MaxLength(10000)
-  body!: string;
+  body?: string;
 
   @ApiPropertyOptional({ default: "outbound" })
   @IsOptional()
@@ -153,4 +156,11 @@ export class SendMessageDto {
   @IsOptional()
   @IsString()
   contentType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Use "automation" for automated outbound messages',
+  })
+  @IsOptional()
+  @IsString()
+  senderType?: string;
 }

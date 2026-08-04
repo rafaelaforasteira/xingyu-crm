@@ -47,7 +47,7 @@ packages/database/.pgdata/
 packages/database/.pgdata-backup-*/
 packages/database/.pgdata-*/
 
-# Uploads & temp
+# Uploads & temp (runtime storage dirs; upload source code is under apps/api/src/common/upload)
 uploads
 tmp
 temp

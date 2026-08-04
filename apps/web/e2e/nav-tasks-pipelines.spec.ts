@@ -41,6 +41,6 @@ test("tasks board groups by custom status and creates a task", async ({ page }) 
   await page.getByRole("button", { name: "Nova tarefa" }).click();
   const title = `E2E task ${Date.now()}`;
   await page.getByLabel("Nome").fill(title);
-  await page.getByRole("button", { name: "Criar" }).click();
+  await page.getByTestId("tasks-page").getByRole("button", { name: "Criar", exact: true }).click();
   await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
 });

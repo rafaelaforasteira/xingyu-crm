@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
@@ -12,6 +12,7 @@ import {
   mergeConversationTags,
 } from "../common/mappers/conversation.mapper";
 import { toPipelineResponse, toPipelineStageResponse } from "../common/mappers/pipeline.mapper";
+import { validateAndSaveUpload } from "../common/upload/upload.util";
 import {
   CreateConversationDto,
   UpdateConversationDto,
@@ -572,21 +573,60 @@ export class ConversationsService {
     conversationId: string,
     dto: SendMessageDto,
     userId: string,
+    files: Express.Multer.File[] = [],
   ) {
     const conversation = await this.assertConversationExists(organizationId, conversationId);
     const now = new Date();
+    const direction =
+      dto.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const);
+    const trimmedBody = dto.body?.trim() ?? "";
+    const hasFiles = files.length > 0;
+
+    if (!trimmedBody && !hasFiles) {
+      throw new BadRequestException("Informe uma mensagem ou anexe um arquivo.");
+    }
+
+    const savedUploads = files.map((file) => validateAndSaveUpload(file));
+    const isAutomation = dto.senderType === "automation";
+    const senderId =
+      direction === "OUTBOUND" && !isAutomation ? userId : null;
 
     const message = await this.prisma.message.create({
       data: {
         conversationId,
-        body: dto.body,
-        direction: (dto.direction === "inbound" ? "INBOUND" : "OUTBOUND") as never,
-        senderId: userId,
+        body: trimmedBody || null,
+        direction,
+        senderId,
         status: "SENT",
         sentAt: now,
-        metadata: { demoMode: true, contentType: dto.contentType ?? "text" },
+        metadata: {
+          crmOnly: true,
+          contentType: dto.contentType ?? (hasFiles ? "multipart" : "text"),
+          ...(isAutomation ? { senderType: "automation" } : {}),
+        },
+        attachments: savedUploads.length
+          ? {
+              create: savedUploads.map((upload) => ({
+                fileName: upload.originalName,
+                mimeType: upload.mimeType,
+                fileSize: upload.fileSize,
+                url: upload.url,
+                kind: upload.kind,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        attachments: true,
+        sender: { select: { id: true, name: true } },
       },
     });
+
+    const preview =
+      trimmedBody ||
+      (savedUploads[0]
+        ? `Anexo: ${savedUploads[0].originalName}`
+        : "Nova mensagem");
 
     await this.prisma.conversation.update({
       where: { id: conversationId },
@@ -597,8 +637,8 @@ export class ConversationsService {
       data: {
         organizationId,
         type: "MESSAGE_SENT",
-        title: "Message sent (demo)",
-        description: dto.body.slice(0, 200),
+        title: "Mensagem enviada",
+        description: preview.slice(0, 200),
         contactId: conversation.contactId,
         conversationId,
         actorId: userId,
@@ -659,7 +699,7 @@ export class ConversationsService {
             take: pageSize,
             include: {
               attachments: true,
-              sender: { select: { id: true, name: true, avatarUrl: true } },
+              sender: { select: { id: true, name: true } },
             },
           });
           rows.reverse();
@@ -676,7 +716,7 @@ export class ConversationsService {
             take: pageSize,
             include: {
               attachments: true,
-              sender: { select: { id: true, name: true, avatarUrl: true } },
+              sender: { select: { id: true, name: true } },
             },
           });
         }
@@ -690,7 +730,7 @@ export class ConversationsService {
         take: pageSize,
         include: {
           attachments: true,
-          sender: { select: { id: true, name: true, avatarUrl: true } },
+          sender: { select: { id: true, name: true } },
         },
       });
       rows.reverse();

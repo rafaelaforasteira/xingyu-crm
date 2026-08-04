@@ -4,7 +4,7 @@ import * as React from "react";
 import { ArrowLeft, Info, Loader2 } from "lucide-react";
 import { ErrorBanner } from "@/components/crm/page-header";
 import { channelName, contactName } from "@/lib/inbox-utils";
-import { cn, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +14,7 @@ import {
   useMarkConversationRead,
 } from "./conversation-composer";
 import { ConversationChannelBadge } from "./conversation-channel-badge";
+import { MessageBubble } from "./message-bubble";
 import type { Conversation } from "@/lib/types";
 
 function errorMessage(error: unknown, fallback: string) {
@@ -51,6 +52,7 @@ export function ConversationThread({
     useConversationMessages(conversationId);
 
   const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
+  const detailContactName = contactName(detail?.contact);
 
   React.useEffect(() => {
     if (!messagesQuery.isLoading && sortedMessages.length > 0) {
@@ -58,13 +60,12 @@ export function ConversationThread({
     }
   }, [conversationId, messagesQuery.isLoading, sortedMessages.length]);
 
-  const detailContactName = contactName(detail?.contact);
-
   return (
     <section
       aria-label="Conversa ativa"
+      data-testid="conversation-pane"
       className={cn(
-        "min-h-0 flex-col",
+        "min-h-0 w-full max-w-[860px] flex-col justify-self-center",
         !conversationId
           ? "hidden md:flex"
           : visible
@@ -80,7 +81,7 @@ export function ConversationThread({
         />
       ) : (
         <>
-          <div className="border-b border-border px-3 py-3 sm:px-4">
+          <div className="border-b border-border bg-card px-3 py-3 sm:px-4">
             <div className="flex items-center gap-2">
               {onBack ? (
                 <Button
@@ -142,7 +143,7 @@ export function ConversationThread({
           </div>
 
           <div
-            className="scrollbar-thin flex-1 space-y-2 overflow-y-auto p-3 sm:p-4"
+            className="conversation-thread-bg scrollbar-thin flex-1 space-y-2 overflow-y-auto p-3 sm:p-4"
             data-testid="message-list"
             aria-live="polite"
           >
@@ -191,22 +192,12 @@ export function ConversationThread({
               </p>
             ) : (
               sortedMessages.map((message) => (
-                <article
+                <MessageBubble
                   key={message.id}
-                  data-testid={`message-${message.id}`}
-                  className={cn(
-                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm sm:max-w-[75%]",
-                    message.direction === "OUTBOUND"
-                      ? "ml-auto bg-primary text-primary-foreground"
-                      : "bg-muted",
-                  )}
-                >
-                  <p className="break-words">{message.body}</p>
-                  <p className="mt-1 text-[10px] opacity-70">
-                    {mounted ? formatDate(message.createdAt, "dd/MM HH:mm") : ""}
-                    {message.status ? ` · ${message.status}` : ""}
-                  </p>
-                </article>
+                  message={message}
+                  inboundName={detailContactName === "Conversa" ? "Cliente" : detailContactName}
+                  mounted={mounted}
+                />
               ))
             )}
             <div ref={messagesEndRef} data-testid="messages-end" />
