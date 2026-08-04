@@ -86,12 +86,16 @@ export function ConversationWorkspace({
 
   const listQueryKey = queryKeys.conversations.list(listParams);
 
-  const showList = true;
-
   return (
-    <div className={cn("flex h-[calc(100dvh-7.5rem)] min-h-[34rem] flex-col", className)}>
+    <div
+      className={cn(
+        "mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[34rem] w-full max-w-[1480px] flex-col",
+        className,
+      )}
+      data-testid="conversation-workspace"
+    >
       {header}
-      <div className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-card md:grid-cols-[280px_1fr] lg:grid-cols-[280px_1fr_300px]">
+      <div className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-card md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)_300px]">
         <div
           className={cn(
             "min-h-0 border-border md:border-r md:flex md:flex-col",
@@ -106,33 +110,35 @@ export function ConversationWorkspace({
           />
         </div>
 
-        <ConversationThread
-          conversationId={conversationId}
-          detail={detailQuery.data}
-          detailLoading={detailQuery.isLoading}
-          detailError={detailQuery.error}
-          onRetryDetail={() => void detailQuery.refetch()}
-          listQueryKey={listQueryKey}
-          mounted={mounted}
-          visible={Boolean(conversationId) && mobileView === "thread"}
-          onBack={
-            conversationId
-              ? () => {
-                  setMobileView("list");
-                  router.push(basePath);
-                }
-              : undefined
-          }
-          onOpenContext={() => {
-            if (window.matchMedia("(min-width: 1024px)").matches) return;
-            if (window.matchMedia("(min-width: 768px)").matches) {
-              setPanelDrawerOpen(true);
-              return;
+        <div className="flex min-h-0 min-w-0 justify-center bg-muted/20">
+          <ConversationThread
+            conversationId={conversationId}
+            detail={detailQuery.data}
+            detailLoading={detailQuery.isLoading}
+            detailError={detailQuery.error}
+            onRetryDetail={() => void detailQuery.refetch()}
+            listQueryKey={listQueryKey}
+            mounted={mounted}
+            visible={Boolean(conversationId) && mobileView === "thread"}
+            onBack={
+              conversationId
+                ? () => {
+                    setMobileView("list");
+                    router.push(basePath);
+                  }
+                : undefined
             }
-            setMobileView("panel");
-          }}
-          showContextButton
-        />
+            onOpenContext={() => {
+              if (window.matchMedia("(min-width: 1024px)").matches) return;
+              if (window.matchMedia("(min-width: 768px)").matches) {
+                setPanelDrawerOpen(true);
+                return;
+              }
+              setMobileView("panel");
+            }}
+            showContextButton
+          />
+        </div>
 
         <LeadContextPanel
           conversationId={conversationId}

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import { Inbox, Loader2 } from "lucide-react";
 import { conversationsApi, pipelinesApi, settingsApi } from "@/lib/api";
 import { normalizeConversationListItems } from "@/lib/inbox-utils";
@@ -37,6 +38,7 @@ export function ConversationList({
   visible?: boolean;
   mounted: boolean;
 }) {
+  const searchParams = useSearchParams();
   const scopeType = scope.type;
   const scopePipelineId = scope.type === "pipeline" ? scope.pipelineId : undefined;
 
@@ -44,12 +46,23 @@ export function ConversationList({
     search: "",
     channelId: "",
     pipelineId: scopePipelineId ?? "",
-    unreadOnly: false,
+    unreadOnly: searchParams.get("unreadOnly") === "1",
+    awaitingReply: searchParams.get("awaitingReply") === "1",
   });
   const [page, setPage] = React.useState(1);
   const [accumulated, setAccumulated] = React.useState<ConversationListItem[]>(
     [],
   );
+
+  React.useEffect(() => {
+    const unreadOnly = searchParams.get("unreadOnly") === "1";
+    const awaitingReply = searchParams.get("awaitingReply") === "1";
+    setFilters((current) => ({
+      ...current,
+      unreadOnly: unreadOnly || current.unreadOnly,
+      awaitingReply: awaitingReply || current.awaitingReply,
+    }));
+  }, [searchParams]);
 
   React.useEffect(() => {
     if (scopeType === "pipeline" && scopePipelineId) {
@@ -76,12 +89,14 @@ export function ConversationList({
       params.pipelineId = filters.pipelineId;
     }
     if (filters.unreadOnly) params.unreadOnly = true;
+    if (filters.awaitingReply) params.awaitingReply = true;
     return params;
   }, [
     debouncedSearch,
     filters.channelId,
     filters.pipelineId,
     filters.unreadOnly,
+    filters.awaitingReply,
     page,
     scopePipelineId,
     scopeType,
@@ -97,6 +112,7 @@ export function ConversationList({
             ? scopePipelineId || ""
             : filters.pipelineId || "",
         unreadOnly: Boolean(filters.unreadOnly),
+        awaitingReply: Boolean(filters.awaitingReply),
         scopeType,
       }),
     [
@@ -104,6 +120,7 @@ export function ConversationList({
       filters.channelId,
       filters.pipelineId,
       filters.unreadOnly,
+      filters.awaitingReply,
       scopePipelineId,
       scopeType,
     ],

@@ -22,6 +22,7 @@ export function CommandPalette() {
   const setOpen = useUiStore((s) => s.setCommandOpen);
   const router = useRouter();
   const [q, setQ] = React.useState("");
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   const { data, isFetching } = useQuery({
     queryKey: queryKeys.search(q),
@@ -31,8 +32,39 @@ export function CommandPalette() {
   });
 
   React.useEffect(() => {
-    if (!open) setQ("");
+    if (!open) {
+      setQ("");
+      return;
+    }
+    const focus = () => {
+      inputRef.current?.focus();
+      // Fallback if ref is not ready on first paint.
+      if (!inputRef.current) {
+        const el = document.querySelector<HTMLInputElement>(
+          '[cmdk-input], input[placeholder="Buscar em todo o CRM…"]',
+        );
+        el?.focus();
+      }
+    };
+    const raf = window.requestAnimationFrame(focus);
+    const t = window.setTimeout(focus, 50);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
   }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, setOpen]);
 
   if (!open) return null;
 
@@ -52,15 +84,23 @@ export function CommandPalette() {
       <Command
         className="relative z-10 w-full max-w-xl overflow-hidden rounded-xl border border-border bg-card shadow-drawer"
         shouldFilter={false}
+        loop
       >
         <div className="flex items-center gap-2 border-b border-border px-3">
-          <Search className="h-4 w-4 text-muted-foreground" />
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <Search className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </span>
           <Command.Input
+            ref={inputRef}
             value={q}
             onValueChange={setQ}
             placeholder="Buscar em todo o CRM…"
+            autoFocus
             className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
+          <kbd className="hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
+            ESC
+          </kbd>
         </div>
         <Command.List className="max-h-80 overflow-y-auto p-2">
           <Command.Empty className="py-8 text-center text-sm text-muted-foreground">

@@ -16,13 +16,13 @@ const SIDEBAR_STEPS = [
 function navLabel(href: string) {
   const map: Record<string, RegExp> = {
     "/dashboard": /visão geral|dashboard/i,
-    "/inbox": /^Inbox$/i,
-    "/tasks": /^Tarefas$/i,
-    "/pipelines": /^Pipelines$/i,
-    "/automations": /^Automação$/i,
-    "/marketing": /^Marketing$/i,
-    "/reports": /^Relatórios$/i,
-    "/settings": /^Configurações$/i,
+    "/inbox": /Conversas|Inbox/i,
+    "/tasks": /Tarefas/i,
+    "/pipelines": /Negócios|Pipelines/i,
+    "/automations": /Automação/i,
+    "/marketing": /Marketing/i,
+    "/reports": /Relatórios/i,
+    "/settings": /Configurações/i,
   };
   return map[href] ?? new RegExp(href);
 }

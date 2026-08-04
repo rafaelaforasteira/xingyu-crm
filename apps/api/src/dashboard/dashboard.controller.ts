@@ -16,17 +16,67 @@ export class DashboardController {
     @Query("ownerId") ownerId?: string,
     @Query("teamId") teamId?: string,
     @Query("pipelineId") pipelineId?: string,
+    @Query("period") period?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("channel") channel?: string,
+    @Query("source") source?: string,
   ) {
-    return this.service.metrics(orgId, { ownerId, teamId, pipelineId });
+    return this.service.metrics(orgId, {
+      ownerId,
+      teamId,
+      pipelineId,
+      period,
+      from,
+      to,
+      channel,
+      source,
+    });
   }
 
   @Get("charts")
-  charts(@OrganizationId() orgId: string) {
-    return this.service.charts(orgId);
+  @ApiOperation({ summary: "Dashboard charts and funnel" })
+  charts(
+    @OrganizationId() orgId: string,
+    @Query("ownerId") ownerId?: string,
+    @Query("teamId") teamId?: string,
+    @Query("pipelineId") pipelineId?: string,
+    @Query("period") period?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+    @Query("channel") channel?: string,
+    @Query("source") source?: string,
+  ) {
+    return this.service.charts(orgId, {
+      ownerId,
+      teamId,
+      pipelineId,
+      period,
+      from,
+      to,
+      channel,
+      source,
+    });
   }
 
   @Get("lists")
-  lists(@OrganizationId() orgId: string): Promise<unknown> {
-    return this.service.lists(orgId);
+  @ApiOperation({ summary: "Dashboard operational lists" })
+  lists(
+    @OrganizationId() orgId: string,
+    @Query("ownerId") ownerId?: string,
+    @Query("teamId") teamId?: string,
+    @Query("pipelineId") pipelineId?: string,
+    @Query("period") period?: string,
+    @Query("from") from?: string,
+    @Query("to") to?: string,
+  ): Promise<unknown> {
+    return this.service.lists(orgId, {
+      ownerId,
+      teamId,
+      pipelineId,
+      period,
+      from,
+      to,
+    });
   }
 }

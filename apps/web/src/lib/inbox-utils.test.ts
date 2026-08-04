@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  canSendMessage,
   conversationTimestamp,
+  formatMessageMetaLine,
   isValidMessageBody,
+  messageSenderLabel,
   normalizeConversations,
   normalizeMessages,
+  shouldSendOnEnter,
   sortMessagesChronologically,
+  translateMessageStatus,
 } from "./inbox-utils";
 
 const conversation = { id: "conv-1" };
@@ -44,6 +49,46 @@ describe("Inbox response normalization", () => {
     expect(normalizeMessages({ data: "invalid" })).toEqual([]);
     expect(normalizeMessages({ data: [{ id: "incomplete" }] })).toEqual([]);
   });
+
+  it("keeps attachment-only messages and maps sender to author", () => {
+    const normalized = normalizeMessages([
+      {
+        id: "msg-att",
+        conversationId: "conv-1",
+        body: null,
+        direction: "OUTBOUND",
+        sentAt: "2026-08-04T12:00:00.000Z",
+        sender: { id: "u1", name: "Ana" },
+        attachments: [
+          {
+            id: "a1",
+            fileName: "pedido.pdf",
+            url: "/api/uploads/files/x.pdf",
+            kind: "document",
+            fileSize: 1200,
+          },
+        ],
+      },
+    ]);
+    expect(normalized).toHaveLength(1);
+    expect(normalized[0]?.author).toEqual({ id: "u1", name: "Ana" });
+    expect(normalized[0]?.attachments?.[0]?.fileName).toBe("pedido.pdf");
+  });
+
+  it("keeps historical outbound messages without sender", () => {
+    const normalized = normalizeMessages([
+      {
+        id: "msg-old",
+        conversationId: "conv-1",
+        body: "Histórico",
+        direction: "OUTBOUND",
+        createdAt: "2026-07-01T10:00:00.000Z",
+        sender: null,
+      },
+    ]);
+    expect(normalized[0]?.author).toBeNull();
+    expect(messageSenderLabel(normalized[0]!)).toBe("Enviado por: Equipe Xingyu");
+  });
 });
 
 describe("Inbox deterministic helpers", () => {
@@ -69,5 +114,49 @@ describe("Inbox deterministic helpers", () => {
   it("does not send blank messages", () => {
     expect(isValidMessageBody("   ")).toBe(false);
     expect(isValidMessageBody(" mensagem ")).toBe(true);
+    expect(canSendMessage("   ", 0)).toBe(false);
+    expect(canSendMessage("", 1)).toBe(true);
+  });
+
+  it("translates statuses and labels senders", () => {
+    expect(translateMessageStatus("SENT")).toBe("Enviado");
+    expect(translateMessageStatus("SENDING")).toBe("Enviando");
+    expect(messageSenderLabel({ direction: "INBOUND", author: null })).toBe(
+      "Recebido de: Cliente",
+    );
+    expect(
+      messageSenderLabel({
+        direction: "OUTBOUND",
+        author: { id: "1", name: "Raffaela" },
+        senderType: "automation",
+      }),
+    ).toBe("Enviado por: Automação");
+    expect(
+      formatMessageMetaLine(
+        {
+          direction: "OUTBOUND",
+          author: { id: "1", name: "Raffaela" },
+          createdAt: "2026-08-04T17:32:00.000Z",
+        },
+        null,
+        true,
+        (_value, pattern) => (pattern === "HH:mm" ? "14:32" : "04/08/2026"),
+      ),
+    ).toBe("Enviado por: Raffaela - 14:32 - 04/08/2026");
+  });
+
+  it("sends on Enter unless Shift or IME composition is active", () => {
+    expect(shouldSendOnEnter({ key: "Enter", shiftKey: false, isComposing: false, keyCode: 13 })).toBe(
+      true,
+    );
+    expect(shouldSendOnEnter({ key: "Enter", shiftKey: true, isComposing: false, keyCode: 13 })).toBe(
+      false,
+    );
+    expect(shouldSendOnEnter({ key: "Enter", shiftKey: false, isComposing: true, keyCode: 13 })).toBe(
+      false,
+    );
+    expect(shouldSendOnEnter({ key: "Enter", shiftKey: false, isComposing: false, keyCode: 229 })).toBe(
+      false,
+    );
   });
 });

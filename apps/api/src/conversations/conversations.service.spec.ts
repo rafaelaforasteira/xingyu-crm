@@ -201,7 +201,7 @@ describe("ConversationsService", () => {
           body: "Older",
           sentAt: new Date("2026-07-30T10:00:00.000Z"),
           attachments: [],
-          sender: { id: "user-1", name: "Agent", avatarUrl: null },
+          sender: { id: "user-1", name: "Agent" },
         },
         {
           id: "msg-2",
@@ -221,11 +221,16 @@ describe("ConversationsService", () => {
           where: expect.objectContaining({ conversationId: "conv-1", deletedAt: null }),
           orderBy: [{ sentAt: "desc" }, { id: "desc" }],
           take: 50,
-          include: expect.objectContaining({ attachments: true }),
+          include: {
+            attachments: true,
+            sender: { select: { id: true, name: true } },
+          },
         }),
       );
       expect(result.data).toHaveLength(2);
       expect(result.data[0]?.body).toBe("Older");
+      expect(result.data[0]?.sender).toEqual({ id: "user-1", name: "Agent" });
+      expect(result.data[0]?.sender).not.toHaveProperty("email");
       expect(result.data[1]?.attachments).toHaveLength(1);
       expect(result.meta).toEqual(
         expect.objectContaining({ pageSize: 50, hasMore: false, nextCursor: "msg-1" }),
@@ -337,6 +342,53 @@ describe("ConversationsService", () => {
         select: { id: true, unreadCount: true, updatedAt: true },
       });
       expect(result.unreadCount).toBe(0);
+    });
+  });
+
+  describe("sendMessage", () => {
+    it("stores senderId for outbound messages from the authenticated user", async () => {
+      prisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", contactId: "contact-1" });
+      prisma.message.create.mockResolvedValue({
+        id: "msg-new",
+        conversationId: "conv-1",
+        body: "Olá",
+        direction: "OUTBOUND",
+        senderId: "auth-user",
+        status: "SENT",
+        attachments: [],
+        sender: { id: "auth-user", name: "Vendedora" },
+      });
+      prisma.conversation.update.mockResolvedValue({});
+      prisma.activity.create.mockResolvedValue({});
+
+      const result = await service.sendMessage(
+        organizationId,
+        "conv-1",
+        { body: "Olá" },
+        "auth-user",
+      );
+
+      expect(prisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            body: "Olá",
+            direction: "OUTBOUND",
+            senderId: "auth-user",
+          }),
+          include: {
+            attachments: true,
+            sender: { select: { id: true, name: true } },
+          },
+        }),
+      );
+      expect(result.sender).toEqual({ id: "auth-user", name: "Vendedora" });
+    });
+
+    it("rejects empty payloads without files", async () => {
+      prisma.conversation.findFirst.mockResolvedValue({ id: "conv-1", contactId: "contact-1" });
+      await expect(
+        service.sendMessage(organizationId, "conv-1", { body: "   " }, "auth-user"),
+      ).rejects.toThrow("Informe uma mensagem ou anexe um arquivo.");
     });
   });
 });

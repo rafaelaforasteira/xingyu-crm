@@ -37,7 +37,12 @@ test.describe("Authentication flow", () => {
       timeout: 30_000,
     });
 
-    await page.getByRole("button", { name: "Sair" }).click();
+    // Logout lives in the sidebar footer (not the topbar).
+    const logout = page.getByRole("button", { name: /^Sair$|^Saindo/ });
+    if (!(await logout.isVisible())) {
+      await page.getByRole("button", { name: "Abrir menu" }).click();
+    }
+    await page.getByRole("button", { name: /^Sair$|^Saindo/ }).click();
     await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
 
     await page.goto("/dashboard");

@@ -1,44 +1,24 @@
 import { expect, test } from "@playwright/test";
 
-test("main menu uses the simplified order", async ({ page }) => {
+test("main menu uses grouped navigation blocks", async ({ page }) => {
   await page.goto("/dashboard");
   const nav = page.locator("div.hidden.lg\\:block aside nav").first();
   await expect(nav.getByRole("link", { name: "Dashboard" })).toBeVisible();
 
-  const labels = await nav.locator("a").evaluateAll((anchors) =>
-    anchors
-      .map((anchor) => anchor.textContent?.replace(/\s+/g, " ").trim() ?? "")
-      .filter(Boolean),
-  );
+  await expect(nav.getByText("Visão geral")).toBeVisible();
+  await expect(nav.getByText("Jornadas")).toBeVisible();
+  await expect(nav.getByText("Gestão")).toBeVisible();
 
-  const main = labels.filter((label) =>
-    [
-      "Dashboard",
-      "Inbox",
-      "Tarefas",
-      "Pipelines",
-      "Automação",
-      "Marketing",
-      "Relatórios",
-      "Configurações",
-    ].includes(label),
-  );
-
-  expect(main).toEqual([
-    "Dashboard",
-    "Inbox",
-    "Tarefas",
-    "Pipelines",
-    "Automação",
-    "Marketing",
-    "Relatórios",
-    "Configurações",
-  ]);
-
-  await expect(nav.getByRole("link", { name: "Pedidos" })).toHaveCount(0);
-  await expect(nav.getByRole("link", { name: "Recompra" })).toHaveCount(0);
-  await expect(nav.getByRole("link", { name: "Reativação" })).toHaveCount(0);
-  await expect(nav.getByRole("link", { name: "Pós-venda" })).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Conversas" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Negócios" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Tarefas" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Recompra" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Reativação" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "E-commerce" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Pós-venda" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Contatos" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Relatórios" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Configurações" })).toBeVisible();
 });
 
 test("pipelines submenu shows enumerated uppercase items and todos os leads", async ({
@@ -61,6 +41,6 @@ test("tasks board groups by custom status and creates a task", async ({ page }) 
   await page.getByRole("button", { name: "Nova tarefa" }).click();
   const title = `E2E task ${Date.now()}`;
   await page.getByLabel("Nome").fill(title);
-  await page.getByRole("button", { name: "Criar" }).click();
+  await page.getByTestId("tasks-page").getByRole("button", { name: "Criar", exact: true }).click();
   await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
 });
