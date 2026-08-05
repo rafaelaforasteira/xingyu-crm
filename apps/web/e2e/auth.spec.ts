@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Authentication flow", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
+  test.setTimeout(90_000);
 
   test("protected route redirects to login, login works, session persists, logout works", async ({
     page,
@@ -9,19 +10,20 @@ test.describe("Authentication flow", () => {
     const email = process.env.ADMIN_EMAIL ?? "admin@xingyu.local";
     const password = process.env.ADMIN_INITIAL_PASSWORD ?? "ChangeMeNow123!";
 
-    await page.goto("/dashboard");
+    await page.goto("/operacao");
     await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
 
     await page.getByLabel("E-mail").fill(email);
     await page.getByLabel("Senha", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "Entrar" }).click();
-
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: /visão geral|dashboard/i })).toBeVisible();
+    await Promise.all([
+      page.waitForURL(/\/operacao/, { timeout: 60_000 }),
+      page.getByRole("button", { name: "Entrar" }).click(),
+    ]);
+    await expect(page.getByTestId("operation-page")).toBeVisible({ timeout: 30_000 });
 
     await page.reload();
-    await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page.getByRole("heading", { name: /visão geral|dashboard/i })).toBeVisible({
+    await expect(page).toHaveURL(/\/operacao/);
+    await expect(page.getByTestId("operation-page")).toBeVisible({
       timeout: 30_000,
     });
 

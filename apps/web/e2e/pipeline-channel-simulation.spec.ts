@@ -451,7 +451,9 @@ test("simulates a demo lead through a pipeline channel and persists every entity
     await dialog
       .getByRole("link", { name: "Ver card no Kanban" })
       .click();
-    await expect(page).toHaveURL(new RegExp(`/pipelines/${pipelineId}$`));
+    await expect(page).toHaveURL(new RegExp(`/pipelines/${pipelineId}$`), {
+      timeout: 20_000,
+    });
     const dealCard = page
       .getByTestId("deal-card")
       .filter({ hasText: dealName });

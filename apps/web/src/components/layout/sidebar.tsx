@@ -8,6 +8,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, LogOut, X, type Luc
 import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
+import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
 import { formatPipelineNavLabel, resolvePipelineIcon } from "@/lib/pipeline-icons";
 import { dashboardApi, pipelinesApi, settingsApi } from "@/lib/api";
@@ -333,9 +334,11 @@ export function Sidebar() {
     >
       <div className="flex h-14 items-center justify-between gap-2 border-b border-sidebar-border px-3">
         <Link
-          href="/dashboard"
+          href={CORE_OPERATION_MODE ? "/operacao" : "/dashboard"}
           className="flex min-w-0 items-center gap-2.5"
-          onClick={() => handleNavigate("/dashboard")}
+          onClick={() =>
+            handleNavigate(CORE_OPERATION_MODE ? "/operacao" : "/dashboard")
+          }
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-sm font-bold text-primary-foreground shadow-soft">
             X

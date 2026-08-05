@@ -32,6 +32,7 @@ import {
   removeOptimisticMessage,
   replaceOptimisticMessage,
 } from "./conversation-cache";
+import { patchBoardDealByConversation } from "@/lib/board-cache";
 import { ConversationEmojiPicker } from "./conversation-emoji-picker";
 import {
   classifyFile,
@@ -172,14 +173,21 @@ export function ConversationComposer({
     },
     onSuccess: ({ message, tempId, text }) => {
       replaceOptimisticMessage(queryClient, conversationId, tempId, message);
+      const preview =
+        text ||
+        message.attachments?.[0]?.fileName ||
+        message.body ||
+        "Nova mensagem";
       patchConversationListItem(queryClient, listQueryKey, conversationId, {
-        lastMessagePreview:
-          text ||
-          message.attachments?.[0]?.fileName ||
-          message.body ||
-          "Nova mensagem",
+        lastMessagePreview: preview,
         lastMessageAt: message.createdAt,
         unreadCount: 0,
+      });
+      patchBoardDealByConversation(queryClient, conversationId, {
+        lastMessagePreview: preview,
+        lastMessageAt: message.createdAt,
+        unreadCount: 0,
+        awaitingReply: false,
       });
       toast.success("Mensagem enviada.");
       textareaRef.current?.focus();
@@ -538,6 +546,9 @@ export function useMarkConversationRead(conversationId: string | undefined) {
     markedRef.current = conversationId;
 
     void conversationsApi.markRead(conversationId).then(() => {
+      patchBoardDealByConversation(queryClient, conversationId, {
+        unreadCount: 0,
+      });
       queryClient.setQueriesData<
         | { pages?: { data: { id: string; unreadCount: number }[] }[] }
         | { data?: { id: string; unreadCount: number }[] }

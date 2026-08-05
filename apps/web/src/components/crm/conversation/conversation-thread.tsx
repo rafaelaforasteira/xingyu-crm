@@ -33,6 +33,8 @@ export function ConversationThread({
   onBack,
   onOpenContext,
   showContextButton,
+  hideHeader,
+  className,
 }: {
   conversationId?: string;
   detail?: Conversation;
@@ -45,6 +47,8 @@ export function ConversationThread({
   onBack?: () => void;
   onOpenContext?: () => void;
   showContextButton?: boolean;
+  hideHeader?: boolean;
+  className?: string;
 }) {
   useMarkConversationRead(conversationId);
 
@@ -65,12 +69,14 @@ export function ConversationThread({
       aria-label="Conversa ativa"
       data-testid="conversation-pane"
       className={cn(
-        "min-h-0 w-full max-w-[860px] flex-col justify-self-center",
+        "min-h-0 w-full flex-col",
+        hideHeader ? "max-w-none" : "max-w-[860px] justify-self-center",
         !conversationId
           ? "hidden md:flex"
           : visible
             ? "flex"
             : "hidden md:flex",
+        className,
       )}
     >
       {!conversationId ? (
@@ -81,6 +87,7 @@ export function ConversationThread({
         />
       ) : (
         <>
+          {!hideHeader ? (
           <div className="border-b border-border bg-card px-3 py-3 sm:px-4">
             <div className="flex items-center gap-2">
               {onBack ? (
@@ -141,6 +148,16 @@ export function ConversationThread({
               </div>
             ) : null}
           </div>
+          ) : detailError ? (
+            <div className="border-b border-border px-3 py-2">
+              <ErrorBanner
+                message={errorMessage(detailError, "Falha ao carregar a conversa.")}
+              />
+              <Button variant="outline" size="sm" onClick={onRetryDetail}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : null}
 
           <div
             className="conversation-thread-bg scrollbar-thin flex-1 space-y-2 overflow-y-auto p-3 sm:p-4"

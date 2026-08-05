@@ -1,34 +1,20 @@
 import { expect, test } from "@playwright/test";
 
-test("main menu uses grouped navigation blocks", async ({ page }) => {
-  await page.goto("/dashboard");
+test("main menu uses simplified operation navigation", async ({ page }) => {
+  await page.goto("/operacao");
   const nav = page.locator("div.hidden.lg\\:block aside nav").first();
-  await expect(nav.getByRole("link", { name: "Dashboard" })).toBeVisible();
-
-  await expect(nav.getByText("Visão geral")).toBeVisible();
-  await expect(nav.getByText("Jornadas")).toBeVisible();
-  await expect(nav.getByText("Gestão")).toBeVisible();
-
-  await expect(nav.getByRole("link", { name: "Conversas" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Negócios" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Tarefas" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Recompra" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Reativação" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "E-commerce" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Pós-venda" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Contatos" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Relatórios" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Operação" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Configurações" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Conversas" })).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Pipelines" })).toHaveCount(0);
 });
 
-test("pipelines submenu shows enumerated uppercase items and todos os leads", async ({
-  page,
-}) => {
-  await page.goto("/dashboard");
-  const sidebar = page.locator("div.hidden.lg\\:block aside").first();
-  await sidebar.getByRole("button", { name: /Expandir pipelines|Recolher pipelines/i }).click();
-  await expect(sidebar.getByText(/TODOS OS LEADS/i)).toBeVisible({ timeout: 15_000 });
-  await expect(sidebar.getByText(/\d{2}\.\s+/).first()).toBeVisible();
+test("legacy routes remain reachable outside the simplified menu", async ({ page }) => {
+  await page.goto("/pipelines");
+  await expect(page.getByRole("heading", { name: /pipeline/i })).toBeVisible({
+    timeout: 20_000,
+  });
 });
 
 test("tasks board groups by custom status and creates a task", async ({ page }) => {

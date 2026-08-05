@@ -6,6 +6,7 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { APP_NAME } from "@xingyu/config";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ApiError } from "@/lib/api";
+import { DEFAULT_APP_HOME } from "@/lib/feature-flags";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -22,7 +23,7 @@ export function LoginForm() {
   React.useEffect(() => {
     if (!authLoading && isAuthenticated) {
       const next = searchParams.get("next");
-      router.replace(next && next.startsWith("/") ? next : "/dashboard");
+      router.replace(next && next.startsWith("/") ? next : DEFAULT_APP_HOME);
     }
   }, [authLoading, isAuthenticated, router, searchParams]);
 
@@ -33,7 +34,7 @@ export function LoginForm() {
     try {
       await login(email, password);
       const next = searchParams.get("next");
-      router.replace(next && next.startsWith("/") ? next : "/dashboard");
+      router.replace(next && next.startsWith("/") ? next : DEFAULT_APP_HOME);
     } catch (err) {
       const message =
         err instanceof ApiError

@@ -48,13 +48,130 @@ export function DealCard({
   dragging,
   onOpen,
   onMove,
+  variant = "default",
+  selected,
 }: {
   deal: Deal;
   dragging?: boolean;
   onOpen: (deal: Deal) => void;
   onMove?: (deal: Deal) => void;
+  variant?: "default" | "operation";
+  selected?: boolean;
 }) {
   const pointerDown = React.useRef<{ x: number; y: number } | null>(null);
+  const contactName = deal.contact?.name ?? deal.company?.name ?? null;
+  const showDealName =
+    variant === "operation" &&
+    contactName &&
+    deal.name.trim().toLowerCase() !== contactName.trim().toLowerCase();
+  const channel =
+    deal.channel?.type === "WHATSAPP"
+      ? "WhatsApp"
+      : deal.channel?.displayName || deal.channel?.name || null;
+
+  if (variant === "operation") {
+    return (
+      <article
+        data-testid="deal-card"
+        data-deal-id={deal.id}
+        data-variant="operation"
+        role="button"
+        tabIndex={0}
+        aria-selected={selected || undefined}
+        className={cn(
+          "cursor-pointer rounded-xl border border-border/80 bg-card p-3 shadow-soft transition hover:border-primary/30 hover:shadow-card",
+          dragging && "opacity-60 shadow-card ring-2 ring-primary/30",
+          selected && "border-primary/50 ring-2 ring-primary/20",
+          (deal.unreadCount ?? 0) > 0 && "border-primary/25 bg-primary/[0.03]",
+        )}
+        onPointerDown={(e) => {
+          pointerDown.current = { x: e.clientX, y: e.clientY };
+        }}
+        onClick={(e) => {
+          const start = pointerDown.current;
+          if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) {
+            return;
+          }
+          onOpen(deal);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen(deal);
+          }
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-snug">
+              {contactName || deal.name}
+            </p>
+            {showDealName ? (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {deal.name}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {deal.awaitingReply ? (
+              <span
+                className="h-2 w-2 rounded-full bg-amber-500"
+                title="Aguardando resposta"
+                aria-label="Aguardando resposta"
+              />
+            ) : null}
+            {(deal.unreadCount ?? 0) > 0 ? (
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                {deal.unreadCount}
+              </span>
+            ) : null}
+            {onMove ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                aria-label={`Mover ${deal.name}`}
+                title="Mover card"
+                onPointerDown={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMove(deal);
+                }}
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {deal.lastMessagePreview ? (
+          <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">
+            “{deal.lastMessagePreview}”
+          </p>
+        ) : !deal.conversationId ? (
+          <p className="mt-1.5 text-xs text-muted-foreground/80">Sem conversa</p>
+        ) : null}
+
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <p className="min-w-0 truncate">
+            {channel ? `${channel} · ` : null}
+            <ClientRelativeTime
+              value={deal.lastMessageAt ?? deal.lastInteractionAt}
+            />
+          </p>
+          {(deal.value ?? 0) > 0 ? (
+            <span className="shrink-0 font-medium text-foreground">
+              {formatCurrency(deal.value ?? 0, deal.currency)}
+            </span>
+          ) : deal.owner ? (
+            <Avatar name={deal.owner.name} size="sm" />
+          ) : null}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article
@@ -160,10 +277,14 @@ function SortableDealCard({
   deal,
   onOpen,
   onMove,
+  variant,
+  selected,
 }: {
   deal: Deal;
   onOpen: (deal: Deal) => void;
   onMove: (deal: Deal) => void;
+  variant?: "default" | "operation";
+  selected?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: deal.id,
@@ -177,7 +298,14 @@ function SortableDealCard({
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <DealCard deal={deal} dragging={isDragging} onOpen={onOpen} onMove={onMove} />
+      <DealCard
+        deal={deal}
+        dragging={isDragging}
+        onOpen={onOpen}
+        onMove={onMove}
+        variant={variant}
+        selected={selected}
+      />
     </div>
   );
 }
@@ -186,10 +314,14 @@ function StageColumn({
   stage,
   onOpen,
   onMove,
+  variant,
+  selectedDealId,
 }: {
   stage: PipelineStage;
   onOpen: (deal: Deal) => void;
   onMove: (deal: Deal) => void;
+  variant?: "default" | "operation";
+  selectedDealId?: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -225,7 +357,14 @@ function StageColumn({
       <SortableContext items={deals.map((d) => d.id)} strategy={verticalListSortingStrategy}>
         <div className="scrollbar-thin flex max-h-[calc(100vh-14rem)] flex-col gap-2 overflow-y-auto p-2">
           {deals.map((deal) => (
-            <SortableDealCard key={deal.id} deal={deal} onOpen={onOpen} onMove={onMove} />
+            <SortableDealCard
+              key={deal.id}
+              deal={deal}
+              onOpen={onOpen}
+              onMove={onMove}
+              variant={variant}
+              selected={selectedDealId === deal.id}
+            />
           ))}
           {deals.length === 0 ? (
             <p className="px-2 py-6 text-center text-xs text-muted-foreground">
@@ -243,11 +382,17 @@ export function KanbanBoard({
   onOpenDeal,
   filterStageId,
   idleDays,
+  variant = "default",
+  selectedDealId,
+  className,
 }: {
   pipeline: Pipeline;
   onOpenDeal?: (deal: Deal) => void;
   filterStageId?: string;
   idleDays?: number;
+  variant?: "default" | "operation";
+  selectedDealId?: string | null;
+  className?: string;
 }) {
   const queryClient = useQueryClient();
   const openDealDrawer = useUiStore((s) => s.openDealDrawer);
@@ -414,13 +559,27 @@ export function KanbanBoard({
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className={cn("flex gap-3 overflow-x-auto pb-2", className)}>
         {stages.map((stage) => (
-          <StageColumn key={stage.id} stage={stage} onOpen={handleOpen} onMove={setDealToMove} />
+          <StageColumn
+            key={stage.id}
+            stage={stage}
+            onOpen={handleOpen}
+            onMove={setDealToMove}
+            variant={variant}
+            selectedDealId={selectedDealId}
+          />
         ))}
       </div>
       <DragOverlay>
-        {activeDeal ? <DealCard deal={activeDeal} dragging onOpen={() => undefined} /> : null}
+        {activeDeal ? (
+          <DealCard
+            deal={activeDeal}
+            dragging
+            onOpen={() => undefined}
+            variant={variant}
+          />
+        ) : null}
       </DragOverlay>
       <MoveDealDialog
         deal={dealToMove}

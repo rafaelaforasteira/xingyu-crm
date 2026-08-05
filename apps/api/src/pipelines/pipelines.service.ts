@@ -18,6 +18,7 @@ import {
   UpdatePipelineDto,
   UpdateStageDto,
 } from "./dto/pipeline.dto";
+import { buildBoardConversationSummary } from "./board-deal.mapper";
 
 const activeStageWhere = { deletedAt: null, archived: false } as const;
 const pipelineChannelConnectionsInclude = {
@@ -239,6 +240,7 @@ export class PipelinesService {
                     lastName: true,
                     email: true,
                     phone: true,
+                    whatsapp: true,
                   },
                 },
                 company: {
@@ -246,6 +248,24 @@ export class PipelinesService {
                 },
                 owner: { select: { id: true, name: true, avatarUrl: true } },
                 tags: { include: { tag: true } },
+                conversation: {
+                  select: {
+                    id: true,
+                    status: true,
+                    lastMessageAt: true,
+                    unreadCount: true,
+                    channelId: true,
+                    channel: {
+                      select: {
+                        id: true,
+                        type: true,
+                        name: true,
+                        displayName: true,
+                        provider: true,
+                      },
+                    },
+                  },
+                },
               },
               orderBy: { updatedAt: "desc" },
             },
@@ -255,30 +275,88 @@ export class PipelinesService {
     });
     if (!pipeline) throw new NotFoundException(`Pipeline ${id} not found`);
 
+    const conversationIds = pipeline.stages.flatMap((stage) =>
+      stage.deals
+        .map((deal) => deal.conversation?.id)
+        .filter((conversationId): conversationId is string => Boolean(conversationId)),
+    );
+
+    const latestByConversation = new Map<
+      string,
+      { conversationId: string; body: string | null; sentAt: Date; direction: string }
+    >();
+
+    if (conversationIds.length) {
+      const latestRows = await this.prisma.message.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          deletedAt: null,
+          isInternal: false,
+        },
+        orderBy: { sentAt: "desc" },
+        distinct: ["conversationId"],
+        select: {
+          conversationId: true,
+          body: true,
+          sentAt: true,
+          direction: true,
+        },
+      });
+      for (const row of latestRows) {
+        latestByConversation.set(row.conversationId, row);
+      }
+    }
+
     return {
       ...pipeline,
       stages: pipeline.stages.map((stage) => ({
         ...stage,
-        deals: stage.deals.map((deal) => ({
-          ...deal,
-          value: Number(deal.value),
-          unreadCount: deal.unreadMessages,
-          contact: deal.contact
-            ? {
-                ...deal.contact,
-                name: [deal.contact.firstName, deal.contact.lastName]
-                  .filter(Boolean)
-                  .join(" "),
-              }
-            : null,
-          company: deal.company
-            ? {
-                ...deal.company,
-                name: deal.company.tradeName ?? deal.company.legalName,
-              }
-            : null,
-          tags: deal.tags.map(({ tag }) => tag),
-        })),
+        deals: stage.deals.map((deal) => {
+          const { conversation, tags, contact, company, ...dealRest } = deal;
+          const latest = conversation
+            ? latestByConversation.get(conversation.id) ?? null
+            : null;
+          const summary = buildBoardConversationSummary(
+            conversation
+              ? {
+                  id: conversation.id,
+                  status: conversation.status,
+                  lastMessageAt: conversation.lastMessageAt,
+                  unreadCount: conversation.unreadCount,
+                  channelId: conversation.channelId,
+                  channel: conversation.channel,
+                }
+              : null,
+            latest,
+          );
+
+          return {
+            ...dealRest,
+            value: Number(deal.value),
+            unreadCount: deal.unreadMessages,
+            conversationId: summary.conversationId ?? deal.conversationId,
+            conversationStatus: summary.conversationStatus,
+            channel: summary.channel,
+            lastMessagePreview: summary.lastMessagePreview,
+            lastMessageAt: summary.lastMessageAt,
+            awaitingReply: summary.awaitingReply,
+            contact: contact
+              ? {
+                  ...contact,
+                  name: [contact.firstName, contact.lastName]
+                    .filter(Boolean)
+                    .join(" "),
+                }
+              : null,
+            company: company
+              ? {
+                  ...company,
+                  name: company.tradeName ?? company.legalName,
+                }
+              : null,
+            tags: tags.map(({ tag }) => tag),
+          };
+        }),
       })),
     };
   }

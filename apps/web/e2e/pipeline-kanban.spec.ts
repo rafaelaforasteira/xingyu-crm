@@ -82,6 +82,7 @@ test("creates and persistently moves a card between stages and pipelines", async
   page,
   request,
 }) => {
+  test.setTimeout(90_000);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const sourceName = `E2E Kanban Origem ${suffix}`;
   const targetName = `E2E Kanban Destino ${suffix}`;

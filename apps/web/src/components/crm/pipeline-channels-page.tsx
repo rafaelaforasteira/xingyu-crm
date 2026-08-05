@@ -716,6 +716,7 @@ function SimulateLeadDialog({
               <Link
                 href={`/pipelines/${pipelineId}`}
                 className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90"
+                onClick={() => onOpenChange(false)}
               >
                 Ver card no Kanban
                 <ExternalLink className="h-4 w-4" />

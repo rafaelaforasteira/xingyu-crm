@@ -16,6 +16,7 @@ import {
   Plug,
   type LucideIcon,
 } from "lucide-react";
+import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
 
 export interface NavItem {
   href: string;
@@ -35,8 +36,8 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-/** Grouped sidebar — only real routes. */
-export const NAV_GROUPS: NavGroup[] = [
+/** Full navigation — preserved for reactivation when CORE_OPERATION_MODE=false. */
+export const FULL_NAV_GROUPS: NavGroup[] = [
   {
     id: "overview",
     label: "Visão geral",
@@ -72,6 +73,29 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/** Simplified operational menu: Operação + Configurações. */
+export const CORE_OPERATION_NAV_GROUPS: NavGroup[] = [
+  {
+    id: "core",
+    label: "Principal",
+    items: [
+      {
+        href: "/operacao",
+        label: "Operação",
+        icon: Kanban,
+        countKey: "waitingConversations",
+        exact: true,
+      },
+      { href: "/settings", label: "Configurações", icon: Settings },
+    ],
+  },
+];
+
+/** Grouped sidebar — only real routes. */
+export const NAV_GROUPS: NavGroup[] = CORE_OPERATION_MODE
+  ? CORE_OPERATION_NAV_GROUPS
+  : FULL_NAV_GROUPS;
 
 /** Flat list kept for command palette / legacy helpers. */
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items).filter(
