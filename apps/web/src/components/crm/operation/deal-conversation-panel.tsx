@@ -21,12 +21,14 @@ export function DealConversationPanel({
   onClose,
   onStageChange,
   mobile,
+  backLabel,
 }: {
   deal: Deal;
   pipeline: Pipeline;
   onClose: () => void;
   onStageChange: (stageId: string) => void;
   mobile?: boolean;
+  backLabel?: string;
 }) {
   const conversationId = deal.conversationId ?? undefined;
   const stages = sortPipelineStages(pipeline.stages);
@@ -71,7 +73,9 @@ export function DealConversationPanel({
           size="icon"
           variant="ghost"
           className="h-9 w-9 shrink-0"
-          aria-label={mobile ? "Voltar ao Kanban" : "Fechar conversa"}
+          aria-label={
+            backLabel ?? (mobile ? "Voltar ao Kanban" : "Fechar conversa")
+          }
           onClick={onClose}
         >
           <ArrowLeft className="h-4 w-4" />

@@ -451,4 +451,107 @@ test.describe("Core operation workspace", () => {
     await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Conversas" })).toHaveCount(0);
   });
+
+  test("switches between Pipeline and Conversas views with URL sync", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const linked = await ensureDealWithConversation(request, "pipe-novos");
+    await page.goto(
+      `/operacao?pipeline=${linked.pipelineId}&view=kanban&deal=${linked.dealId}`,
+    );
+    await expect(page.getByTestId("operation-view-switcher")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("operation-view-kanban")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByTestId("operation-kanban")).toBeVisible();
+
+    await page.getByTestId("operation-view-conversations").click();
+    await expect(page).toHaveURL(/view=conversations/);
+    await expect(page).toHaveURL(new RegExp(`conversation=${linked.conversationId}`));
+    await expect(page).not.toHaveURL(/[?&]deal=/);
+    await expect(page.getByTestId("operation-conversations-view")).toBeVisible();
+    await expect(page.getByTestId("conversation-list")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Mensagem" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("composer-textarea")).toHaveCSS("resize", "none");
+    await expect(page.getByTestId("composer-keyboard-hint")).toBeVisible();
+
+    await page.getByTestId("operation-view-kanban").click();
+    await expect(page).toHaveURL(/view=kanban/);
+    await expect(page).toHaveURL(new RegExp(`deal=${linked.dealId}`));
+    await expect(page).not.toHaveURL(/[?&]conversation=/);
+    await expect(page.getByTestId("operation-kanban")).toBeVisible();
+  });
+
+  test("admin can add a pipeline column from operação", async ({ page, request }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto("/operacao?pipeline=pipe-novos&view=kanban");
+    await expect(page.getByTestId("operation-add-stage")).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByTestId("operation-add-stage").click();
+    await expect(page.getByRole("heading", { name: "Adicionar coluna" })).toBeVisible();
+
+    const stageName = `E2E Coluna ${Date.now()}`;
+    await page.getByTestId("add-stage-name").fill(stageName);
+    await page.getByTestId("add-stage-submit").click();
+    await expect(page.getByText("Coluna adicionada")).toBeVisible();
+    await expect(page.getByTestId("kanban-stage").filter({ hasText: stageName })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const board = await fetchBoard(request, "pipe-novos");
+    expect(board.stages.some((stage) => stage.name === stageName)).toBe(true);
+
+    await page.reload();
+    await expect(page.getByTestId("kanban-stage").filter({ hasText: stageName })).toBeVisible({
+      timeout: 20_000,
+    });
+  });
+
+  test("conversations view drops no-conversation filter and opens demo chat", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      "/operacao?pipeline=pipe-novos&view=conversations&filter=no-conversation",
+    );
+    await expect(page.getByTestId("operation-conversations-view")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page).not.toHaveURL(/filter=no-conversation/);
+    await expect(page.getByTestId("operation-filter-no-conversation")).toHaveCount(0);
+
+    const claudia = page
+      .getByTestId("conversation-list")
+      .locator('[data-testid^="conversation-"]')
+      .filter({ hasText: /Cláudia/i })
+      .first();
+    if (await claudia.count()) {
+      await claudia.click();
+      await expect(page).toHaveURL(/conversation=/);
+      await expect(page.getByTestId("deal-operation-header")).toContainText(/Cláudia/i);
+    }
+  });
+
+  test("mobile conversations list opens thread fullscreen", async ({ page, request }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const linked = await ensureDealWithConversation(request, "pipe-novos");
+    await page.goto(
+      `/operacao?pipeline=${linked.pipelineId}&view=conversations`,
+    );
+    await expect(page.getByTestId("operation-conversation-list")).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByTestId(`conversation-${linked.conversationId}`).click();
+    await expect(page.getByRole("button", { name: "Voltar às conversas" })).toBeVisible();
+    await page.getByRole("button", { name: "Voltar às conversas" }).click();
+    await expect(page.getByTestId("conversation-list")).toBeVisible();
+  });
 });

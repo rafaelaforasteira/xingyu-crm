@@ -13,6 +13,8 @@ import {
 import { ApiHeader, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/demo-user.decorator";
 import { OrganizationId } from "../common/decorators/organization.decorator";
+import { AuthRole } from "@xingyu/database";
+import { Roles } from "../auth/decorators/roles.decorator";
 import {
   CreatePipelineDto,
   CreateStageDto,
@@ -144,6 +146,7 @@ export class PipelinesController {
   }
 
   @Post(":id/stages")
+  @Roles(AuthRole.ADMIN)
   @ApiOperation({ summary: "Add a stage to a pipeline" })
   addStage(
     @OrganizationId() orgId: string,

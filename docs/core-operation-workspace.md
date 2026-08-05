@@ -1,4 +1,4 @@
-# Core operation workspace (Kanban + conversa)
+# Core operation workspace (Kanban + Conversas)
 
 ## Propósito
 
@@ -8,81 +8,82 @@ Fluxo diário:
 
 1. Login
 2. Abrir **Operação**
-3. Ver o Kanban do pipeline padrão
-4. Clicar em um card
-5. Responder na conversa na mesma tela
-6. Mover o lead entre etapas
-7. Continuar no Kanban
+3. Alternar entre **Pipeline** (Kanban) e **Conversas**
+4. Responder leads na mesma tela
+5. Mover etapas
+6. (ADMIN) adicionar colunas ao pipeline
 
-A integração real com WhatsApp Cloud API **não** faz parte desta rodada.
+A integração real com WhatsApp Cloud API **não** faz parte desta rodada. Mídias do composer são CRM-only.
 
-## Rota
+## Visualizações
 
-- `/operacao`
-- Query opcional: `?pipeline=<pipelineId>&deal=<dealId>`
-- Filtros: `?q=...&filter=unread|awaiting|no-conversation`
+Controle segmentado no cabeçalho: `[ Pipeline ] [ Conversas ]` (`PipelineViewSwitcher`).
 
-## Escolha do pipeline
+| View | URL |
+|------|-----|
+| Kanban (padrão) | `/operacao?pipeline=<id>&view=kanban` |
+| Conversas | `/operacao?pipeline=<id>&view=conversations` |
 
-1. Se `pipeline` vier na URL e estiver ativo, usa esse.
-2. Senão, usa o pipeline ativo com `isDefault=true`.
-3. Senão, usa o primeiro pipeline ativo (posição / nome).
-4. Se não houver pipeline ativo, mostra estado vazio com link para `/settings/pipelines`.
+- `view` ausente ou inválido → Kanban
+- `deal=<dealId>` só no Kanban (painel lateral)
+- `conversation=<conversationId>` só em Conversas
+- Ao alternar: troca `deal` ↔ `conversation` quando houver vínculo; nunca ambos ativos
+- Busca `q` e filtros compatíveis são preservados
 
-## Painel de conversa
+## Busca única
 
-- Desktop (≥1280px): Kanban + painel à direita (560–680px).
-- Notebook/tablet: drawer lateral sobre o Kanban.
-- Mobile: conversa em tela cheia; voltar restaura o Kanban.
+Um único campo no cabeçalho da Operação.
 
-Ao abrir um card:
+- Pipeline: contato, negócio, telefone, prévia
+- Conversas: repassado como `externalSearch` para `ConversationList` (sem segunda busca)
 
-- a URL recebe `deal=<id>`;
-- o Kanban permanece montado;
-- reutiliza `ConversationThread` + `ConversationComposer` (inbox);
-- não abre Inbox nem o `DealWorkspaceDrawer`.
+## Filtros
 
-Negócio sem conversa: estado vazio, sem envio e sem conversa falsa.
+**Pipeline:** Todos · Não lidos · Aguardando · Sem conversa
 
-## URL e reload
+**Conversas:** Todas · Não lidas · Aguardando resposta
 
-- Abrir card → adiciona `deal`.
-- Fechar painel → remove `deal`, mantém `pipeline` e filtros.
-- Reload com `deal` válido → reabre o painel.
-- `deal` inválido → remove o parâmetro e mostra toast.
+Se entrar em Conversas com `filter=no-conversation`, a URL é normalizada para `all`.
 
-## Etapas
+## Conversas (escopo pipeline)
 
-- Drag and drop do Kanban e seletor do painel usam `dealsApi.move` (PATCH `/deals/:id`).
-- Atualização otimista do cache do board; rollback em falha.
+Lista via `ConversationList` com `scope={{ type: "pipeline", pipelineId }}`.
+
+Desktop: lista 320–380px + conversa à direita (sem painel de contexto do lead).
+Tablet/mobile: lista primeiro; conversa fullscreen com “Voltar às conversas”.
+
+Reutiliza `ConversationThread`, `ConversationComposer`, `MessageBubble`, `DealConversationPanel`.
+
+## Composer
+
+- `resize: none` (sem alça nativa)
+- Altura inicial ~44px, máxima ~130px, scroll interno depois
+- Linha: Emoji · Anexo · Texto · Áudio · Enviar (`items-end`, botões 40px)
+- Hint centralizado abaixo do textarea
+
+## Coluna (ADMIN)
+
+Botão **Adicionar coluna** só em `view=kanban` e `user.role === "ADMIN"`.
+
+Modal compacto → `POST /pipelines/:id/stages` (protegido com `@Roles(ADMIN)`).
+
+Nova etapa no final; board e seletores atualizados via React Query.
 
 ## Cache
 
-- Envio de mensagem atualiza `lastMessagePreview`, `lastMessageAt`, `unreadCount=0`, `awaitingReply=false` no card via `patchBoardDealByConversation`.
-- Marcar como lida zera `unreadCount` no card.
-- Filtro “Não lidos” mantém o card aberto mesmo após zerar não lidas.
+- Envio: prévia/unread/awaiting no card (`patchBoardDealByConversation`) e listas
+- Leitura: zera unread no card e na lista
+- Move etapa: board + listas
+- Nova coluna: board / stages / detail
 
 ## Modo `NEXT_PUBLIC_CORE_OPERATION_MODE`
 
-Quando `true` (padrão do produto nesta rodada):
+Quando `true`: menu Operação + Configurações; home `/operacao`.
+Quando `false`: menu completo; home `/dashboard`.
+Rotas antigas continuam acessíveis por URL.
 
-- menu: **Operação** + **Configurações**;
-- `/`, login e usuários autenticados em `/login` redirecionam para `/operacao`.
+## Limitações / próxima etapa
 
-Quando `false`:
-
-- menu completo em `FULL_NAV_GROUPS` é reativado;
-- home volta para `/dashboard`.
-
-Rotas antigas (Dashboard, Inbox, Pipelines, Tarefas, etc.) **continuam acessíveis** por URL.
-
-## Limitações atuais
-
-- Sem WebSocket / SSE / polling agressivo.
-- WhatsApp ainda em modo demo / CRM-only (mídia e mensagens locais).
-- Sem permissões finas multi-usuário nesta tela.
-- Sem painéis laterais de pedidos/notas/arquivos na operação (permanecem nas fichas completas).
-
-## Próxima etapa
-
-Integração real com WhatsApp Cloud API (webhook Meta, envio real, atualização em tempo real).
+- Sem WhatsApp Cloud API, webhook Meta, WebSocket/SSE
+- Sem exclusão de coluna na Operação
+- Próxima etapa futura: Cloud API

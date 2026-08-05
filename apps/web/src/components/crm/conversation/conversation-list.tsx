@@ -31,23 +31,47 @@ export function ConversationList({
   activeId,
   basePath,
   mounted,
+  externalSearch,
+  externalUnreadOnly,
+  externalAwaitingReply,
+  hideInternalFilters = false,
+  variant = "default",
+  awaitingByConversationId,
+  onSelectConversation,
+  emptyTitle,
+  emptyDescription,
+  className,
 }: {
   scope: { type: "global" } | { type: "pipeline"; pipelineId: string };
   activeId?: string;
   basePath: string;
   visible?: boolean;
   mounted: boolean;
+  /** Controlled search from parent (e.g. Operação header). */
+  externalSearch?: string;
+  externalUnreadOnly?: boolean;
+  externalAwaitingReply?: boolean;
+  hideInternalFilters?: boolean;
+  variant?: "default" | "operation";
+  awaitingByConversationId?: Record<string, boolean>;
+  onSelectConversation?: (conversationId: string) => void;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  className?: string;
 }) {
   const searchParams = useSearchParams();
   const scopeType = scope.type;
   const scopePipelineId = scope.type === "pipeline" ? scope.pipelineId : undefined;
+  const controlled = hideInternalFilters;
 
   const [filters, setFilters] = React.useState<ConversationFiltersState>({
-    search: "",
+    search: externalSearch ?? "",
     channelId: "",
     pipelineId: scopePipelineId ?? "",
-    unreadOnly: searchParams.get("unreadOnly") === "1",
-    awaitingReply: searchParams.get("awaitingReply") === "1",
+    unreadOnly:
+      externalUnreadOnly ?? searchParams.get("unreadOnly") === "1",
+    awaitingReply:
+      externalAwaitingReply ?? searchParams.get("awaitingReply") === "1",
   });
   const [page, setPage] = React.useState(1);
   const [accumulated, setAccumulated] = React.useState<ConversationListItem[]>(
@@ -55,14 +79,16 @@ export function ConversationList({
   );
 
   React.useEffect(() => {
-    const unreadOnly = searchParams.get("unreadOnly") === "1";
-    const awaitingReply = searchParams.get("awaitingReply") === "1";
-    setFilters((current) => ({
-      ...current,
-      unreadOnly: unreadOnly || current.unreadOnly,
-      awaitingReply: awaitingReply || current.awaitingReply,
-    }));
-  }, [searchParams]);
+    if (!controlled) {
+      const unreadOnly = searchParams.get("unreadOnly") === "1";
+      const awaitingReply = searchParams.get("awaitingReply") === "1";
+      setFilters((current) => ({
+        ...current,
+        unreadOnly: unreadOnly || current.unreadOnly,
+        awaitingReply: awaitingReply || current.awaitingReply,
+      }));
+    }
+  }, [controlled, searchParams]);
 
   React.useEffect(() => {
     if (scopeType === "pipeline" && scopePipelineId) {
@@ -74,7 +100,27 @@ export function ConversationList({
     }
   }, [scopePipelineId, scopeType]);
 
-  const debouncedSearch = useDebouncedValue(filters.search, 300);
+  React.useEffect(() => {
+    if (!controlled) return;
+    setFilters((current) => ({
+      ...current,
+      search: externalSearch ?? "",
+      unreadOnly: Boolean(externalUnreadOnly),
+      awaitingReply: Boolean(externalAwaitingReply),
+    }));
+  }, [controlled, externalSearch, externalUnreadOnly, externalAwaitingReply]);
+
+  const debouncedSearch = useDebouncedValue(
+    controlled ? (externalSearch ?? "") : filters.search,
+    controlled ? 0 : 300,
+  );
+
+  const unreadOnly = controlled
+    ? Boolean(externalUnreadOnly)
+    : filters.unreadOnly;
+  const awaitingReply = controlled
+    ? Boolean(externalAwaitingReply)
+    : filters.awaitingReply;
 
   const listParams = React.useMemo(() => {
     const params: Record<string, string | number | boolean> = {
@@ -82,47 +128,49 @@ export function ConversationList({
       page,
     };
     if (debouncedSearch) params.search = debouncedSearch;
-    if (filters.channelId) params.channelId = filters.channelId;
+    if (!controlled && filters.channelId) params.channelId = filters.channelId;
     if (scopeType === "pipeline" && scopePipelineId) {
       params.pipelineId = scopePipelineId;
     } else if (filters.pipelineId) {
       params.pipelineId = filters.pipelineId;
     }
-    if (filters.unreadOnly) params.unreadOnly = true;
-    if (filters.awaitingReply) params.awaitingReply = true;
+    if (unreadOnly) params.unreadOnly = true;
+    if (awaitingReply) params.awaitingReply = true;
     return params;
   }, [
+    awaitingReply,
+    controlled,
     debouncedSearch,
     filters.channelId,
     filters.pipelineId,
-    filters.unreadOnly,
-    filters.awaitingReply,
     page,
     scopePipelineId,
     scopeType,
+    unreadOnly,
   ]);
 
   const filterKey = React.useMemo(
     () =>
       JSON.stringify({
         search: debouncedSearch || "",
-        channelId: filters.channelId || "",
+        channelId: controlled ? "" : filters.channelId || "",
         pipelineId:
           scopeType === "pipeline"
             ? scopePipelineId || ""
             : filters.pipelineId || "",
-        unreadOnly: Boolean(filters.unreadOnly),
-        awaitingReply: Boolean(filters.awaitingReply),
+        unreadOnly: Boolean(unreadOnly),
+        awaitingReply: Boolean(awaitingReply),
         scopeType,
       }),
     [
+      awaitingReply,
+      controlled,
       debouncedSearch,
       filters.channelId,
       filters.pipelineId,
-      filters.unreadOnly,
-      filters.awaitingReply,
       scopePipelineId,
       scopeType,
+      unreadOnly,
     ],
   );
 
@@ -167,13 +215,14 @@ export function ConversationList({
   const pipelinesQuery = useQuery({
     queryKey: queryKeys.pipelines.navigation,
     queryFn: () => pipelinesApi.navigation(),
-    enabled: scopeType === "global",
+    enabled: scopeType === "global" && !controlled,
     staleTime: 60_000,
   });
 
   const settingsQuery = useQuery({
     queryKey: queryKeys.settings,
     queryFn: () => settingsApi.overview(),
+    enabled: !controlled,
     staleTime: 60_000,
   });
 
@@ -186,15 +235,20 @@ export function ConversationList({
   return (
     <section
       aria-label="Lista de conversas"
-      className="flex h-full min-h-0 flex-1 flex-col"
+      className={`flex h-full min-h-0 flex-1 flex-col ${className ?? ""}`}
+      data-testid="conversation-list-panel"
     >
-      <ConversationFilters
-        filters={filters}
-        onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
-        showPipelineFilter={scopeType === "global"}
-        channels={channels}
-        pipelines={pipelines}
-      />
+      {controlled ? null : (
+        <ConversationFilters
+          filters={filters}
+          onChange={(patch) =>
+            setFilters((current) => ({ ...current, ...patch }))
+          }
+          showPipelineFilter={scopeType === "global"}
+          channels={channels}
+          pipelines={pipelines}
+        />
+      )}
       <div
         className="scrollbar-thin min-h-[12rem] flex-1 overflow-y-auto"
         data-testid="conversation-list"
@@ -206,14 +260,26 @@ export function ConversationList({
             ))}
           </div>
         ) : listQuery.error && conversations.length === 0 ? (
-          <div className="p-3 text-sm text-destructive">
-            {(listQuery.error as Error).message}
+          <div className="space-y-2 p-3 text-sm">
+            <p className="text-destructive">
+              {(listQuery.error as Error).message}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void listQuery.refetch()}
+            >
+              Tentar novamente
+            </Button>
           </div>
         ) : conversations.length === 0 ? (
           <EmptyState
             icon={Inbox}
-            title="Nenhuma conversa"
-            description="Ajuste os filtros ou aguarde novos leads."
+            title={emptyTitle ?? "Nenhuma conversa"}
+            description={
+              emptyDescription ?? "Ajuste os filtros ou aguarde novos leads."
+            }
             className="m-3 border-0"
           />
         ) : (
@@ -224,6 +290,9 @@ export function ConversationList({
               href={`${basePath}/${conversation.id}`}
               active={activeId === conversation.id}
               mounted={mounted}
+              variant={variant}
+              awaitingReply={awaitingByConversationId?.[conversation.id]}
+              onSelect={onSelectConversation}
             />
           ))
         )}

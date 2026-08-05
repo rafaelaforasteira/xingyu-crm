@@ -6,6 +6,31 @@ export type OperationFilter =
   | "awaiting"
   | "no-conversation";
 
+export type OperationView = "kanban" | "conversations";
+
+export function parseOperationView(value: string | null | undefined): OperationView {
+  if (value === "conversations") return "conversations";
+  return "kanban";
+}
+
+/** Filters valid for Conversas view — drops no-conversation. */
+export function normalizeFilterForView(
+  filter: OperationFilter,
+  view: OperationView,
+): OperationFilter {
+  if (view === "conversations" && filter === "no-conversation") return "all";
+  return filter;
+}
+
+export function conversationFilterParams(filter: OperationFilter): {
+  unreadOnly?: boolean;
+  awaitingReply?: boolean;
+} {
+  if (filter === "unread") return { unreadOnly: true };
+  if (filter === "awaiting") return { awaitingReply: true };
+  return {};
+}
+
 export function chooseDefaultPipeline(
   pipelines: Array<Pick<Pipeline, "id" | "isDefault" | "archived" | "position" | "name">>,
   preferredId?: string | null,
@@ -112,6 +137,20 @@ export function findDealInBoard(
   return null;
 }
 
+export function findDealByConversationId(
+  pipeline: Pipeline | undefined | null,
+  conversationId: string,
+): Deal | null {
+  if (!pipeline?.stages) return null;
+  for (const stage of pipeline.stages) {
+    const deal = stage.deals?.find(
+      (item) => item.conversationId === conversationId,
+    );
+    if (deal) return deal;
+  }
+  return null;
+}
+
 export function patchDealInStages(
   stages: PipelineStage[],
   dealId: string,
@@ -156,4 +195,24 @@ export function channelLabel(deal: Deal): string | null {
   if (!channel) return null;
   if (channel.type === "WHATSAPP") return "WhatsApp";
   return channel.displayName || channel.name || channel.type;
+}
+
+export const STAGE_COLOR_PRESETS = [
+  "#94A3B8",
+  "#60A5FA",
+  "#4ADE80",
+  "#FBBF24",
+  "#F97316",
+  "#F87171",
+  "#C084FC",
+  "#2DD4BF",
+] as const;
+
+export function sanitizeStageName(name: string): string {
+  return name.trim().replace(/\s+/g, " ");
+}
+
+export function isValidStageName(name: string, maxLength = 80): boolean {
+  const cleaned = sanitizeStageName(name);
+  return cleaned.length > 0 && cleaned.length <= maxLength;
 }
