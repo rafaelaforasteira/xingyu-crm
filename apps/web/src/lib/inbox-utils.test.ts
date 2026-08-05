@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildMessageTimeline,
   canSendMessage,
   conversationTimestamp,
+  formatMessageDayLabel,
   formatMessageMetaLine,
   isValidMessageBody,
+  mergeMessagePages,
+  messageDayKey,
   messageSenderLabel,
   normalizeConversations,
   normalizeMessages,
@@ -11,6 +15,7 @@ import {
   sortMessagesChronologically,
   translateMessageStatus,
 } from "./inbox-utils";
+import type { Message } from "./types";
 
 const conversation = { id: "conv-1" };
 const message = {
@@ -21,10 +26,23 @@ const message = {
   createdAt: "2026-07-30T10:00:00.000Z",
 };
 
+function msg(
+  partial: Partial<Message> & Pick<Message, "id" | "createdAt" | "direction">,
+): Message {
+  return {
+    conversationId: "conv-1",
+    body: partial.body ?? "x",
+    author: partial.author ?? null,
+    ...partial,
+  };
+}
+
 describe("Inbox response normalization", () => {
   it("normalizes conversation arrays and paginated responses", () => {
     expect(normalizeConversations([conversation])).toEqual([conversation]);
-    expect(normalizeConversations({ data: [conversation], meta: {} })).toEqual([conversation]);
+    expect(normalizeConversations({ data: [conversation], meta: {} })).toEqual([
+      conversation,
+    ]);
   });
 
   it("returns an empty conversation list for absent or invalid responses", () => {
@@ -89,10 +107,23 @@ describe("Inbox response normalization", () => {
     expect(normalized[0]?.author).toBeNull();
     expect(messageSenderLabel(normalized[0]!)).toBe("Enviado por: Equipe Xingyu");
   });
+
+  it("preserves paragraph breaks in body text", () => {
+    const normalized = normalizeMessages([
+      {
+        id: "msg-break",
+        conversationId: "conv-1",
+        body: "Linha 1\n\nLinha 2",
+        direction: "INBOUND",
+        createdAt: "2026-08-04T12:00:00.000Z",
+      },
+    ]);
+    expect(normalized[0]?.body).toBe("Linha 1\n\nLinha 2");
+  });
 });
 
-describe("Inbox deterministic helpers", () => {
-  it("sorts messages without mutating the API response", () => {
+describe("Message timeline and pagination helpers", () => {
+  it("sorts messages chronologically without mutating source", () => {
     const later = { ...message, id: "msg-2", createdAt: "2026-07-30T11:00:00.000Z" };
     const source = [later, message];
     expect(sortMessagesChronologically(source).map((item) => item.id)).toEqual([
@@ -102,13 +133,82 @@ describe("Inbox deterministic helpers", () => {
     expect(source[0]?.id).toBe("msg-2");
   });
 
+  it("dedupes merged pages and keeps chronological order", () => {
+    const older = [
+      msg({ id: "a", createdAt: "2026-08-01T10:00:00.000Z", direction: "INBOUND" }),
+      msg({ id: "b", createdAt: "2026-08-01T11:00:00.000Z", direction: "OUTBOUND" }),
+    ];
+    const current = [
+      msg({
+        id: "b",
+        createdAt: "2026-08-01T11:00:00.000Z",
+        direction: "OUTBOUND",
+        body: "dup",
+      }),
+      msg({ id: "c", createdAt: "2026-08-01T12:00:00.000Z", direction: "INBOUND" }),
+    ];
+    expect(mergeMessagePages(older, current).map((item) => item.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("formats day labels as Hoje, Ontem or dd/MM/yyyy in America/Sao_Paulo", () => {
+    const now = new Date("2026-08-05T15:00:00.000-03:00");
+    expect(formatMessageDayLabel(messageDayKey(now, "America/Sao_Paulo"), now)).toBe(
+      "Hoje",
+    );
+    const yesterday = new Date("2026-08-04T15:00:00.000-03:00");
+    expect(
+      formatMessageDayLabel(messageDayKey(yesterday, "America/Sao_Paulo"), now),
+    ).toBe("Ontem");
+    expect(formatMessageDayLabel("2026-07-31", now)).toBe("31/07/2026");
+  });
+
+  it("groups messages with a single separator per day", () => {
+    const now = new Date("2026-08-05T18:00:00.000-03:00");
+    const timeline = buildMessageTimeline(
+      [
+        msg({
+          id: "1",
+          createdAt: "2026-08-04T12:00:00.000-03:00",
+          direction: "INBOUND",
+        }),
+        msg({
+          id: "2",
+          createdAt: "2026-08-04T13:00:00.000-03:00",
+          direction: "OUTBOUND",
+        }),
+        msg({
+          id: "3",
+          createdAt: "2026-08-05T09:00:00.000-03:00",
+          direction: "INBOUND",
+        }),
+      ],
+      now,
+    );
+    const days = timeline.filter((item) => item.type === "day");
+    expect(days).toHaveLength(2);
+    expect(days[0]).toMatchObject({ type: "day", label: "Ontem" });
+    expect(days[1]).toMatchObject({ type: "day", label: "Hoje" });
+  });
+
+  it("returns empty timeline for conversation without messages", () => {
+    expect(buildMessageTimeline([])).toEqual([]);
+  });
+});
+
+describe("Inbox deterministic helpers", () => {
   it("uses a stable timestamp before mount and formats it afterwards", () => {
     const formatter = vi.fn(() => "há 1 minuto");
     expect(conversationTimestamp(null, message.createdAt, false, formatter)).toBe(
       "Última interação",
     );
     expect(formatter).not.toHaveBeenCalled();
-    expect(conversationTimestamp(null, message.createdAt, true, formatter)).toBe("há 1 minuto");
+    expect(conversationTimestamp(null, message.createdAt, true, formatter)).toBe(
+      "há 1 minuto",
+    );
   });
 
   it("does not send blank messages", () => {
@@ -120,10 +220,28 @@ describe("Inbox deterministic helpers", () => {
 
   it("translates statuses and labels senders", () => {
     expect(translateMessageStatus("SENT")).toBe("Enviado");
+    expect(translateMessageStatus("DELIVERED")).toBe("Entregue");
+    expect(translateMessageStatus("READ")).toBe("Lido");
+    expect(translateMessageStatus("FAILED")).toBe("Falhou");
     expect(translateMessageStatus("SENDING")).toBe("Enviando");
     expect(messageSenderLabel({ direction: "INBOUND", author: null })).toBe(
       "Recebido de: Cliente",
     );
+    expect(
+      messageSenderLabel(
+        {
+          direction: "INBOUND",
+          author: null,
+        },
+        "Cláudia Nunes",
+      ),
+    ).toBe("Recebido de: Cláudia Nunes");
+    expect(
+      messageSenderLabel({
+        direction: "OUTBOUND",
+        author: { id: "1", name: "Administradora Xingyu" },
+      }),
+    ).toBe("Enviado por: Administradora Xingyu");
     expect(
       messageSenderLabel({
         direction: "OUTBOUND",
@@ -146,17 +264,37 @@ describe("Inbox deterministic helpers", () => {
   });
 
   it("sends on Enter unless Shift or IME composition is active", () => {
-    expect(shouldSendOnEnter({ key: "Enter", shiftKey: false, isComposing: false, keyCode: 13 })).toBe(
-      true,
-    );
-    expect(shouldSendOnEnter({ key: "Enter", shiftKey: true, isComposing: false, keyCode: 13 })).toBe(
-      false,
-    );
-    expect(shouldSendOnEnter({ key: "Enter", shiftKey: false, isComposing: true, keyCode: 13 })).toBe(
-      false,
-    );
-    expect(shouldSendOnEnter({ key: "Enter", shiftKey: false, isComposing: false, keyCode: 229 })).toBe(
-      false,
-    );
+    expect(
+      shouldSendOnEnter({
+        key: "Enter",
+        shiftKey: false,
+        isComposing: false,
+        keyCode: 13,
+      }),
+    ).toBe(true);
+    expect(
+      shouldSendOnEnter({
+        key: "Enter",
+        shiftKey: true,
+        isComposing: false,
+        keyCode: 13,
+      }),
+    ).toBe(false);
+    expect(
+      shouldSendOnEnter({
+        key: "Enter",
+        shiftKey: false,
+        isComposing: true,
+        keyCode: 13,
+      }),
+    ).toBe(false);
+    expect(
+      shouldSendOnEnter({
+        key: "Enter",
+        shiftKey: false,
+        isComposing: false,
+        keyCode: 229,
+      }),
+    ).toBe(false);
   });
 });

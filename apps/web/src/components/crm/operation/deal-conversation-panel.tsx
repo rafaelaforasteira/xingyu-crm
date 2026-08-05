@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Phone } from "lucide-react";
+import { ArrowLeft, Phone } from "lucide-react";
 import { conversationsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Pipeline } from "@/lib/types";
@@ -14,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Label, Select } from "@/components/ui/form-controls";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ConversationThread } from "@/components/crm/conversation/conversation-thread";
+import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 
 export function DealConversationPanel({
   deal,
@@ -22,6 +23,7 @@ export function DealConversationPanel({
   onStageChange,
   mobile,
   backLabel,
+  historyOnly = false,
 }: {
   deal: Deal;
   pipeline: Pipeline;
@@ -29,12 +31,16 @@ export function DealConversationPanel({
   onStageChange: (stageId: string) => void;
   mobile?: boolean;
   backLabel?: string;
+  /** Conversation History MVP: no composer, no stage editor. */
+  historyOnly?: boolean;
 }) {
   const conversationId = deal.conversationId ?? undefined;
   const stages = sortPipelineStages(pipeline.stages);
   const contactLabel = deal.contact?.name || deal.name;
   const phone = deal.contact?.whatsapp || deal.contact?.phone || null;
   const channel = channelLabel(deal);
+  const stageName =
+    stages.find((stage) => stage.id === deal.stageId)?.name ?? null;
 
   const detailQuery = useQuery({
     queryKey: queryKeys.conversations.detail(conversationId ?? ""),
@@ -46,6 +52,10 @@ export function DealConversationPanel({
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (historyOnly) {
+        onClose();
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (
         target?.closest("[data-testid='emoji-popover'], [data-testid='attach-menu']")
@@ -57,12 +67,13 @@ export function DealConversationPanel({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [historyOnly, onClose]);
 
   return (
     <section
       aria-label={`Conversa com ${contactLabel}`}
       className="flex h-full min-h-0 flex-col bg-background"
+      data-history-only={historyOnly ? "true" : "false"}
     >
       <header
         data-testid="deal-operation-header"
@@ -84,7 +95,10 @@ export function DealConversationPanel({
         <Avatar name={contactLabel} size="sm" className="shrink-0" />
 
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold leading-tight">
+          <h2
+            className="truncate text-sm font-semibold leading-tight"
+            data-testid="conversation-header"
+          >
             {contactLabel}
           </h2>
           <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -98,6 +112,9 @@ export function DealConversationPanel({
             {deal.conversationStatus ? (
               <span className="shrink-0">· {deal.conversationStatus}</span>
             ) : null}
+            {historyOnly && stageName ? (
+              <span className="shrink-0 truncate">· {stageName}</span>
+            ) : null}
             {(deal.unreadCount ?? 0) > 0 ? (
               <span className="shrink-0 font-medium text-primary">
                 · {deal.unreadCount} não lidas
@@ -106,33 +123,35 @@ export function DealConversationPanel({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Label htmlFor={`deal-stage-${deal.id}`} className="sr-only">
-            Etapa do negócio
-          </Label>
-          <Select
-            id={`deal-stage-${deal.id}`}
-            aria-label="Etapa do negócio"
-            data-testid="deal-stage-select"
-            className="h-8 max-w-[9.5rem] text-xs"
-            value={deal.stageId}
-            onChange={(event) => onStageChange(event.target.value)}
-          >
-            {stages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
-                {stage.name}
-              </option>
-            ))}
-          </Select>
-          <Link
-            href={`/pipelines/${deal.pipelineId}/deals/${deal.id}`}
-            className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2 text-xs font-medium shadow-sm hover:bg-accent"
-            title="Abrir ficha completa"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span className="sr-only">Ficha</span>
-          </Link>
-        </div>
+        {!historyOnly ? (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Label htmlFor={`deal-stage-${deal.id}`} className="sr-only">
+              Etapa do negócio
+            </Label>
+            <Select
+              id={`deal-stage-${deal.id}`}
+              aria-label="Etapa do negócio"
+              data-testid="deal-stage-select"
+              className="h-8 max-w-[9.5rem] text-xs"
+              value={deal.stageId}
+              onChange={(event) => onStageChange(event.target.value)}
+            >
+              {stages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
+            </Select>
+            <Link
+              href={`/pipelines/${deal.pipelineId}/deals/${deal.id}`}
+              className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2 text-xs font-medium shadow-sm hover:bg-accent"
+              title="Abrir ficha completa"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span className="sr-only">Ficha</span>
+            </Link>
+          </div>
+        ) : null}
       </header>
 
       {!conversationId ? (
@@ -142,9 +161,11 @@ export function DealConversationPanel({
             description="A conversa aparecerá aqui quando o cliente entrar por um canal conectado."
             className="m-auto border-0"
           />
-          <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
-            Envio indisponível sem conversa e canal válidos.
-          </div>
+          {!historyOnly ? (
+            <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">
+              Envio indisponível sem conversa e canal válidos.
+            </div>
+          ) : null}
         </div>
       ) : (
         <ConversationThread
@@ -157,6 +178,7 @@ export function DealConversationPanel({
           mounted
           visible
           hideHeader
+          hideComposer={historyOnly}
           showContextButton={false}
           className="min-h-0 flex-1"
         />

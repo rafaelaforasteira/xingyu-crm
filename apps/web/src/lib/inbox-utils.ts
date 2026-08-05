@@ -155,8 +155,78 @@ export function unwrapMessageCursorPage(response: unknown): MessageCursorPage {
 export function sortMessagesChronologically(messages: Message[]): Message[] {
   return [...messages].sort(
     (left, right) =>
-      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime() ||
+      left.id.localeCompare(right.id),
   );
+}
+
+export function mergeMessagePages(
+  older: Message[],
+  current: Message[],
+): Message[] {
+  const byId = new Map<string, Message>();
+  for (const message of [...older, ...current]) {
+    byId.set(message.id, message);
+  }
+  return sortMessagesChronologically([...byId.values()]);
+}
+
+const HISTORY_TIME_ZONE = "America/Sao_Paulo";
+
+/** Calendar day key YYYY-MM-DD in America/Sao_Paulo. */
+export function messageDayKey(
+  value: string | Date,
+  timeZone = HISTORY_TIME_ZONE,
+): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "invalid";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+export function formatMessageDayLabel(
+  dayKey: string,
+  now = new Date(),
+  timeZone = HISTORY_TIME_ZONE,
+): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return dayKey;
+  const todayKey = messageDayKey(now, timeZone);
+  if (dayKey === todayKey) return "Hoje";
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  if (dayKey === messageDayKey(yesterday, timeZone)) return "Ontem";
+  const [year, month, day] = dayKey.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+export type MessageTimelineItem =
+  | { type: "day"; key: string; label: string }
+  | { type: "message"; message: Message };
+
+export function buildMessageTimeline(
+  messages: Message[],
+  now = new Date(),
+  timeZone = HISTORY_TIME_ZONE,
+): MessageTimelineItem[] {
+  const sorted = sortMessagesChronologically(messages);
+  const items: MessageTimelineItem[] = [];
+  let lastDay: string | null = null;
+  for (const message of sorted) {
+    const day = messageDayKey(message.createdAt, timeZone);
+    if (day !== lastDay) {
+      items.push({
+        type: "day",
+        key: day,
+        label: formatMessageDayLabel(day, now, timeZone),
+      });
+      lastDay = day;
+    }
+    items.push({ type: "message", message });
+  }
+  return items;
 }
 
 export function isValidMessageBody(body: string): boolean {

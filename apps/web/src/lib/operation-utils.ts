@@ -1,4 +1,4 @@
-import type { Deal, Pipeline, PipelineStage } from "@/lib/types";
+import type { ConversationListItem, Deal, Pipeline, PipelineStage } from "@/lib/types";
 
 export type OperationFilter =
   | "all"
@@ -149,6 +149,37 @@ export function findDealByConversationId(
     if (deal) return deal;
   }
   return null;
+}
+
+/** Build a Deal card from conversation list metadata (includes closed/lost deals). */
+export function dealFromConversationListItem(
+  item: ConversationListItem,
+  pipeline: Pipeline,
+): Deal | null {
+  const dealSummary = item.currentDeal;
+  if (!dealSummary) return null;
+  const contactName = item.contact?.name?.trim() || dealSummary.name;
+  return {
+    id: dealSummary.id,
+    name: dealSummary.name || contactName,
+    pipelineId: dealSummary.pipelineId || pipeline.id,
+    stageId: dealSummary.stageId,
+    conversationId: item.id,
+    conversationStatus: item.status,
+    unreadCount: item.unreadCount,
+    lastMessagePreview: item.lastMessagePreview ?? null,
+    lastMessageAt: item.lastMessageAt ?? null,
+    createdAt: item.lastMessageAt ?? new Date(0).toISOString(),
+    contact: item.contact
+      ? {
+          id: item.contact.id,
+          name: contactName,
+          firstName: item.contact.firstName,
+          lastName: item.contact.lastName ?? null,
+          createdAt: item.lastMessageAt ?? new Date(0).toISOString(),
+        }
+      : null,
+  };
 }
 
 export function patchDealInStages(

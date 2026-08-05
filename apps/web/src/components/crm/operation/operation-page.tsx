@@ -91,6 +91,7 @@ export function OperationPage() {
   const [addStageOpen, setAddStageOpen] = React.useState(false);
   const [addingStage, setAddingStage] = React.useState(false);
   const invalidDealHandled = React.useRef<string | null>(null);
+  const invalidConversationHandled = React.useRef<string | null>(null);
 
   const pipelinesQuery = useQuery({
     queryKey: queryKeys.pipelines.list({ archived: false, pageSize: 100 }),
@@ -190,6 +191,24 @@ export function OperationPage() {
     });
   }, [dealParam, board, boardQuery.isLoading, setParams, view]);
 
+  const handleInvalidConversation = React.useCallback(
+    (conversationId: string) => {
+      if (invalidConversationHandled.current === conversationId) return;
+      invalidConversationHandled.current = conversationId;
+      toast.error("Conversa não encontrada neste pipeline.");
+      setParams((params) => {
+        params.delete("conversation");
+      });
+    },
+    [setParams],
+  );
+
+  React.useEffect(() => {
+    if (conversationParam && findDealByConversationId(board, conversationParam)) {
+      invalidConversationHandled.current = null;
+    }
+  }, [board, conversationParam]);
+
   const switchView = React.useCallback(
     (next: OperationView) => {
       if (!selectedPipeline) return;
@@ -205,9 +224,11 @@ export function OperationPage() {
 
         if (next === "conversations") {
           const openDealId = params.get("deal");
-          const openDeal = openDealId
-            ? findDealInBoard(board, openDealId)
-            : null;
+          const openDeal =
+            (openDealId ? findDealInBoard(board, openDealId) : null) ??
+            (selectedDeal && (!openDealId || selectedDeal.id === openDealId)
+              ? selectedDeal
+              : null);
           params.delete("deal");
           if (openDeal?.conversationId) {
             params.set("conversation", openDeal.conversationId);
@@ -225,7 +246,7 @@ export function OperationPage() {
         }
       });
     },
-    [board, selectedPipeline, setParams],
+    [board, selectedDeal, selectedPipeline, setParams],
   );
 
   const openDeal = (deal: Deal) => {
@@ -516,6 +537,7 @@ export function OperationPage() {
               onSelectConversation={selectConversation}
               onCloseConversation={closeConversation}
               onStageChange={(deal, stageId) => void changeStage(deal, stageId)}
+              onInvalidConversation={handleInvalidConversation}
             />
           </div>
         ) : (

@@ -6,9 +6,10 @@ import { MessageCircle } from "lucide-react";
 import { conversationsApi } from "@/lib/api";
 import { normalizeConversationListItems } from "@/lib/inbox-utils";
 import { queryKeys } from "@/lib/query-keys";
-import type { Deal, Pipeline } from "@/lib/types";
+import type { ConversationListItem, Deal, Pipeline } from "@/lib/types";
 import {
   conversationFilterParams,
+  dealFromConversationListItem,
   findDealByConversationId,
   type OperationFilter,
 } from "@/lib/operation-utils";
@@ -41,6 +42,7 @@ export function OperationConversationsView({
   onSelectConversation,
   onCloseConversation,
   onStageChange,
+  onInvalidConversation,
 }: {
   pipeline: Pipeline;
   board: Pipeline | null | undefined;
@@ -50,6 +52,7 @@ export function OperationConversationsView({
   onSelectConversation: (conversationId: string) => void;
   onCloseConversation: () => void;
   onStageChange: (deal: Deal, stageId: string) => void;
+  onInvalidConversation?: (conversationId: string) => void;
 }) {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
@@ -91,6 +94,23 @@ export function OperationConversationsView({
     retry: false,
   });
 
+  const unfilteredBootstrapQuery = useQuery({
+    queryKey: [
+      ...queryKeys.conversations.lists,
+      "operation-bootstrap-all",
+      { pipelineId: pipeline.id, pageSize: 50 },
+    ] as const,
+    queryFn: async () => {
+      const response = await conversationsApi.list({
+        pipelineId: pipeline.id,
+        pageSize: 50,
+      });
+      return normalizeConversationListItems(response);
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+
   React.useEffect(() => {
     if (conversationId) return;
     if (isMobile || isTablet) return;
@@ -109,7 +129,45 @@ export function OperationConversationsView({
     return findDealByConversationId(board, conversationId);
   }, [board, conversationId]);
 
-  const showThread = Boolean(conversationId && linkedDeal);
+  const listItemDeal = React.useMemo(() => {
+    if (!conversationId || linkedDeal) return null;
+    const pools: ConversationListItem[] = [
+      ...(bootstrapQuery.data ?? []),
+      ...(unfilteredBootstrapQuery.data ?? []),
+    ];
+    const item = pools.find((entry) => entry.id === conversationId);
+    if (!item) return null;
+    return dealFromConversationListItem(item, board ?? pipeline);
+  }, [
+    board,
+    bootstrapQuery.data,
+    conversationId,
+    linkedDeal,
+    pipeline,
+    unfilteredBootstrapQuery.data,
+  ]);
+
+  const panelDeal = linkedDeal ?? listItemDeal;
+
+  React.useEffect(() => {
+    if (!conversationId || !onInvalidConversation) return;
+    if (bootstrapQuery.isLoading || unfilteredBootstrapQuery.isLoading) return;
+    if (panelDeal) return;
+    const known = (unfilteredBootstrapQuery.data ?? []).some(
+      (entry) => entry.id === conversationId,
+    );
+    if (known) return;
+    onInvalidConversation(conversationId);
+  }, [
+    bootstrapQuery.isLoading,
+    conversationId,
+    onInvalidConversation,
+    panelDeal,
+    unfilteredBootstrapQuery.data,
+    unfilteredBootstrapQuery.isLoading,
+  ]);
+
+  const showThread = Boolean(conversationId && panelDeal);
   const showList = !isMobile || !showThread;
   const showFullThread = Boolean(showThread && (isMobile || isTablet));
 
@@ -123,7 +181,7 @@ export function OperationConversationsView({
           "flex min-h-0 shrink-0 flex-col border-r border-border bg-background",
           showFullThread && "hidden",
           !showList && "hidden",
-          "w-full md:w-[min(340px,38vw)] lg:w-[clamp(320px,28vw,380px)]",
+          "w-full md:w-[min(320px,36vw)] lg:w-[clamp(340px,28vw,380px)]",
         )}
         data-testid="operation-conversation-list"
       >
@@ -152,14 +210,15 @@ export function OperationConversationsView({
         )}
         data-testid="operation-conversation-pane"
       >
-        {showThread && linkedDeal ? (
+        {showThread && panelDeal ? (
           <DealConversationPanel
-            deal={linkedDeal}
+            deal={panelDeal}
             pipeline={board ?? pipeline}
             onClose={onCloseConversation}
-            onStageChange={(stageId) => onStageChange(linkedDeal, stageId)}
+            onStageChange={(stageId) => onStageChange(panelDeal, stageId)}
             mobile={isMobile || isTablet}
             backLabel="Voltar às conversas"
+            historyOnly
           />
         ) : (
           <EmptyState

@@ -18,6 +18,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { conversationsApi } from "@/lib/api";
 import {
   canSendMessage,
+  mergeMessagePages,
   shouldSendOnEnter,
   sortMessagesChronologically,
 } from "@/lib/inbox-utils";
@@ -610,12 +611,17 @@ export function useMarkConversationRead(conversationId: string | undefined) {
   }, [conversationId, queryClient]);
 }
 
+/** Page size for message history — small enough to exercise older-page loads in demo. */
+const MESSAGE_PAGE_SIZE = 20;
+
 export function useConversationMessages(conversationId: string | undefined) {
   const messagesQuery = useQuery({
     queryKey: queryKeys.conversations.messages(conversationId ?? ""),
     queryFn: async () => {
       if (!conversationId) throw new Error("Nenhuma conversa selecionada.");
-      return conversationsApi.messages(conversationId, { pageSize: 50 });
+      return conversationsApi.messages(conversationId, {
+        pageSize: MESSAGE_PAGE_SIZE,
+      });
     },
     enabled: Boolean(conversationId),
     retry: false,
@@ -635,14 +641,14 @@ export function useConversationMessages(conversationId: string | undefined) {
     setLoadingOlder(true);
     try {
       const older = await conversationsApi.messages(conversationId, {
-        pageSize: 50,
+        pageSize: MESSAGE_PAGE_SIZE,
         cursor,
         before: true,
       });
       queryClient.setQueryData<MessageCursorPage>(
         queryKeys.conversations.messages(conversationId),
         {
-          data: sortMessagesChronologically([...older.data, ...current.data]),
+          data: mergeMessagePages(older.data, current.data),
           meta: {
             pageSize: current.meta.pageSize,
             hasMore: older.meta.hasMore,

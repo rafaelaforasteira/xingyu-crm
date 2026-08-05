@@ -472,15 +472,17 @@ test.describe("Core operation workspace", () => {
 
     await page.getByTestId("operation-view-conversations").click();
     await expect(page).toHaveURL(/view=conversations/);
-    await expect(page).toHaveURL(new RegExp(`conversation=${linked.conversationId}`));
+    await expect(page).toHaveURL(
+      new RegExp(`conversation=${linked.conversationId}`),
+      { timeout: 15_000 },
+    );
     await expect(page).not.toHaveURL(/[?&]deal=/);
     await expect(page.getByTestId("operation-conversations-view")).toBeVisible();
     await expect(page.getByTestId("conversation-list")).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Mensagem" })).toBeVisible({
-      timeout: 15_000,
-    });
-    await expect(page.getByTestId("composer-textarea")).toHaveCSS("resize", "none");
-    await expect(page.getByTestId("composer-keyboard-hint")).toBeVisible();
+    // History MVP: no composer in Conversas view
+    await expect(page.getByTestId("conversation-composer")).toHaveCount(0);
+    await expect(page.getByRole("textbox", { name: "Mensagem" })).toHaveCount(0);
+    await expect(page.getByTestId("lead-context-panel")).toHaveCount(0);
 
     await page.getByTestId("operation-view-kanban").click();
     await expect(page).toHaveURL(/view=kanban/);
