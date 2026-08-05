@@ -596,10 +596,18 @@ function InfoRow({
   );
 }
 
-export function DealWorkspaceDrawer() {
+export function DealWorkspaceDrawer({
+  onClose: onCloseProp,
+}: {
+  onClose?: () => void;
+} = {}) {
   const open = useUiStore((s) => s.dealDrawerOpen);
   const dealId = useUiStore((s) => s.selectedDealId);
-  const close = useUiStore((s) => s.closeDealDrawer);
+  const closeStore = useUiStore((s) => s.closeDealDrawer);
+  const close = React.useCallback(() => {
+    closeStore();
+    onCloseProp?.();
+  }, [closeStore, onCloseProp]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -613,7 +621,7 @@ export function DealWorkspaceDrawer() {
   if (!open || !dealId) return null;
 
   return (
-    <div className="fixed inset-0 z-50 hidden md:flex">
+    <div className="fixed inset-0 z-50 hidden md:flex" data-testid="deal-workspace-drawer">
       <button
         type="button"
         className="absolute inset-0 bg-foreground/25 backdrop-blur-[1px]"
@@ -622,7 +630,12 @@ export function DealWorkspaceDrawer() {
       />
       <aside className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col border-l border-border bg-card shadow-drawer xl:max-w-3xl">
         <div className="absolute right-3 top-3 z-10">
-          <Button variant="ghost" size="icon" onClick={close}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={close}
+            aria-label="Fechar drawer"
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>

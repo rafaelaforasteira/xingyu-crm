@@ -19,27 +19,22 @@ test.describe("Authentication flow", () => {
       page.waitForURL(/\/operacao/, { timeout: 60_000 }),
       page.getByRole("button", { name: "Entrar" }).click(),
     ]);
-    await expect(page.getByTestId("operation-page")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("beta-operation-page")).toBeVisible({
+      timeout: 30_000,
+    });
 
     await page.reload();
     await expect(page).toHaveURL(/\/operacao/);
-    await expect(page.getByTestId("operation-page")).toBeVisible({
+    await expect(page.getByTestId("beta-operation-page")).toBeVisible({
       timeout: 30_000,
     });
 
+    // Beta single-pipeline: hidden modules redirect to /operacao while session is active.
     await page.goto("/inbox");
-    await expect(page).toHaveURL(/\/inbox/);
-    await expect(page.getByRole("heading", { name: /inbox/i })).toBeVisible({
-      timeout: 30_000,
-    });
-
+    await expect(page).toHaveURL(/\/operacao/, { timeout: 15_000 });
     await page.goto("/pipelines");
-    await expect(page).toHaveURL(/\/pipelines/);
-    await expect(page.getByRole("heading", { name: /pipeline/i })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page).toHaveURL(/\/operacao/, { timeout: 15_000 });
 
-    // Logout lives in the sidebar footer (not the topbar).
     const logout = page.getByRole("button", { name: /^Sair$|^Saindo/ });
     if (!(await logout.isVisible())) {
       await page.getByRole("button", { name: "Abrir menu" }).click();

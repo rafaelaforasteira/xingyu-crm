@@ -7,8 +7,9 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, LogOut, X, type LucideIcon } from "lucide-react";
 import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
-import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
+import { BETA_SINGLE_PIPELINE_MODE } from "@/lib/beta-config";
+import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
 import { formatPipelineNavLabel, resolvePipelineIcon } from "@/lib/pipeline-icons";
 import { dashboardApi, pipelinesApi, settingsApi } from "@/lib/api";
@@ -31,6 +32,7 @@ function SidebarNavLink({
   count,
   onNavigate,
   onPrefetch,
+  testId,
 }: {
   href: string;
   label: string;
@@ -40,12 +42,14 @@ function SidebarNavLink({
   count?: number;
   onNavigate: (href: string) => void;
   onPrefetch: (href: string) => void;
+  testId?: string;
 }) {
   return (
     <Link
       href={href}
       title={label}
       aria-current={active ? "page" : undefined}
+      data-testid={testId}
       onClick={() => onNavigate(href)}
       onMouseEnter={() => onPrefetch(href)}
       onFocus={() => onPrefetch(href)}
@@ -325,8 +329,12 @@ export function Sidebar() {
     return undefined;
   };
 
+  const homeHref =
+    BETA_SINGLE_PIPELINE_MODE || CORE_OPERATION_MODE ? "/operacao" : "/dashboard";
+
   const content = (
     <aside
+      data-testid="beta-sidebar"
       className={cn(
         "flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
         collapsed ? "w-[68px]" : "w-60",
@@ -334,11 +342,9 @@ export function Sidebar() {
     >
       <div className="flex h-14 items-center justify-between gap-2 border-b border-sidebar-border px-3">
         <Link
-          href={CORE_OPERATION_MODE ? "/operacao" : "/dashboard"}
+          href={homeHref}
           className="flex min-w-0 items-center gap-2.5"
-          onClick={() =>
-            handleNavigate(CORE_OPERATION_MODE ? "/operacao" : "/dashboard")
-          }
+          onClick={() => handleNavigate(homeHref)}
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-sm font-bold text-primary-foreground shadow-soft">
             X
@@ -407,6 +413,9 @@ export function Sidebar() {
                     count={resolveCount(item)}
                     onNavigate={handleNavigate}
                     onPrefetch={handlePrefetch}
+                    testId={
+                      item.href === "/operacao" ? "beta-nav-operation" : undefined
+                    }
                   />
                 );
               })}

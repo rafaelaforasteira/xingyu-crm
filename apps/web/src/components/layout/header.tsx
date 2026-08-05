@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Bell,
   CheckSquare,
@@ -17,6 +18,10 @@ import {
 import { notificationsApi, tasksApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
+import {
+  BETA_COMING_SOON_MESSAGE,
+  BETA_SINGLE_PIPELINE_MODE,
+} from "@/lib/beta-config";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { useUiStore } from "@/stores/ui";
 import { Badge } from "@/components/ui/badge";
@@ -43,20 +48,28 @@ export function Header() {
 
   const unread = notifications.filter((n) => !n.read).length;
 
+  const showComingSoon = React.useCallback(() => {
+    toast.message(BETA_COMING_SOON_MESSAGE);
+  }, []);
+
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        if (BETA_SINGLE_PIPELINE_MODE) {
+          showComingSoon();
+          return;
+        }
         setCommandOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setCommandOpen]);
+  }, [setCommandOpen, showComingSoon]);
 
   return (
     <header
-      data-testid="global-header"
+      data-testid={BETA_SINGLE_PIPELINE_MODE ? "beta-header" : "global-header"}
       className="sticky top-0 z-30 border-b border-border/80 bg-card/90 backdrop-blur-md"
     >
       <div className="mx-auto grid h-14 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
@@ -71,12 +84,14 @@ export function Header() {
             <Menu className="h-5 w-5" />
           </Button>
 
-          <Link href="/tasks?view=today" className="shrink-0">
+          {BETA_SINGLE_PIPELINE_MODE ? (
             <Button
+              type="button"
               variant="outline"
               size="sm"
-              className="gap-1.5 px-2.5 sm:px-3"
+              className="shrink-0 gap-1.5 px-2.5 sm:px-3"
               aria-label="Tarefas de hoje"
+              onClick={showComingSoon}
             >
               <CheckSquare className="h-4 w-4" />
               <span className="hidden sm:inline">Hoje</span>
@@ -86,7 +101,24 @@ export function Header() {
                 </Badge>
               ) : null}
             </Button>
-          </Link>
+          ) : (
+            <Link href="/tasks?view=today" className="shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 px-2.5 sm:px-3"
+                aria-label="Tarefas de hoje"
+              >
+                <CheckSquare className="h-4 w-4" />
+                <span className="hidden sm:inline">Hoje</span>
+                {tasksToday.length > 0 ? (
+                  <Badge variant="secondary" className="hidden sm:inline-flex">
+                    {tasksToday.length}
+                  </Badge>
+                ) : null}
+              </Button>
+            </Link>
+          )}
 
           <div className="relative shrink-0">
             <Button
@@ -150,7 +182,13 @@ export function Header() {
         <div className="flex min-w-0 items-center justify-center gap-2">
           <button
             type="button"
-            onClick={() => setCommandOpen(true)}
+            onClick={() => {
+              if (BETA_SINGLE_PIPELINE_MODE) {
+                showComingSoon();
+                return;
+              }
+              setCommandOpen(true);
+            }}
             className="flex h-9 w-full max-w-xl min-w-0 items-center gap-2.5 rounded-lg border border-input bg-background/80 px-2.5 text-sm text-muted-foreground transition hover:bg-accent/50 sm:px-3"
             aria-label="Buscar no CRM"
           >
@@ -170,14 +208,20 @@ export function Header() {
               variant="default"
               size="sm"
               className="gap-1 px-2.5 sm:px-3"
-              onClick={() => setNovoOpen((v) => !v)}
+              onClick={() => {
+                if (BETA_SINGLE_PIPELINE_MODE) {
+                  showComingSoon();
+                  return;
+                }
+                setNovoOpen((v) => !v);
+              }}
               aria-label="Criar novo"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Novo</span>
               <ChevronDown className="hidden h-3.5 w-3.5 opacity-80 sm:inline" />
             </Button>
-            {novoOpen ? (
+            {!BETA_SINGLE_PIPELINE_MODE && novoOpen ? (
               <>
                 <button
                   type="button"

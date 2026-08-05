@@ -13,8 +13,9 @@ import {
   sanitizeStageName,
 } from "./operation-utils";
 import type { Deal, Pipeline, PipelineStage } from "./types";
-import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS } from "./nav";
+import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS, BETA_SINGLE_PIPELINE_NAV_GROUPS } from "./nav";
 import { CORE_OPERATION_MODE, shouldHideGlobalHeader } from "./feature-flags";
+import { BETA_SINGLE_PIPELINE_MODE } from "./beta-config";
 
 function deal(partial: Partial<Deal> & Pick<Deal, "id" | "name" | "pipelineId" | "stageId">): Deal {
   return {
@@ -153,8 +154,10 @@ describe("navigation mode", () => {
     ]);
   });
 
-  it("uses simplified menu when CORE_OPERATION_MODE is enabled", () => {
-    if (CORE_OPERATION_MODE) {
+  it("uses beta or simplified menu depending on mode flags", () => {
+    if (BETA_SINGLE_PIPELINE_MODE) {
+      expect(NAV_GROUPS).toEqual(BETA_SINGLE_PIPELINE_NAV_GROUPS);
+    } else if (CORE_OPERATION_MODE) {
       expect(NAV_GROUPS).toEqual(CORE_OPERATION_NAV_GROUPS);
     } else {
       expect(NAV_GROUPS).toEqual(FULL_NAV_GROUPS);
@@ -163,16 +166,21 @@ describe("navigation mode", () => {
 });
 
 describe("shouldHideGlobalHeader", () => {
-  it("hides header only on /operacao when core mode is on", () => {
-    expect(shouldHideGlobalHeader("/operacao", true)).toBe(true);
-    expect(shouldHideGlobalHeader("/operacao/", true)).toBe(true);
-    expect(shouldHideGlobalHeader("/settings", true)).toBe(false);
-    expect(shouldHideGlobalHeader("/inbox", true)).toBe(false);
-    expect(shouldHideGlobalHeader("/dashboard", true)).toBe(false);
+  it("never hides header when beta single-pipeline mode is on", () => {
+    expect(shouldHideGlobalHeader("/operacao", true, true)).toBe(false);
+    expect(shouldHideGlobalHeader("/settings", true, true)).toBe(false);
+  });
+
+  it("hides header only on /operacao when core mode is on and beta is off", () => {
+    expect(shouldHideGlobalHeader("/operacao", true, false)).toBe(true);
+    expect(shouldHideGlobalHeader("/operacao/", true, false)).toBe(true);
+    expect(shouldHideGlobalHeader("/settings", true, false)).toBe(false);
+    expect(shouldHideGlobalHeader("/inbox", true, false)).toBe(false);
+    expect(shouldHideGlobalHeader("/dashboard", true, false)).toBe(false);
   });
 
   it("keeps header when core mode is off", () => {
-    expect(shouldHideGlobalHeader("/operacao", false)).toBe(false);
+    expect(shouldHideGlobalHeader("/operacao", false, false)).toBe(false);
   });
 });
 

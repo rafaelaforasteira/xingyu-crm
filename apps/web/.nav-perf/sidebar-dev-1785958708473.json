@@ -1,0 +1,19 @@
+{
+  "mode": "dev",
+  "results": [
+    {
+      "label": "operacao→kanban",
+      "elapsedMs": 841,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "apiSample": []
+    },
+    {
+      "label": "kanban→conversations",
+      "elapsedMs": 712,
+      "pageErrors": [],
+      "consoleErrors": [],
+      "apiSample": []
+    }
+  ]
+}

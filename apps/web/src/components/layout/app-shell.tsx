@@ -38,7 +38,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hideGlobalHeader = shouldHideGlobalHeader(pathname);
 
   return (
-    <div className="flex min-h-screen bg-background" data-app-shell="true">
+    <div
+      className="flex min-h-screen bg-background"
+      data-app-shell="true"
+      data-testid="beta-app-shell"
+    >
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {hideGlobalHeader ? null : <Header />}

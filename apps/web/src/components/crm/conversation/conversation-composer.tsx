@@ -343,7 +343,11 @@ export function ConversationComposer({
   };
 
   return (
-    <div className="border-t border-border bg-card" data-testid="conversation-composer">
+    <div
+      className="border-t border-border bg-card"
+      data-testid="conversation-composer"
+      data-beta-testid="beta-conversation-composer"
+    >
       <ConversationAttachmentPreview items={pending} onRemove={removePending} />
       {audioPreview ? (
         <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -377,7 +381,6 @@ export function ConversationComposer({
 
       <form
         className="flex items-end gap-1.5 p-2 sm:gap-2 sm:p-3"
-        data-testid="conversation-composer"
         onSubmit={(event) => {
           event.preventDefault();
           submitMessage();

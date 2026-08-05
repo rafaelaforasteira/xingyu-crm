@@ -30,6 +30,7 @@ export function ConversationList({
   scope,
   activeId,
   basePath,
+  getConversationHref,
   mounted,
   externalSearch,
   externalUnreadOnly,
@@ -45,6 +46,7 @@ export function ConversationList({
   scope: { type: "global" } | { type: "pipeline"; pipelineId: string };
   activeId?: string;
   basePath: string;
+  getConversationHref?: (conversationId: string) => string;
   visible?: boolean;
   mounted: boolean;
   /** Controlled search from parent (e.g. Operação header). */
@@ -287,7 +289,11 @@ export function ConversationList({
             <ConversationListItemRow
               key={conversation.id}
               conversation={conversation}
-              href={`${basePath}/${conversation.id}`}
+              href={
+                getConversationHref
+                  ? getConversationHref(conversation.id)
+                  : `${basePath}/${conversation.id}`
+              }
               active={activeId === conversation.id}
               mounted={mounted}
               variant={variant}
