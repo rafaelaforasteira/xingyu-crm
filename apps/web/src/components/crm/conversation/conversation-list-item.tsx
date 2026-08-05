@@ -44,9 +44,12 @@ export function ConversationListItemRow({
   };
 
   const className = cn(
-    "flex w-full gap-2.5 border-b border-border/60 px-3 py-2.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-    active && "bg-accent",
-    "aria-[current=page]:bg-accent",
+    "flex w-full gap-2.5 border-b border-border/60 px-3 py-2.5 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+    active &&
+      (variant === "operation"
+        ? "bg-primary/[0.07] aria-[current=page]:bg-primary/[0.07]"
+        : "bg-accent aria-[current=page]:bg-accent"),
+    !active && "aria-[current=page]:bg-accent",
   );
 
   const body = (

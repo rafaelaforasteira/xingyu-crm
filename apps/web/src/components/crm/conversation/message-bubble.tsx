@@ -37,7 +37,7 @@ export function MessageBubble({
       <div
         data-testid="message-bubble"
         className={cn(
-          "w-fit max-w-[min(70%,680px)] rounded-2xl px-3 py-2 text-sm shadow-[0_1px_1px_rgba(0,0,0,0.04)]",
+          "w-fit max-w-[min(70%,680px)] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-[0_1px_1px_rgba(0,0,0,0.04)]",
           outbound
             ? "rounded-tr-md bg-[#dcf8c6] text-foreground dark:bg-emerald-950/50"
             : "rounded-tl-md bg-card text-foreground",
@@ -57,7 +57,9 @@ export function MessageBubble({
         </p>
 
         {message.body ? (
-          <p className="mt-1 whitespace-pre-wrap break-words">{message.body}</p>
+          <p className="mt-1.5 whitespace-pre-wrap break-words leading-relaxed">
+            {message.body}
+          </p>
         ) : null}
 
         {message.attachments?.length ? (

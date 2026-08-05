@@ -173,61 +173,84 @@ export function OperationConversationsView({
 
   return (
     <div
-      className="relative flex h-full min-h-0 overflow-hidden"
+      className={cn(
+        "relative flex h-full min-h-0 w-full flex-col overflow-hidden",
+        showFullThread ? "p-0" : "px-4 pb-4 pt-1 sm:px-5",
+      )}
       data-testid="operation-conversations-view"
     >
-      <aside
-        className={cn(
-          "flex min-h-0 shrink-0 flex-col border-r border-border bg-background",
-          showFullThread && "hidden",
-          !showList && "hidden",
-          "w-full md:w-[min(320px,36vw)] lg:w-[clamp(340px,28vw,380px)]",
-        )}
-        data-testid="operation-conversation-list"
-      >
-        <ConversationList
-          scope={{ type: "pipeline", pipelineId: pipeline.id }}
-          activeId={conversationId ?? undefined}
-          basePath="/operacao"
-          mounted={mounted}
-          hideInternalFilters
-          externalSearch={search}
-          externalUnreadOnly={filterParams.unreadOnly}
-          externalAwaitingReply={filterParams.awaitingReply}
-          variant="operation"
-          awaitingByConversationId={awaitingByConversationId}
-          onSelectConversation={onSelectConversation}
-          emptyTitle="Nenhuma conversa neste pipeline"
-          emptyDescription="As conversas aparecerão aqui quando os clientes entrarem pelos canais conectados."
-        />
-      </aside>
-
       <div
         className={cn(
-          "min-h-0 min-w-0 flex-1 bg-background",
-          showFullThread && "absolute inset-0 z-30",
-          !showThread && (isMobile || isTablet) && "hidden",
+          "mx-auto flex min-h-0 w-full flex-1 flex-col",
+          showFullThread ? "max-w-none" : "max-w-[1480px]",
         )}
-        data-testid="operation-conversation-pane"
+        data-testid="conversation-workspace"
       >
-        {showThread && panelDeal ? (
-          <DealConversationPanel
-            deal={panelDeal}
-            pipeline={board ?? pipeline}
-            onClose={onCloseConversation}
-            onStageChange={(stageId) => onStageChange(panelDeal, stageId)}
-            mobile={isMobile || isTablet}
-            backLabel="Voltar às conversas"
-            historyOnly
-          />
-        ) : (
-          <EmptyState
-            icon={MessageCircle}
-            title="Selecione uma conversa"
-            description="Escolha um cliente na lista para abrir o histórico."
-            className="m-auto border-0"
-          />
-        )}
+        <div
+          className={cn(
+            "grid min-h-0 flex-1 overflow-hidden",
+            showFullThread
+              ? "rounded-none border-0 bg-background shadow-none"
+              : "rounded-xl border border-border bg-card shadow-card md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[300px_minmax(0,1fr)]",
+            isMobile && !showFullThread && "grid-cols-1",
+          )}
+        >
+          <aside
+            className={cn(
+              "flex min-h-0 flex-col border-border bg-card",
+              showFullThread && "hidden",
+              !showList && "hidden",
+              !showFullThread && "md:border-r",
+              "w-full",
+            )}
+            data-testid="operation-conversation-list"
+          >
+            <ConversationList
+              scope={{ type: "pipeline", pipelineId: pipeline.id }}
+              activeId={conversationId ?? undefined}
+              basePath="/operacao"
+              mounted={mounted}
+              hideInternalFilters
+              externalSearch={search}
+              externalUnreadOnly={filterParams.unreadOnly}
+              externalAwaitingReply={filterParams.awaitingReply}
+              variant="operation"
+              awaitingByConversationId={awaitingByConversationId}
+              onSelectConversation={onSelectConversation}
+              emptyTitle="Nenhuma conversa neste pipeline"
+              emptyDescription="As conversas aparecerão aqui quando os clientes entrarem pelos canais conectados."
+            />
+          </aside>
+
+          <div
+            className={cn(
+              "min-h-0 min-w-0 bg-muted/20",
+              showFullThread && "absolute inset-0 z-30 bg-background",
+              !showThread && (isMobile || isTablet) && "hidden",
+              !showFullThread && "flex",
+            )}
+            data-testid="operation-conversation-pane"
+          >
+            {showThread && panelDeal ? (
+              <DealConversationPanel
+                deal={panelDeal}
+                pipeline={board ?? pipeline}
+                onClose={onCloseConversation}
+                onStageChange={(stageId) => onStageChange(panelDeal, stageId)}
+                mobile={isMobile || isTablet}
+                backLabel="Voltar às conversas"
+                historyOnly
+              />
+            ) : (
+              <EmptyState
+                icon={MessageCircle}
+                title="Selecione uma conversa"
+                description="Escolha um cliente na lista para abrir o histórico."
+                className="m-auto border-0 bg-transparent"
+              />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

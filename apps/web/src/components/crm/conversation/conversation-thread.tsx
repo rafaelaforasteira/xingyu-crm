@@ -192,12 +192,20 @@ export function ConversationThread({
 
           <div
             ref={listRef}
-            className="conversation-thread-bg scrollbar-thin flex-1 space-y-2 overflow-y-auto p-3 sm:p-4"
+            className="conversation-thread-bg scrollbar-thin flex-1 overflow-y-auto p-3 sm:p-4"
             data-testid="message-list"
             aria-label="Histórico de mensagens"
             aria-live="polite"
             aria-busy={messagesQuery.isLoading || loadingOlder}
           >
+            <div
+              className={cn(
+                hideComposer
+                  ? "mx-auto w-full max-w-[960px] space-y-2.5 px-1 sm:px-2"
+                  : "space-y-2",
+              )}
+              data-testid={hideComposer ? "message-content-column" : undefined}
+            >
             {hasMore ? (
               <div className="flex justify-center pb-2">
                 <Button
@@ -250,9 +258,9 @@ export function ConversationThread({
                   <div
                     key={`day-${item.key}`}
                     data-testid="message-day-separator"
-                    className="flex items-center justify-center py-2"
+                    className="flex items-center justify-center py-2.5"
                   >
-                    <span className="rounded-full bg-background/80 px-3 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm">
+                    <span className="rounded-full bg-background/85 px-3 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm">
                       {item.label}
                     </span>
                   </div>
@@ -271,6 +279,7 @@ export function ConversationThread({
               )
             )}
             <div ref={messagesEndRef} data-testid="messages-end" />
+            </div>
           </div>
 
           {!detailError && !hideComposer ? (

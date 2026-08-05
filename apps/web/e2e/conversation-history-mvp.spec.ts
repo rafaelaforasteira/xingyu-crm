@@ -125,4 +125,49 @@ test.describe("Conversation History MVP", () => {
     await page.getByRole("button", { name: "Voltar às conversas" }).click();
     await expect(page.getByTestId("conversation-list")).toBeVisible();
   });
+
+  test("restored workspace layout stays centered and contained at 1920px", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto(
+      "/operacao?pipeline=pipe-novos&view=conversations&conversation=conv-operacao-demo",
+    );
+
+    const workspace = page.getByTestId("conversation-workspace");
+    await expect(workspace).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("operation-conversation-list")).toBeVisible();
+    await expect(page.getByTestId("operation-conversation-pane")).toBeVisible();
+    await expect(page.getByTestId("message-content-column")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await expect(page.getByTestId("conversation-composer")).toHaveCount(0);
+    await expect(page.getByTestId("lead-context-panel")).toHaveCount(0);
+    await expect(page.getByTestId("global-header")).toHaveCount(0);
+
+    const workspaceBox = await workspace.boundingBox();
+    const listBox = await page.getByTestId("operation-conversation-list").boundingBox();
+    const paneBox = await page.getByTestId("operation-conversation-pane").boundingBox();
+    const contentBox = await page.getByTestId("message-content-column").boundingBox();
+
+    expect(workspaceBox).toBeTruthy();
+    expect(listBox).toBeTruthy();
+    expect(paneBox).toBeTruthy();
+    expect(contentBox).toBeTruthy();
+
+    expect(workspaceBox!.width).toBeGreaterThan(1100);
+    expect(workspaceBox!.width).toBeLessThan(1550);
+    expect(listBox!.width).toBeGreaterThanOrEqual(270);
+    expect(listBox!.width).toBeLessThanOrEqual(350);
+    expect(paneBox!.width).toBeGreaterThan(700);
+    expect(contentBox!.width).toBeLessThanOrEqual(1040);
+    expect(contentBox!.width).toBeGreaterThan(700);
+
+    // Two columns only — list left edge and pane right edge within workspace.
+    expect(listBox!.x).toBeGreaterThanOrEqual(workspaceBox!.x - 1);
+    expect(paneBox!.x + paneBox!.width).toBeLessThanOrEqual(
+      workspaceBox!.x + workspaceBox!.width + 2,
+    );
+  });
 });

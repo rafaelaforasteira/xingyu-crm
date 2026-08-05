@@ -7,6 +7,7 @@ import { conversationsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Pipeline } from "@/lib/types";
 import { channelLabel } from "@/lib/operation-utils";
+import { cn } from "@/lib/utils";
 import { sortPipelineStages } from "@/components/crm/deal-board-dialogs";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -69,28 +70,38 @@ export function DealConversationPanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [historyOnly, onClose]);
 
+  const showBackButton = historyOnly ? Boolean(mobile) : true;
+
   return (
     <section
       aria-label={`Conversa com ${contactLabel}`}
-      className="flex h-full min-h-0 flex-col bg-background"
+      className={cn(
+        "flex h-full min-h-0 w-full flex-col",
+        historyOnly ? "bg-transparent" : "bg-background",
+      )}
       data-history-only={historyOnly ? "true" : "false"}
     >
       <header
         data-testid="deal-operation-header"
-        className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-2.5 py-2"
+        className={cn(
+          "flex shrink-0 items-center gap-2 border-b border-border bg-card",
+          historyOnly ? "min-h-14 px-4 py-3 sm:px-5" : "px-2.5 py-2",
+        )}
       >
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className="h-9 w-9 shrink-0"
-          aria-label={
-            backLabel ?? (mobile ? "Voltar ao Kanban" : "Fechar conversa")
-          }
-          onClick={onClose}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+        {showBackButton ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9 shrink-0"
+            aria-label={
+              backLabel ?? (mobile ? "Voltar ao Kanban" : "Fechar conversa")
+            }
+            onClick={onClose}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        ) : null}
 
         <Avatar name={contactLabel} size="sm" className="shrink-0" />
 
