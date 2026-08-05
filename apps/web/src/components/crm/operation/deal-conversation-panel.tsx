@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Pipeline } from "@/lib/types";
 import { channelLabel } from "@/lib/operation-utils";
 import { sortPipelineStages } from "@/components/crm/deal-board-dialogs";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Label, Select } from "@/components/ui/form-controls";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -20,12 +21,14 @@ export function DealConversationPanel({
   onClose,
   onStageChange,
   mobile,
+  backLabel,
 }: {
   deal: Deal;
   pipeline: Pipeline;
   onClose: () => void;
   onStageChange: (stageId: string) => void;
   mobile?: boolean;
+  backLabel?: string;
 }) {
   const conversationId = deal.conversationId ?? undefined;
   const stages = sortPipelineStages(pipeline.stages);
@@ -59,53 +62,51 @@ export function DealConversationPanel({
   return (
     <section
       aria-label={`Conversa com ${contactLabel}`}
-      className="flex h-full min-h-0 flex-col"
+      className="flex h-full min-h-0 flex-col bg-background"
     >
       <header
         data-testid="deal-operation-header"
-        className="flex shrink-0 flex-col gap-2 border-b border-border px-3 py-2.5"
+        className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-2.5 py-2"
       >
-        <div className="flex items-start gap-2">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label={mobile ? "Voltar ao Kanban" : "Fechar conversa"}
-            onClick={onClose}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-sm font-semibold">{contactLabel}</h2>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-              {phone ? (
-                <span className="inline-flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {phone}
-                </span>
-              ) : null}
-              {channel ? <span>{channel}</span> : null}
-              {deal.conversationStatus ? (
-                <span>{deal.conversationStatus}</span>
-              ) : null}
-              {(deal.unreadCount ?? 0) > 0 ? (
-                <span className="font-medium text-primary">
-                  {deal.unreadCount} não lidas
-                </span>
-              ) : null}
-            </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-9 w-9 shrink-0"
+          aria-label={
+            backLabel ?? (mobile ? "Voltar ao Kanban" : "Fechar conversa")
+          }
+          onClick={onClose}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+
+        <Avatar name={contactLabel} size="sm" className="shrink-0" />
+
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-sm font-semibold leading-tight">
+            {contactLabel}
+          </h2>
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
+            {phone ? (
+              <span className="inline-flex min-w-0 items-center gap-0.5 truncate">
+                <Phone className="h-3 w-3 shrink-0" />
+                <span className="truncate">{phone}</span>
+              </span>
+            ) : null}
+            {channel ? <span className="shrink-0">· {channel}</span> : null}
+            {deal.conversationStatus ? (
+              <span className="shrink-0">· {deal.conversationStatus}</span>
+            ) : null}
+            {(deal.unreadCount ?? 0) > 0 ? (
+              <span className="shrink-0 font-medium text-primary">
+                · {deal.unreadCount} não lidas
+              </span>
+            ) : null}
           </div>
-          <Link
-            href={`/pipelines/${deal.pipelineId}/deals/${deal.id}`}
-            className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2.5 text-xs font-medium shadow-sm hover:bg-accent"
-            title="Abrir ficha completa"
-          >
-            <ExternalLink className="mr-1 h-3.5 w-3.5" />
-            Ficha
-          </Link>
         </div>
 
-        <div className="flex items-center gap-2 pl-10">
+        <div className="flex shrink-0 items-center gap-1.5">
           <Label htmlFor={`deal-stage-${deal.id}`} className="sr-only">
             Etapa do negócio
           </Label>
@@ -113,7 +114,7 @@ export function DealConversationPanel({
             id={`deal-stage-${deal.id}`}
             aria-label="Etapa do negócio"
             data-testid="deal-stage-select"
-            className="h-8 text-xs"
+            className="h-8 max-w-[9.5rem] text-xs"
             value={deal.stageId}
             onChange={(event) => onStageChange(event.target.value)}
           >
@@ -123,14 +124,22 @@ export function DealConversationPanel({
               </option>
             ))}
           </Select>
+          <Link
+            href={`/pipelines/${deal.pipelineId}/deals/${deal.id}`}
+            className="inline-flex h-8 items-center rounded-lg border border-input bg-card px-2 text-xs font-medium shadow-sm hover:bg-accent"
+            title="Abrir ficha completa"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span className="sr-only">Ficha</span>
+          </Link>
         </div>
       </header>
 
       {!conversationId ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <EmptyState
-            title="Ainda não existe uma conversa vinculada a este negócio."
-            description="A conversa será vinculada quando o cliente entrar por um canal conectado."
+            title="Ainda não existe uma conversa vinculada a este lead."
+            description="A conversa aparecerá aqui quando o cliente entrar por um canal conectado."
             className="m-auto border-0"
           />
           <div className="border-t border-border p-3 text-center text-xs text-muted-foreground">

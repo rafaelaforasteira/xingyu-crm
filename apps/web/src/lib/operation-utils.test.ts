@@ -4,12 +4,17 @@ import {
   dealMatchesOperationFilter,
   dealMatchesSearch,
   filterPipelineBoard,
+  findDealByConversationId,
+  isValidStageName,
   moveDealInStages,
+  normalizeFilterForView,
+  parseOperationView,
   patchDealInStages,
+  sanitizeStageName,
 } from "./operation-utils";
 import type { Deal, Pipeline, PipelineStage } from "./types";
 import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS } from "./nav";
-import { CORE_OPERATION_MODE } from "./feature-flags";
+import { CORE_OPERATION_MODE, shouldHideGlobalHeader } from "./feature-flags";
 
 function deal(partial: Partial<Deal> & Pick<Deal, "id" | "name" | "pipelineId" | "stageId">): Deal {
   return {
@@ -154,5 +159,71 @@ describe("navigation mode", () => {
     } else {
       expect(NAV_GROUPS).toEqual(FULL_NAV_GROUPS);
     }
+  });
+});
+
+describe("shouldHideGlobalHeader", () => {
+  it("hides header only on /operacao when core mode is on", () => {
+    expect(shouldHideGlobalHeader("/operacao", true)).toBe(true);
+    expect(shouldHideGlobalHeader("/operacao/", true)).toBe(true);
+    expect(shouldHideGlobalHeader("/settings", true)).toBe(false);
+    expect(shouldHideGlobalHeader("/inbox", true)).toBe(false);
+    expect(shouldHideGlobalHeader("/dashboard", true)).toBe(false);
+  });
+
+  it("keeps header when core mode is off", () => {
+    expect(shouldHideGlobalHeader("/operacao", false)).toBe(false);
+  });
+});
+
+describe("operation view helpers", () => {
+  it("defaults missing or invalid view to kanban", () => {
+    expect(parseOperationView(null)).toBe("kanban");
+    expect(parseOperationView(undefined)).toBe("kanban");
+    expect(parseOperationView("kanban")).toBe("kanban");
+    expect(parseOperationView("conversations")).toBe("conversations");
+    expect(parseOperationView("weird")).toBe("kanban");
+  });
+
+  it("removes no-conversation filter when entering conversations view", () => {
+    expect(normalizeFilterForView("no-conversation", "conversations")).toBe("all");
+    expect(normalizeFilterForView("unread", "conversations")).toBe("unread");
+    expect(normalizeFilterForView("no-conversation", "kanban")).toBe(
+      "no-conversation",
+    );
+  });
+
+  it("finds deal by conversation id", () => {
+    const pipeline: Pipeline = {
+      id: "pipe",
+      name: "P",
+      stages: [
+        {
+          id: "s1",
+          name: "Novo",
+          pipelineId: "pipe",
+          position: 0,
+          deals: [
+            deal({
+              id: "d1",
+              name: "Lead",
+              pipelineId: "pipe",
+              stageId: "s1",
+              conversationId: "conv-1",
+            }),
+          ],
+        },
+      ],
+    };
+    expect(findDealByConversationId(pipeline, "conv-1")?.id).toBe("d1");
+    expect(findDealByConversationId(pipeline, "missing")).toBeNull();
+  });
+
+  it("validates stage names", () => {
+    expect(sanitizeStageName("  Nova   etapa  ")).toBe("Nova etapa");
+    expect(isValidStageName("")).toBe(false);
+    expect(isValidStageName("   ")).toBe(false);
+    expect(isValidStageName("Proposta")).toBe(true);
+    expect(isValidStageName("x".repeat(81))).toBe(false);
   });
 });

@@ -142,7 +142,7 @@ describe("Inbox deterministic helpers", () => {
         true,
         (_value, pattern) => (pattern === "HH:mm" ? "14:32" : "04/08/2026"),
       ),
-    ).toBe("Enviado por: Raffaela - 14:32 - 04/08/2026");
+    ).toBe("Enviado por: Raffaela · 14:32 · 04/08/2026");
   });
 
   it("sends on Enter unless Shift or IME composition is active", () => {

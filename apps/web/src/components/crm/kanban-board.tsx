@@ -316,12 +316,14 @@ function StageColumn({
   onMove,
   variant,
   selectedDealId,
+  fillColumns,
 }: {
   stage: PipelineStage;
   onOpen: (deal: Deal) => void;
   onMove: (deal: Deal) => void;
   variant?: "default" | "operation";
   selectedDealId?: string | null;
+  fillColumns?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -336,7 +338,7 @@ function StageColumn({
       data-testid="kanban-stage"
       data-stage-id={stage.id}
       className={cn(
-        "flex w-72 shrink-0 flex-col rounded-xl border border-border/70 bg-muted/40",
+        "flex h-full min-h-0 min-w-0 flex-col rounded-xl border border-border/70 bg-muted/40",
         isOver && "ring-2 ring-primary/40",
       )}
     >
@@ -355,7 +357,14 @@ function StageColumn({
         </div>
       </div>
       <SortableContext items={deals.map((d) => d.id)} strategy={verticalListSortingStrategy}>
-        <div className="scrollbar-thin flex max-h-[calc(100vh-14rem)] flex-col gap-2 overflow-y-auto p-2">
+        <div
+          className={cn(
+            "scrollbar-thin flex flex-col gap-2 overflow-y-auto p-2",
+            fillColumns || variant === "operation"
+              ? "min-h-0 flex-1"
+              : "max-h-[calc(100vh-14rem)]",
+          )}
+        >
           {deals.map((deal) => (
             <SortableDealCard
               key={deal.id}
@@ -385,6 +394,7 @@ export function KanbanBoard({
   variant = "default",
   selectedDealId,
   className,
+  fillColumns = false,
 }: {
   pipeline: Pipeline;
   onOpenDeal?: (deal: Deal) => void;
@@ -393,6 +403,8 @@ export function KanbanBoard({
   variant?: "default" | "operation";
   selectedDealId?: string | null;
   className?: string;
+  /** When true, columns grow to fill available width (min 280px). */
+  fillColumns?: boolean;
 }) {
   const queryClient = useQueryClient();
   const openDealDrawer = useUiStore((s) => s.openDealDrawer);
@@ -559,7 +571,18 @@ export function KanbanBoard({
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
     >
-      <div className={cn("flex gap-3 overflow-x-auto pb-2", className)}>
+      <div
+        data-testid="kanban-columns"
+        data-fill-columns={fillColumns ? "true" : "false"}
+        className={cn(
+          "grid min-h-0 grid-flow-col gap-3 overflow-x-auto pb-2",
+          fillColumns ? "h-full w-full" : null,
+          className,
+        )}
+        style={{
+          gridAutoColumns: fillColumns ? "minmax(280px, 1fr)" : "18rem",
+        }}
+      >
         {stages.map((stage) => (
           <StageColumn
             key={stage.id}
@@ -568,6 +591,7 @@ export function KanbanBoard({
             onMove={setDealToMove}
             variant={variant}
             selectedDealId={selectedDealId}
+            fillColumns={fillColumns}
           />
         ))}
       </div>

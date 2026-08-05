@@ -47,7 +47,8 @@ function errorMessage(error: unknown, fallback: string) {
 function resizeTextarea(el: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = "auto";
-  el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+  const next = Math.min(Math.max(el.scrollHeight, 44), 130);
+  el.style.height = `${next}px`;
 }
 
 export function ConversationComposer({
@@ -375,16 +376,18 @@ export function ConversationComposer({
 
       <form
         className="flex items-end gap-1.5 p-2 sm:gap-2 sm:p-3"
+        data-testid="conversation-composer"
         onSubmit={(event) => {
           event.preventDefault();
           submitMessage();
         }}
       >
-        <div className="relative">
+        <div className="relative shrink-0">
           <Button
             type="button"
             size="icon"
             variant="ghost"
+            className="h-10 w-10 shrink-0"
             aria-label="Inserir emoji"
             title="Emoji"
             disabled={sendMutation.isPending || recording}
@@ -402,11 +405,12 @@ export function ConversationComposer({
           />
         </div>
 
-        <div className="relative">
+        <div className="relative shrink-0">
           <Button
             type="button"
             size="icon"
             variant="ghost"
+            className="h-10 w-10 shrink-0"
             aria-label="Anexar arquivo"
             title="Anexar"
             disabled={sendMutation.isPending || recording}
@@ -473,11 +477,14 @@ export function ConversationComposer({
             aria-label="Mensagem"
             value={body}
             rows={1}
-            placeholder="Responder…"
+            placeholder="Digite uma mensagem…"
             disabled={sendMutation.isPending || recording}
             className={cn(
-              "max-h-[150px] min-h-[40px] resize-none overflow-y-auto py-2.5 leading-5",
+              "max-h-[130px] min-h-[44px] resize-none overflow-y-auto rounded-2xl border-border/80 bg-background py-2.5 leading-5 shadow-none",
+              "[field-sizing:fixed]",
             )}
+            style={{ resize: "none" }}
+            data-testid="composer-textarea"
             onChange={(event) => {
               setBody(event.target.value);
               resizeTextarea(event.target);
@@ -489,8 +496,16 @@ export function ConversationComposer({
               }
             }}
           />
-          <p className="mt-1 px-0.5 text-[10px] text-muted-foreground">
-            Enter para enviar · Shift + Enter para quebrar linha
+          <p
+            className="mt-1 truncate text-center text-[10px] leading-tight text-muted-foreground max-[380px]:text-[9px]"
+            data-testid="composer-keyboard-hint"
+          >
+            <span className="max-[360px]:hidden">
+              Enter para enviar · Shift + Enter para quebrar linha
+            </span>
+            <span className="hidden max-[360px]:inline">
+              Enter envia · Shift+Enter quebra
+            </span>
           </p>
         </div>
 
@@ -499,6 +514,7 @@ export function ConversationComposer({
             type="button"
             size="icon"
             variant="destructive"
+            className="h-10 w-10 shrink-0"
             aria-label="Parar gravação"
             title="Parar"
             onClick={stopRecording}
@@ -510,6 +526,7 @@ export function ConversationComposer({
             type="button"
             size="icon"
             variant="ghost"
+            className="h-10 w-10 shrink-0"
             aria-label="Gravar áudio"
             title="Áudio"
             disabled={sendMutation.isPending}
@@ -522,6 +539,7 @@ export function ConversationComposer({
         <Button
           type="submit"
           size="icon"
+          className="h-10 w-10 shrink-0"
           aria-label="Enviar mensagem"
           title="Enviar"
           disabled={!canSend}

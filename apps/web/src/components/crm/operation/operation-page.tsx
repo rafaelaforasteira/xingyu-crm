@@ -5,26 +5,43 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Filter, Loader2, Plus, RefreshCw, Search } from "lucide-react";
-import { dealsApi, pipelinesApi } from "@/lib/api";
+import {
+  Columns3,
+  Filter,
+  Loader2,
+  Menu,
+  Plus,
+  RefreshCw,
+  Search,
+} from "lucide-react";
+import { dealsApi, pipelineStagesApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import type { Deal } from "@/lib/types";
+import type { Deal, Pipeline } from "@/lib/types";
 import {
   chooseDefaultPipeline,
   countBoardDeals,
   countBoardUnread,
   filterPipelineBoard,
+  findDealByConversationId,
   findDealInBoard,
+  normalizeFilterForView,
+  parseOperationView,
   type OperationFilter,
+  type OperationView,
 } from "@/lib/operation-utils";
 import { moveBoardDeal } from "@/lib/board-cache";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/components/auth/auth-provider";
+import { useUiStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
+import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { OperationEmptyState } from "./operation-empty-state";
 import { DealConversationPanel } from "./deal-conversation-panel";
+import { OperationConversationsView } from "./operation-conversations-view";
+import { AddStageDialog } from "./add-stage-dialog";
 
 const KanbanBoard = dynamic(
   () =>
@@ -54,16 +71,25 @@ export function OperationPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen);
+  const isAdmin = user?.role === "ADMIN";
 
   const pipelineParam = searchParams.get("pipeline");
   const dealParam = searchParams.get("deal");
+  const conversationParam = searchParams.get("conversation");
   const search = searchParams.get("q") ?? "";
-  const filter = (searchParams.get("filter") as OperationFilter | null) ?? "all";
+  const rawFilter =
+    (searchParams.get("filter") as OperationFilter | null) ?? "all";
+  const view = parseOperationView(searchParams.get("view"));
+  const filter = normalizeFilterForView(rawFilter, view);
 
-  const isDesktop = useMediaQuery("(min-width: 1280px)");
+  const isDesktop = useMediaQuery("(min-width: 1536px)");
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [addStageOpen, setAddStageOpen] = React.useState(false);
+  const [addingStage, setAddingStage] = React.useState(false);
   const invalidDealHandled = React.useRef<string | null>(null);
 
   const pipelinesQuery = useQuery({
@@ -94,7 +120,6 @@ export function OperationPage() {
     return findDealInBoard(board, dealParam);
   }, [board, dealParam]);
 
-  // Keep selected deal visible even if current filter would hide it.
   const boardForKanban = React.useMemo(() => {
     if (!filteredBoard || !selectedDeal) return filteredBoard;
     const stillVisible = findDealInBoard(filteredBoard, selectedDeal.id);
@@ -115,7 +140,7 @@ export function OperationPage() {
     };
   }, [filteredBoard, selectedDeal]);
 
-  const panelOpen = Boolean(dealParam && selectedDeal);
+  const panelOpen = view === "kanban" && Boolean(dealParam && selectedDeal);
 
   const setParams = React.useCallback(
     (mutate: (params: URLSearchParams) => void) => {
@@ -130,12 +155,29 @@ export function OperationPage() {
     if (!pipelineParam && selectedPipeline?.id) {
       setParams((params) => {
         params.set("pipeline", selectedPipeline.id);
+        if (!params.get("view")) params.set("view", "kanban");
       });
     }
   }, [pipelineParam, selectedPipeline?.id, setParams]);
 
+  // Normalize invalid view / incompatible filter in URL.
   React.useEffect(() => {
-    if (!dealParam || !board || boardQuery.isLoading) return;
+    const rawView = searchParams.get("view");
+    const needsViewFix =
+      rawView != null &&
+      rawView !== "kanban" &&
+      rawView !== "conversations";
+    const needsFilterFix =
+      view === "conversations" && rawFilter === "no-conversation";
+    if (!needsViewFix && !needsFilterFix) return;
+    setParams((params) => {
+      if (needsViewFix) params.set("view", "kanban");
+      if (needsFilterFix) params.set("filter", "all");
+    });
+  }, [rawFilter, searchParams, setParams, view]);
+
+  React.useEffect(() => {
+    if (view !== "kanban" || !dealParam || !board || boardQuery.isLoading) return;
     if (findDealInBoard(board, dealParam)) {
       invalidDealHandled.current = null;
       return;
@@ -146,12 +188,52 @@ export function OperationPage() {
     setParams((params) => {
       params.delete("deal");
     });
-  }, [dealParam, board, boardQuery.isLoading, setParams]);
+  }, [dealParam, board, boardQuery.isLoading, setParams, view]);
+
+  const switchView = React.useCallback(
+    (next: OperationView) => {
+      if (!selectedPipeline) return;
+      setParams((params) => {
+        params.set("pipeline", selectedPipeline.id);
+        params.set("view", next);
+        const currentFilter = normalizeFilterForView(
+          (params.get("filter") as OperationFilter | null) ?? "all",
+          next,
+        );
+        if (currentFilter === "all") params.delete("filter");
+        else params.set("filter", currentFilter);
+
+        if (next === "conversations") {
+          const openDealId = params.get("deal");
+          const openDeal = openDealId
+            ? findDealInBoard(board, openDealId)
+            : null;
+          params.delete("deal");
+          if (openDeal?.conversationId) {
+            params.set("conversation", openDeal.conversationId);
+          } else {
+            params.delete("conversation");
+          }
+        } else {
+          const openConversationId = params.get("conversation");
+          const linked = openConversationId
+            ? findDealByConversationId(board, openConversationId)
+            : null;
+          params.delete("conversation");
+          if (linked) params.set("deal", linked.id);
+          else params.delete("deal");
+        }
+      });
+    },
+    [board, selectedPipeline, setParams],
+  );
 
   const openDeal = (deal: Deal) => {
     setParams((params) => {
       if (selectedPipeline?.id) params.set("pipeline", selectedPipeline.id);
+      params.set("view", "kanban");
       params.set("deal", deal.id);
+      params.delete("conversation");
     });
   };
 
@@ -170,15 +252,39 @@ export function OperationPage() {
     });
   }, [dealParam, setParams]);
 
+  const selectConversation = React.useCallback(
+    (conversationId: string) => {
+      setParams((params) => {
+        if (selectedPipeline?.id) params.set("pipeline", selectedPipeline.id);
+        params.set("view", "conversations");
+        params.set("conversation", conversationId);
+        params.delete("deal");
+      });
+    },
+    [selectedPipeline?.id, setParams],
+  );
+
+  const closeConversation = React.useCallback(() => {
+    setParams((params) => {
+      params.delete("conversation");
+    });
+  }, [setParams]);
+
   const refresh = async () => {
-    const tasks: Promise<unknown>[] = [pipelinesQuery.refetch(), boardQuery.refetch()];
-    if (selectedDeal?.conversationId) {
+    const tasks: Promise<unknown>[] = [
+      pipelinesQuery.refetch(),
+      boardQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists }),
+    ];
+    const activeConversation =
+      conversationParam || selectedDeal?.conversationId || null;
+    if (activeConversation) {
       tasks.push(
         queryClient.invalidateQueries({
-          queryKey: queryKeys.conversations.detail(selectedDeal.conversationId),
+          queryKey: queryKeys.conversations.detail(activeConversation),
         }),
         queryClient.invalidateQueries({
-          queryKey: queryKeys.conversations.messages(selectedDeal.conversationId),
+          queryKey: queryKeys.conversations.messages(activeConversation),
         }),
       );
     }
@@ -193,14 +299,49 @@ export function OperationPage() {
     try {
       await dealsApi.move(deal.id, stageId);
       toast.success("Etapa atualizada");
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.pipelines.board(selectedPipeline.id),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.pipelines.board(selectedPipeline.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations.lists,
+        }),
+      ]);
     } catch (error) {
       moveBoardDeal(queryClient, selectedPipeline.id, deal.id, previousStageId);
       toast.error(
         error instanceof Error ? error.message : "Não foi possível mover o negócio",
       );
+    }
+  };
+
+  const createStage = async (data: { name: string; color: string }) => {
+    if (!selectedPipeline) return;
+    setAddingStage(true);
+    try {
+      await pipelineStagesApi.create(selectedPipeline.id, {
+        name: data.name,
+        color: data.color,
+        type: "OPEN",
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.pipelines.board(selectedPipeline.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.pipelines.detail(selectedPipeline.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.pipelines.stages(selectedPipeline.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.pipelines.list({ archived: false, pageSize: 100 }),
+        }),
+      ]);
+      toast.success("Coluna adicionada");
+      setAddStageOpen(false);
+    } finally {
+      setAddingStage(false);
     }
   };
 
@@ -227,21 +368,54 @@ export function OperationPage() {
   const showDrawer = panelOpen && !isDesktop && !isMobile;
   const showFullScreen = panelOpen && isMobile;
 
+  const conversationFilters: Array<[OperationFilter, string]> = [
+    ["all", "Todas"],
+    ["unread", "Não lidas"],
+    ["awaiting", "Aguardando resposta"],
+  ];
+  const kanbanFilters: Array<[OperationFilter, string]> = [
+    ["all", "Todos"],
+    ["unread", "Não lidos"],
+    ["awaiting", "Aguardando"],
+    ["no-conversation", "Sem conversa"],
+  ];
+  const filterButtons =
+    view === "conversations" ? conversationFilters : kanbanFilters;
+
   return (
     <div
       data-testid="operation-page"
-      className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden"
+      data-view={view}
+      className="flex h-dvh min-h-0 flex-col overflow-hidden"
     >
       <header
         data-testid="operation-header"
-        className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-3"
+        className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-3 py-2.5 sm:px-4"
       >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 lg:hidden"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menu"
+          data-testid="operation-open-sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h1 className="text-lg font-semibold tracking-tight">Operação</h1>
             <span className="truncate text-sm text-muted-foreground">
               · {selectedPipeline.name}
             </span>
+            <PipelineViewSwitcher
+              pipelineId={selectedPipeline.id}
+              active={view}
+              kanbanLabel="Pipeline"
+              onNavigate={switchView}
+            />
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {totalDeals} negócios
@@ -268,14 +442,7 @@ export function OperationPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtros">
-          {(
-            [
-              ["all", "Todos"],
-              ["unread", "Não lidos"],
-              ["awaiting", "Aguardando"],
-              ["no-conversation", "Sem conversa"],
-            ] as const
-          ).map(([value, label]) => (
+          {filterButtons.map(([value, label]) => (
             <Button
               key={value}
               type="button"
@@ -311,93 +478,141 @@ export function OperationPage() {
           )}
         </Button>
 
-        <Button
-          type="button"
-          size="sm"
-          data-testid="operation-new-deal"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus className="mr-1 h-4 w-4" />
-          Novo lead
-        </Button>
+        {view === "kanban" && isAdmin ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="operation-add-stage"
+            onClick={() => setAddStageOpen(true)}
+          >
+            <Columns3 className="mr-1 h-4 w-4" />
+            Adicionar coluna
+          </Button>
+        ) : null}
+
+        {view === "kanban" ? (
+          <Button
+            type="button"
+            size="sm"
+            data-testid="operation-new-deal"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Novo lead
+          </Button>
+        ) : null}
       </header>
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <div
-          className={cn(
-            "min-h-0 min-w-0 flex-1 overflow-hidden p-3",
-            showFullScreen && "hidden",
-          )}
-          data-testid="operation-kanban"
-        >
-          {boardQuery.isLoading || !boardForKanban ? (
-            <Skeleton className="h-full w-full" />
-          ) : (
-            <KanbanBoard
-              pipeline={boardForKanban}
-              onOpenDeal={openDeal}
-              variant="operation"
-              selectedDealId={dealParam}
-              className="h-full"
-            />
-          )}
-        </div>
-
-        {showSplit && selectedDeal ? (
-          <aside
-            className="flex w-[min(680px,max(560px,38%))] shrink-0 flex-col border-l border-border bg-background"
-            data-testid="operation-conversation-panel"
-          >
-            <DealConversationPanel
-              deal={selectedDeal}
-              pipeline={board ?? selectedPipeline}
-              onClose={closePanel}
-              onStageChange={(stageId) => void changeStage(selectedDeal, stageId)}
-            />
-          </aside>
-        ) : null}
-
-        {showDrawer && selectedDeal ? (
-          <div
-            className="absolute inset-y-0 right-0 z-30 flex w-[min(65vw,680px)] flex-col border-l border-border bg-background shadow-xl"
-            data-testid="operation-conversation-panel"
-          >
-            <button
-              type="button"
-              className="absolute inset-y-0 right-full w-screen cursor-default bg-black/20"
-              aria-label="Fechar conversa"
-              onClick={closePanel}
-            />
-            <DealConversationPanel
-              deal={selectedDeal}
-              pipeline={board ?? selectedPipeline}
-              onClose={closePanel}
-              onStageChange={(stageId) => void changeStage(selectedDeal, stageId)}
+        {view === "conversations" ? (
+          <div className="min-h-0 min-w-0 flex-1">
+            <OperationConversationsView
+              pipeline={selectedPipeline}
+              board={board}
+              conversationId={conversationParam}
+              search={search}
+              filter={filter}
+              onSelectConversation={selectConversation}
+              onCloseConversation={closeConversation}
+              onStageChange={(deal, stageId) => void changeStage(deal, stageId)}
             />
           </div>
-        ) : null}
+        ) : (
+          <>
+            <div
+              className={cn(
+                "min-h-0 min-w-0 flex-1 overflow-hidden p-3",
+                showFullScreen && "hidden",
+              )}
+              data-testid="operation-kanban"
+            >
+              {boardQuery.isLoading || !boardForKanban ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <KanbanBoard
+                  pipeline={boardForKanban}
+                  onOpenDeal={openDeal}
+                  variant="operation"
+                  selectedDealId={dealParam}
+                  fillColumns={!panelOpen}
+                  className="h-full"
+                />
+              )}
+            </div>
 
-        {showFullScreen && selectedDeal ? (
-          <div
-            className="absolute inset-0 z-40 flex flex-col bg-background"
-            data-testid="operation-conversation-panel"
-          >
-            <DealConversationPanel
-              deal={selectedDeal}
-              pipeline={board ?? selectedPipeline}
-              onClose={closePanel}
-              onStageChange={(stageId) => void changeStage(selectedDeal, stageId)}
-              mobile
-            />
-          </div>
-        ) : null}
+            {showSplit && selectedDeal ? (
+              <aside
+                className="flex w-[clamp(620px,40vw,700px)] shrink-0 flex-col border-l border-border bg-background"
+                data-testid="operation-conversation-panel"
+              >
+                <DealConversationPanel
+                  deal={selectedDeal}
+                  pipeline={board ?? selectedPipeline}
+                  onClose={closePanel}
+                  onStageChange={(stageId) =>
+                    void changeStage(selectedDeal, stageId)
+                  }
+                />
+              </aside>
+            ) : null}
+
+            {showDrawer && selectedDeal ? (
+              <div
+                className="absolute inset-y-0 right-0 z-30 flex w-[min(60vw,700px)] flex-col border-l border-border bg-background shadow-xl"
+                data-testid="operation-conversation-panel"
+              >
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-full w-screen cursor-default bg-black/20"
+                  aria-label="Fechar sobreposição"
+                  onClick={closePanel}
+                />
+                <DealConversationPanel
+                  deal={selectedDeal}
+                  pipeline={board ?? selectedPipeline}
+                  onClose={closePanel}
+                  onStageChange={(stageId) =>
+                    void changeStage(selectedDeal, stageId)
+                  }
+                />
+              </div>
+            ) : null}
+
+            {showFullScreen && selectedDeal ? (
+              <div
+                className="absolute inset-0 z-40 flex flex-col bg-background"
+                data-testid="operation-conversation-panel"
+              >
+                <DealConversationPanel
+                  deal={selectedDeal}
+                  pipeline={board ?? selectedPipeline}
+                  onClose={closePanel}
+                  onStageChange={(stageId) =>
+                    void changeStage(selectedDeal, stageId)
+                  }
+                  mobile
+                />
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
 
       <CreateDealDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        pipeline={board ?? selectedPipeline}
+        pipeline={(board ?? selectedPipeline) as Pipeline}
       />
+
+      {isAdmin ? (
+        <AddStageDialog
+          open={addStageOpen}
+          pending={addingStage}
+          onOpenChange={setAddStageOpen}
+          onSubmit={createStage}
+        />
+      ) : null}
     </div>
   );
 }

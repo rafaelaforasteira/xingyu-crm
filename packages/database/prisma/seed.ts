@@ -27,6 +27,10 @@ import {
   UserStatus,
   AuthRole,
 } from "@prisma/client";
+import {
+  OPERATION_DEMO_IDS,
+  assertDemoSeedAllowed,
+} from "./seed-guards";
 
 loadEnv({ path: path.resolve(__dirname, "../../../.env") });
 
@@ -156,13 +160,195 @@ function hoursAgo(n: number): Date {
   return new Date(NOW.getTime() - n * 60 * 60 * 1000);
 }
 
-async function main() {
-  const nodeEnv = process.env.NODE_ENV ?? "development";
-  if (nodeEnv === "production") {
-    throw new Error(
-      "Seed de autenticação/homologação não deve rodar com NODE_ENV=production.",
+/**
+ * Idempotent demo lead for /operacao visual QA.
+ * Safe to re-run; never creates duplicates; skips when dependencies are missing.
+ */
+async function ensureOperationDemoConversation(): Promise<void> {
+  const {
+    contactId: CONTACT_ID,
+    conversationId: CONVERSATION_ID,
+    dealId: DEAL_ID,
+    channelId: CHANNEL_ID,
+    pipelineId: PIPELINE_ID,
+    stageId: STAGE_ID,
+    ownerId: OWNER_ID,
+  } = OPERATION_DEMO_IDS;
+
+  const [contact, channel, stage, owner] = await Promise.all([
+    prisma.contact.findFirst({
+      where: { id: CONTACT_ID, organizationId: ORG_ID, deletedAt: null },
+      select: { id: true },
+    }),
+    prisma.channel.findFirst({
+      where: { id: CHANNEL_ID, organizationId: ORG_ID, deletedAt: null },
+      select: { id: true },
+    }),
+    prisma.pipelineStage.findFirst({
+      where: { id: STAGE_ID, pipelineId: PIPELINE_ID, deletedAt: null },
+      select: { id: true },
+    }),
+    prisma.user.findFirst({
+      where: { id: OWNER_ID, organizationId: ORG_ID, deletedAt: null },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!contact || !channel || !stage || !owner) {
+    console.log(
+      "Operation demo conversation skipped (missing contact/channel/stage/owner).",
     );
+    return;
   }
+
+  const existingConversation = await prisma.conversation.findUnique({
+    where: { id: CONVERSATION_ID },
+    select: { id: true },
+  });
+
+  if (!existingConversation) {
+    await prisma.conversation.create({
+      data: {
+        id: CONVERSATION_ID,
+        organizationId: ORG_ID,
+        contactId: CONTACT_ID,
+        channelId: CHANNEL_ID,
+        assigneeId: OWNER_ID,
+        subject: "Demo Operação · Cláudia Nunes",
+        status: ConversationStatus.OPEN,
+        unreadCount: 2,
+        lastMessageAt: hoursAgo(0.2),
+        messages: {
+          create: [
+            {
+              id: `${CONVERSATION_ID}-msg-1`,
+              body: "Olá! Vi o catálogo de bijuterias no WhatsApp.",
+              direction: MessageDirection.INBOUND,
+              status: MessageStatus.READ,
+              sentAt: hoursAgo(5),
+              channelId: CHANNEL_ID,
+            },
+            {
+              id: `${CONVERSATION_ID}-msg-2`,
+              body: "Oi Cláudia! Que bom te ver por aqui. Posso te ajudar com o pedido?",
+              direction: MessageDirection.OUTBOUND,
+              status: MessageStatus.READ,
+              senderId: OWNER_ID,
+              sentAt: hoursAgo(4.8),
+              channelId: CHANNEL_ID,
+            },
+            {
+              id: `${CONVERSATION_ID}-msg-3`,
+              body: "Queria saber o prazo de entrega para Cuiabá.",
+              direction: MessageDirection.INBOUND,
+              status: MessageStatus.READ,
+              sentAt: hoursAgo(4.5),
+              channelId: CHANNEL_ID,
+            },
+            {
+              id: `${CONVERSATION_ID}-msg-4`,
+              body: "Para MT o prazo médio é de 5 a 8 dias úteis após a confirmação do PIX.",
+              direction: MessageDirection.OUTBOUND,
+              status: MessageStatus.READ,
+              senderId: OWNER_ID,
+              sentAt: hoursAgo(4.2),
+              channelId: CHANNEL_ID,
+            },
+            {
+              id: `${CONVERSATION_ID}-msg-5`,
+              body: "Vocês têm o colar da linha Essência em estoque?",
+              direction: MessageDirection.INBOUND,
+              status: MessageStatus.READ,
+              sentAt: hoursAgo(2),
+              channelId: CHANNEL_ID,
+            },
+            {
+              id: `${CONVERSATION_ID}-msg-6`,
+              body: "Sim! Temos dourado e prata. Posso reservar um kit com 6 peças.",
+              direction: MessageDirection.OUTBOUND,
+              status: MessageStatus.DELIVERED,
+              senderId: OWNER_ID,
+              sentAt: hoursAgo(1.8),
+              channelId: CHANNEL_ID,
+            },
+            {
+              id: `${CONVERSATION_ID}-msg-7`,
+              body: "Perfeito. Pode montar o kit e me passar o valor?",
+              direction: MessageDirection.INBOUND,
+              status: MessageStatus.DELIVERED,
+              sentAt: hoursAgo(0.5),
+              channelId: CHANNEL_ID,
+            },
+            {
+              id: `${CONVERSATION_ID}-msg-8`,
+              body: "Gostaria de saber o prazo de entrega com urgência também.",
+              direction: MessageDirection.INBOUND,
+              status: MessageStatus.DELIVERED,
+              sentAt: hoursAgo(0.2),
+              channelId: CHANNEL_ID,
+            },
+          ],
+        },
+      },
+    });
+    console.log("Created operation demo conversation: conv-operacao-demo");
+  }
+
+  const existingDeal = await prisma.deal.findUnique({
+    where: { id: DEAL_ID },
+    select: { id: true, conversationId: true },
+  });
+
+  if (!existingDeal) {
+    await prisma.deal.create({
+      data: {
+        id: DEAL_ID,
+        organizationId: ORG_ID,
+        pipelineId: PIPELINE_ID,
+        stageId: STAGE_ID,
+        contactId: CONTACT_ID,
+        ownerId: OWNER_ID,
+        teamId: "team-comercial",
+        conversationId: CONVERSATION_ID,
+        name: "Conversa demo · Cláudia Nunes",
+        value: 1860,
+        status: DealStatus.OPEN,
+        priority: DealPriority.HIGH,
+        source: "WhatsApp",
+        campaign: "Operação demo",
+        unreadMessages: 2,
+        lastInteractionAt: hoursAgo(0.2),
+        enteredStageAt: hoursAgo(6),
+        createdById: OWNER_ID,
+        updatedById: OWNER_ID,
+      },
+    });
+    console.log("Created operation demo deal: deal-operacao-demo");
+    return;
+  }
+
+  if (existingDeal.conversationId !== CONVERSATION_ID) {
+    await prisma.deal.update({
+      where: { id: DEAL_ID },
+      data: {
+        conversationId: CONVERSATION_ID,
+        status: DealStatus.OPEN,
+        stageId: STAGE_ID,
+        pipelineId: PIPELINE_ID,
+        deletedAt: null,
+        closedAt: null,
+        unreadMessages: 2,
+        lastInteractionAt: hoursAgo(0.2),
+      },
+    });
+    console.log("Linked operation demo deal to conversation");
+  } else {
+    console.log("Operation demo deal already present (idempotent).");
+  }
+}
+
+async function main() {
+  assertDemoSeedAllowed();
 
   const existingOrganization = await prisma.organization.findUnique({
     where: { id: ORG_ID },
@@ -170,6 +356,7 @@ async function main() {
   });
   if (existingOrganization) {
     await ensureAdminAuthUser();
+    await ensureOperationDemoConversation();
     console.log("Demo seed already exists; preserving existing and manually created data.");
     console.log("Credenciais de admin sincronizadas a partir de ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD.");
     return;
@@ -1608,6 +1795,8 @@ async function main() {
     activities: await prisma.activity.count(),
     savedViews: await prisma.savedView.count(),
   };
+
+  await ensureOperationDemoConversation();
 
   console.log("\nXingyu CRM seed complete\n");
   console.log("Record counts:");

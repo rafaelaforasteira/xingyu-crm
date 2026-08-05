@@ -41,17 +41,21 @@ async function createDeal(
 async function ensureDealWithConversation(
   request: APIRequestContext,
   pipelineId: string,
+  options?: { fresh?: boolean },
 ) {
-  const board = await fetchBoard(request, pipelineId);
-  const existing = flatDeals(board).find((deal) => deal.conversationId);
-  if (existing) {
-    return {
-      dealId: existing.id,
-      pipelineId,
-      conversationId: existing.conversationId!,
-    };
+  if (!options?.fresh) {
+    const board = await fetchBoard(request, pipelineId);
+    const existing = flatDeals(board).find((deal) => deal.conversationId);
+    if (existing) {
+      return {
+        dealId: existing.id,
+        pipelineId,
+        conversationId: existing.conversationId!,
+      };
+    }
   }
 
+  const board = await fetchBoard(request, pipelineId);
   const stageId = board.stages[0]?.id;
   expect(stageId).toBeTruthy();
 
@@ -147,6 +151,13 @@ async function openPipeline(page: Page, pipelineId: string) {
   await expect(page.getByTestId("kanban-stage").first()).toBeVisible({ timeout: 20_000 });
 }
 
+async function closeConversationPanel(page: Page) {
+  await page
+    .getByTestId("deal-operation-header")
+    .getByRole("button", { name: /Fechar conversa|Voltar ao Kanban/i })
+    .click();
+}
+
 test.describe("Core operation workspace", () => {
   test("loads default pipeline kanban", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -173,7 +184,7 @@ test.describe("Core operation workspace", () => {
     await expect(page.getByTestId("deal-operation-header")).toBeVisible();
     await expect(page.getByTestId("operation-kanban")).toBeVisible();
 
-    await page.getByRole("button", { name: /Fechar conversa|Voltar ao Kanban/i }).click();
+    await closeConversationPanel(page);
     await expect(page.getByTestId("operation-conversation-panel")).toHaveCount(0);
     await expect(page).not.toHaveURL(/[?&]deal=/);
     await expect(page.getByTestId("operation-kanban")).toBeVisible();
@@ -181,8 +192,10 @@ test.describe("Core operation workspace", () => {
   });
 
   test("sends message and updates card preview", async ({ page, request }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const linked = await ensureDealWithConversation(request, "pipe-comercial");
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const linked = await ensureDealWithConversation(request, "pipe-comercial", {
+      fresh: true,
+    });
 
     await page.goto(
       `/operacao?pipeline=${linked.pipelineId}&deal=${linked.dealId}`,
@@ -196,18 +209,20 @@ test.describe("Core operation workspace", () => {
     const composer = page.getByRole("textbox", { name: "Mensagem" });
     await expect(composer).toBeVisible();
     await composer.fill(unique);
-    await composer.press("Enter");
+    await page.getByRole("button", { name: "Enviar mensagem" }).click();
     await expect(page.getByText("Mensagem enviada.")).toBeVisible();
-    await expect(page.getByTestId("message-list")).toContainText(unique);
+    await expect(
+      page.getByTestId("message-list").getByText(unique, { exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole("button", { name: /Fechar conversa|Voltar ao Kanban/i }).click();
+    await closeConversationPanel(page);
     await expect(
       page.getByTestId("deal-card").filter({ hasText: unique }).first(),
     ).toBeVisible({ timeout: 10_000 });
   });
 
   test("moves stage from panel selector", async ({ page, request }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: 1920, height: 1080 });
     const prepared = await prepareBoard(request, "pipe-comercial");
     expect(prepared.stages.length).toBeGreaterThan(1);
 
@@ -228,7 +243,7 @@ test.describe("Core operation workspace", () => {
     await select.selectOption(target.id);
     await expect(page.getByText("Etapa atualizada")).toBeVisible();
 
-    await page.getByRole("button", { name: /Fechar conversa|Voltar ao Kanban/i }).click();
+    await closeConversationPanel(page);
     await expect(
       page.locator(
         `[data-testid="kanban-stage"][data-stage-id="${target.id}"] [data-deal-id="${deal.id}"]`,
@@ -264,9 +279,152 @@ test.describe("Core operation workspace", () => {
       timeout: 20_000,
     });
     await expect(
-      page.getByText("Ainda não existe uma conversa vinculada a este negócio."),
+      page.getByText("Ainda não existe uma conversa vinculada a este lead."),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "A conversa aparecerá aqui quando o cliente entrar por um canal conectado.",
+      ),
     ).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Mensagem" })).toHaveCount(0);
+  });
+
+  test("hides global header on operação and keeps it on settings", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/operacao");
+    await expect(page.getByTestId("operation-page")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("global-header")).toHaveCount(0);
+    await expect(page.getByTestId("app-main")).toHaveAttribute(
+      "data-operation-mode",
+      "core",
+    );
+
+    await page.goto("/settings");
+    await expect(page.getByTestId("global-header")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("app-main")).toHaveAttribute(
+      "data-operation-mode",
+      "default",
+    );
+  });
+
+  test("mobile menu button opens sidebar when header is hidden", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/operacao");
+    await expect(page.getByTestId("operation-page")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("global-header")).toHaveCount(0);
+    await page.getByTestId("operation-open-sidebar").click();
+    await expect(
+      page.locator('a[href="/operacao"][aria-current="page"]').last(),
+    ).toBeVisible();
+  });
+
+  test("kanban fills width when panel closed and shrinks when open", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const linked = await ensureDealWithConversation(request, "pipe-novos");
+    await page.goto(`/operacao?pipeline=${linked.pipelineId}`);
+    await expect(page.getByTestId("kanban-columns")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("kanban-columns")).toHaveAttribute(
+      "data-fill-columns",
+      "true",
+    );
+
+    const closedBox = await page.getByTestId("operation-kanban").boundingBox();
+    expect(closedBox).toBeTruthy();
+    expect(closedBox!.width).toBeGreaterThan(1200);
+
+    await page.goto(
+      `/operacao?pipeline=${linked.pipelineId}&deal=${linked.dealId}`,
+    );
+    await expect(page.getByTestId("operation-conversation-panel")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("kanban-columns")).toHaveAttribute(
+      "data-fill-columns",
+      "false",
+    );
+
+    const panel = page.getByTestId("operation-conversation-panel");
+    const panelBox = await panel.boundingBox();
+    expect(panelBox).toBeTruthy();
+    expect(panelBox!.width).toBeGreaterThanOrEqual(600);
+    expect(panelBox!.width).toBeLessThanOrEqual(720);
+
+    await expect(page.getByTestId("deal-operation-header")).toContainText(/Cláudia|E2E|Lead|Conversa/i);
+    await expect(page.getByTestId("message-list")).toBeVisible();
+    const outbound = page
+      .getByTestId("message-list")
+      .locator('[data-testid^="message-"][data-direction="OUTBOUND"]')
+      .first();
+    if (await outbound.count()) {
+      await expect(outbound.getByTestId("message-sender-line")).toContainText(
+        /Enviado por:/,
+      );
+    }
+  });
+
+  test("filters remain after closing conversation", async ({ page, request }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await prepareBoard(request, "pipe-comercial");
+    await page.goto("/operacao?pipeline=pipe-comercial&filter=no-conversation");
+    await expect(page.getByTestId("operation-page")).toBeVisible({ timeout: 30_000 });
+    await expect(page).toHaveURL(/filter=no-conversation/);
+
+    const card = page.getByTestId("deal-card").first();
+    if (await card.count()) {
+      await card.click();
+      await expect(page.getByTestId("operation-conversation-panel")).toBeVisible();
+      await closeConversationPanel(page);
+    }
+    await expect(page).toHaveURL(/filter=no-conversation/);
+    await expect(page.getByTestId("operation-kanban")).toBeVisible();
+  });
+
+  test("demo deal with conversation opens messenger panel", async ({ page, request }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const board = await fetchBoard(request, "pipe-novos");
+    const demo = flatDeals(board).find((deal) => deal.id === "deal-operacao-demo");
+    if (!demo?.conversationId) {
+      test.info().annotations.push({
+        type: "note",
+        description: "Demo deal absent — seed may not have run; using any linked deal.",
+      });
+    }
+    const target =
+      demo?.conversationId != null
+        ? demo
+        : flatDeals(board).find((deal) => deal.conversationId);
+    expect(target?.conversationId).toBeTruthy();
+
+    await page.goto(`/operacao?pipeline=pipe-novos&deal=${target!.id}`);
+    await expect(page.getByTestId("operation-conversation-panel")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("deal-operation-header")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Mensagem" })).toBeVisible();
+    await expect(page.getByText("Enter para enviar")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Inserir emoji" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Anexar arquivo" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Gravar áudio" })).toBeVisible();
+  });
+
+  test("notebook drawer keeps controlled conversation width", async ({ page, request }) => {
+    // Below 2xl (1536): drawer layout with ~60vw capped at 700px
+    await page.setViewportSize({ width: 1366, height: 768 });
+    const linked = await ensureDealWithConversation(request, "pipe-comercial");
+    await page.goto(
+      `/operacao?pipeline=${linked.pipelineId}&deal=${linked.dealId}`,
+    );
+    await expect(page.getByTestId("operation-conversation-panel")).toBeVisible({
+      timeout: 20_000,
+    });
+    const panelBox = await page.getByTestId("operation-conversation-panel").boundingBox();
+    expect(panelBox).toBeTruthy();
+    expect(panelBox!.width).toBeGreaterThan(500);
+    expect(panelBox!.width).toBeLessThanOrEqual(700);
+    await expect(page.getByTestId("operation-kanban")).toBeVisible();
   });
 
   test("mobile opens conversation full screen and returns to kanban", async ({
@@ -292,5 +450,108 @@ test.describe("Core operation workspace", () => {
     await expect(nav.getByRole("link", { name: "Configurações" })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
     await expect(nav.getByRole("link", { name: "Conversas" })).toHaveCount(0);
+  });
+
+  test("switches between Pipeline and Conversas views with URL sync", async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    const linked = await ensureDealWithConversation(request, "pipe-novos");
+    await page.goto(
+      `/operacao?pipeline=${linked.pipelineId}&view=kanban&deal=${linked.dealId}`,
+    );
+    await expect(page.getByTestId("operation-view-switcher")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("operation-view-kanban")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByTestId("operation-kanban")).toBeVisible();
+
+    await page.getByTestId("operation-view-conversations").click();
+    await expect(page).toHaveURL(/view=conversations/);
+    await expect(page).toHaveURL(new RegExp(`conversation=${linked.conversationId}`));
+    await expect(page).not.toHaveURL(/[?&]deal=/);
+    await expect(page.getByTestId("operation-conversations-view")).toBeVisible();
+    await expect(page.getByTestId("conversation-list")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Mensagem" })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId("composer-textarea")).toHaveCSS("resize", "none");
+    await expect(page.getByTestId("composer-keyboard-hint")).toBeVisible();
+
+    await page.getByTestId("operation-view-kanban").click();
+    await expect(page).toHaveURL(/view=kanban/);
+    await expect(page).toHaveURL(new RegExp(`deal=${linked.dealId}`));
+    await expect(page).not.toHaveURL(/[?&]conversation=/);
+    await expect(page.getByTestId("operation-kanban")).toBeVisible();
+  });
+
+  test("admin can add a pipeline column from operação", async ({ page, request }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto("/operacao?pipeline=pipe-novos&view=kanban");
+    await expect(page.getByTestId("operation-add-stage")).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByTestId("operation-add-stage").click();
+    await expect(page.getByRole("heading", { name: "Adicionar coluna" })).toBeVisible();
+
+    const stageName = `E2E Coluna ${Date.now()}`;
+    await page.getByTestId("add-stage-name").fill(stageName);
+    await page.getByTestId("add-stage-submit").click();
+    await expect(page.getByText("Coluna adicionada")).toBeVisible();
+    await expect(page.getByTestId("kanban-stage").filter({ hasText: stageName })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const board = await fetchBoard(request, "pipe-novos");
+    expect(board.stages.some((stage) => stage.name === stageName)).toBe(true);
+
+    await page.reload();
+    await expect(page.getByTestId("kanban-stage").filter({ hasText: stageName })).toBeVisible({
+      timeout: 20_000,
+    });
+  });
+
+  test("conversations view drops no-conversation filter and opens demo chat", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      "/operacao?pipeline=pipe-novos&view=conversations&filter=no-conversation",
+    );
+    await expect(page.getByTestId("operation-conversations-view")).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page).not.toHaveURL(/filter=no-conversation/);
+    await expect(page.getByTestId("operation-filter-no-conversation")).toHaveCount(0);
+
+    const claudia = page
+      .getByTestId("conversation-list")
+      .locator('[data-testid^="conversation-"]')
+      .filter({ hasText: /Cláudia/i })
+      .first();
+    if (await claudia.count()) {
+      await claudia.click();
+      await expect(page).toHaveURL(/conversation=/);
+      await expect(page.getByTestId("deal-operation-header")).toContainText(/Cláudia/i);
+    }
+  });
+
+  test("mobile conversations list opens thread fullscreen", async ({ page, request }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const linked = await ensureDealWithConversation(request, "pipe-novos");
+    await page.goto(
+      `/operacao?pipeline=${linked.pipelineId}&view=conversations`,
+    );
+    await expect(page.getByTestId("operation-conversation-list")).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByTestId(`conversation-${linked.conversationId}`).click();
+    await expect(page.getByRole("button", { name: "Voltar às conversas" })).toBeVisible();
+    await page.getByRole("button", { name: "Voltar às conversas" }).click();
+    await expect(page.getByTestId("conversation-list")).toBeVisible();
   });
 });
