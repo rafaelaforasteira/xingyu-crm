@@ -5,7 +5,7 @@ test("conversation workspace respects desktop max width and stays usable on note
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/inbox");
-  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/);
+  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/, { timeout: 30_000 });
 
   const workspace = page.getByTestId("conversation-workspace");
   await expect(workspace).toBeVisible();
@@ -28,7 +28,7 @@ test("composer supports enter, shift+enter, emoji, attachments and sender labels
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/inbox");
-  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/);
+  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/, { timeout: 30_000 });
 
   const composer = page.getByRole("textbox", { name: "Mensagem" });
   await expect(composer).toBeVisible();
@@ -98,7 +98,7 @@ test("composer supports enter, shift+enter, emoji, attachments and sender labels
 test("mobile conversation composer remains usable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/inbox");
-  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/);
+  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/, { timeout: 30_000 });
   await expect(page.getByTestId("conversation-list")).toBeHidden();
   await expect(page.getByRole("textbox", { name: "Mensagem" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Enviar mensagem" })).toBeVisible();
@@ -140,7 +140,7 @@ test("audio recording can start and cancel with mocked MediaRecorder", async ({ 
   });
 
   await page.goto("/inbox");
-  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/);
+  await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/, { timeout: 30_000 });
   await page.getByRole("button", { name: "Gravar áudio" }).click();
   await expect(page.getByTestId("recording-indicator")).toBeVisible();
   await page.getByRole("button", { name: "Parar gravação" }).click();

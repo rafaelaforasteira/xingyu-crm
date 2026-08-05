@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Dashboard decision center", () => {
-  test("loads dashboard blocks and grouped sidebar", async ({ page }) => {
+  test("loads dashboard blocks and simplified sidebar", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page.getByTestId("dashboard-page")).toBeVisible({ timeout: 30_000 });
     await expect(
@@ -9,11 +9,8 @@ test.describe("Dashboard decision center", () => {
     ).toBeVisible();
 
     const nav = page.locator("div.hidden.lg\\:block aside nav").first();
-    await expect(nav.getByText("Visão geral")).toBeVisible();
-    await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(nav.getByRole("link", { name: "Operação" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Configurações" })).toBeVisible();
 
     await expect(page.getByText("Precisa da sua atenção")).toBeVisible();
     await expect(page.getByText("Funil comercial")).toBeVisible();

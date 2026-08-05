@@ -354,6 +354,11 @@ export interface Deal {
   nextTask?: Task | null;
   unreadCount?: number;
   conversationId?: string | null;
+  conversationStatus?: string | null;
+  channel?: ConversationChannelSummary | null;
+  lastMessagePreview?: string | null;
+  lastMessageAt?: string | null;
+  awaitingReply?: boolean;
   status?: string;
   createdAt: string;
   updatedAt?: string;

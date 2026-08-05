@@ -4,6 +4,10 @@ import type { NextRequest } from "next/server";
 const ACCESS_COOKIE = "xingyu_access_token";
 const REFRESH_COOKIE = "xingyu_refresh_token";
 
+const CORE_OPERATION_MODE =
+  process.env.NEXT_PUBLIC_CORE_OPERATION_MODE !== "false";
+const DEFAULT_APP_HOME = CORE_OPERATION_MODE ? "/operacao" : "/dashboard";
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession =
@@ -12,14 +16,14 @@ export function middleware(request: NextRequest) {
 
   if (pathname === "/login") {
     if (hasSession) {
-      return NextResponse.redirect(new URL("/dashboard", request.url));
+      return NextResponse.redirect(new URL(DEFAULT_APP_HOME, request.url));
     }
     return NextResponse.next();
   }
 
   if (pathname === "/") {
     return NextResponse.redirect(
-      new URL(hasSession ? "/dashboard" : "/login", request.url),
+      new URL(hasSession ? DEFAULT_APP_HOME : "/login", request.url),
     );
   }
 
@@ -36,6 +40,7 @@ export const config = {
   matcher: [
     "/",
     "/login",
+    "/operacao/:path*",
     "/dashboard/:path*",
     "/contacts/:path*",
     "/companies/:path*",

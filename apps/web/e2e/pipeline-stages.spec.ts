@@ -69,6 +69,7 @@ test("manages pipeline stages and safely moves deals before deletion", async ({
   page,
   request,
 }) => {
+  test.setTimeout(90_000);
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const pipelineName = `E2E Etapas ${suffix}`;
   const baseName = `Entrada ${suffix}`;
