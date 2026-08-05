@@ -3,7 +3,11 @@
 import * as React from "react";
 import { ArrowLeft, Info, Loader2 } from "lucide-react";
 import { ErrorBanner } from "@/components/crm/page-header";
-import { channelName, contactName } from "@/lib/inbox-utils";
+import {
+  buildMessageTimeline,
+  channelName,
+  contactName,
+} from "@/lib/inbox-utils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -34,6 +38,7 @@ export function ConversationThread({
   onOpenContext,
   showContextButton,
   hideHeader,
+  hideComposer,
   className,
 }: {
   conversationId?: string;
@@ -48,6 +53,8 @@ export function ConversationThread({
   onOpenContext?: () => void;
   showContextButton?: boolean;
   hideHeader?: boolean;
+  /** History-only mode (Conversation History MVP). */
+  hideComposer?: boolean;
   className?: string;
 }) {
   useMarkConversationRead(conversationId);
@@ -56,13 +63,37 @@ export function ConversationThread({
     useConversationMessages(conversationId);
 
   const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const stickToBottomRef = React.useRef(true);
   const detailContactName = contactName(detail?.contact);
 
   React.useEffect(() => {
-    if (!messagesQuery.isLoading && sortedMessages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
+    stickToBottomRef.current = true;
+  }, [conversationId]);
+
+  React.useEffect(() => {
+    if (messagesQuery.isLoading || sortedMessages.length === 0) return;
+    if (!stickToBottomRef.current) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    stickToBottomRef.current = false;
   }, [conversationId, messagesQuery.isLoading, sortedMessages.length]);
+
+  const handleLoadOlder = React.useCallback(async () => {
+    const el = listRef.current;
+    const prevHeight = el?.scrollHeight ?? 0;
+    const prevTop = el?.scrollTop ?? 0;
+    stickToBottomRef.current = false;
+    await loadOlder();
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.scrollTop = el.scrollHeight - prevHeight + prevTop;
+    });
+  }, [loadOlder]);
+
+  const timeline = React.useMemo(
+    () => (mounted ? buildMessageTimeline(sortedMessages) : []),
+    [mounted, sortedMessages],
+  );
 
   return (
     <section
@@ -160,9 +191,12 @@ export function ConversationThread({
           ) : null}
 
           <div
+            ref={listRef}
             className="conversation-thread-bg scrollbar-thin flex-1 space-y-2 overflow-y-auto p-3 sm:p-4"
             data-testid="message-list"
+            aria-label="Histórico de mensagens"
             aria-live="polite"
+            aria-busy={messagesQuery.isLoading || loadingOlder}
           >
             {hasMore ? (
               <div className="flex justify-center pb-2">
@@ -170,11 +204,12 @@ export function ConversationThread({
                   type="button"
                   variant="ghost"
                   size="sm"
+                  data-testid="load-older-messages"
                   disabled={loadingOlder}
-                  onClick={() => void loadOlder()}
+                  onClick={() => void handleLoadOlder()}
                 >
                   {loadingOlder ? (
-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" aria-hidden />
                   ) : null}
                   Carregar mensagens anteriores
                 </Button>
@@ -204,23 +239,41 @@ export function ConversationThread({
                 </Button>
               </div>
             ) : sortedMessages.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Sem mensagens
-              </p>
+              <EmptyState
+                title="Ainda não existem mensagens"
+                description="O histórico aparecerá aqui quando houver mensagens vinculadas a esta conversa."
+                className="m-auto border-0 bg-transparent"
+              />
             ) : (
-              sortedMessages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  inboundName={detailContactName === "Conversa" ? "Cliente" : detailContactName}
-                  mounted={mounted}
-                />
-              ))
+              timeline.map((item) =>
+                item.type === "day" ? (
+                  <div
+                    key={`day-${item.key}`}
+                    data-testid="message-day-separator"
+                    className="flex items-center justify-center py-2"
+                  >
+                    <span className="rounded-full bg-background/80 px-3 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm">
+                      {item.label}
+                    </span>
+                  </div>
+                ) : (
+                  <MessageBubble
+                    key={item.message.id}
+                    message={item.message}
+                    inboundName={
+                      detailContactName === "Conversa"
+                        ? "Cliente"
+                        : detailContactName
+                    }
+                    mounted={mounted}
+                  />
+                ),
+              )
             )}
             <div ref={messagesEndRef} data-testid="messages-end" />
           </div>
 
-          {!detailError ? (
+          {!detailError && !hideComposer ? (
             <ConversationComposer
               conversationId={conversationId}
               listQueryKey={listQueryKey}

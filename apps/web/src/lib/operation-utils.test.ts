@@ -219,6 +219,68 @@ describe("operation view helpers", () => {
     expect(findDealByConversationId(pipeline, "missing")).toBeNull();
   });
 
+  it("searches deals by contact name and phone", () => {
+    const claudia = deal({
+      id: "d1",
+      name: "Lead",
+      pipelineId: "pipe",
+      stageId: "s1",
+      contact: {
+        id: "c1",
+        name: "Cláudia Nunes",
+        phone: "+556599900011",
+        whatsapp: "+556599900011",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    expect(dealMatchesSearch(claudia, "Cláudia")).toBe(true);
+    expect(dealMatchesSearch(claudia, "599900011")).toBe(true);
+    expect(dealMatchesSearch(claudia, "Amanda")).toBe(false);
+  });
+
+  it("filters board by pipeline deals matching search", () => {
+    const pipeline: Pipeline = {
+      id: "pipe-novos",
+      name: "Novos",
+      stages: [
+        {
+          id: "s1",
+          name: "Novo",
+          pipelineId: "pipe-novos",
+          position: 0,
+          deals: [
+            deal({
+              id: "d1",
+              name: "A",
+              pipelineId: "pipe-novos",
+              stageId: "s1",
+              conversationId: "conv-1",
+              contact: {
+                id: "c1",
+                name: "Letícia Araújo",
+                createdAt: "2026-01-01T00:00:00.000Z",
+              },
+            }),
+            deal({
+              id: "d2",
+              name: "B",
+              pipelineId: "pipe-novos",
+              stageId: "s1",
+              conversationId: "conv-2",
+              contact: {
+                id: "c2",
+                name: "Amanda Vieira",
+                createdAt: "2026-01-01T00:00:00.000Z",
+              },
+            }),
+          ],
+        },
+      ],
+    };
+    const filtered = filterPipelineBoard(pipeline, { search: "Letícia" });
+    expect(filtered.stages?.[0]?.deals?.map((d) => d.id)).toEqual(["d1"]);
+  });
+
   it("validates stage names", () => {
     expect(sanitizeStageName("  Nova   etapa  ")).toBe("Nova etapa");
     expect(isValidStageName("")).toBe(false);

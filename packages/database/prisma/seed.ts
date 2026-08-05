@@ -31,6 +31,7 @@ import {
   OPERATION_DEMO_IDS,
   assertDemoSeedAllowed,
 } from "./seed-guards";
+import { ensureConversationHistoryMvp } from "./seed-conversation-history-mvp";
 
 loadEnv({ path: path.resolve(__dirname, "../../../.env") });
 
@@ -357,6 +358,7 @@ async function main() {
   if (existingOrganization) {
     await ensureAdminAuthUser();
     await ensureOperationDemoConversation();
+    await ensureConversationHistoryMvp(prisma, ORG_ID, { hoursAgo, daysAgo });
     console.log("Demo seed already exists; preserving existing and manually created data.");
     console.log("Credenciais de admin sincronizadas a partir de ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD.");
     return;
@@ -1797,6 +1799,7 @@ async function main() {
   };
 
   await ensureOperationDemoConversation();
+  await ensureConversationHistoryMvp(prisma, ORG_ID, { hoursAgo, daysAgo });
 
   console.log("\nXingyu CRM seed complete\n");
   console.log("Record counts:");
