@@ -37,14 +37,14 @@ export function MessageBubble({
       <div
         data-testid="message-bubble"
         className={cn(
-          "w-fit max-w-[min(70%,680px)] rounded-2xl px-3 py-2 text-sm shadow-sm",
+          "w-fit max-w-[min(70%,680px)] rounded-2xl px-3 py-2 text-sm shadow-[0_1px_1px_rgba(0,0,0,0.04)]",
           outbound
-            ? "bg-emerald-50 text-foreground dark:bg-emerald-950/40"
-            : "bg-card text-foreground",
+            ? "rounded-tr-md bg-[#dcf8c6] text-foreground dark:bg-emerald-950/50"
+            : "rounded-tl-md bg-card text-foreground",
         )}
       >
         <p
-          className="truncate text-[10px] leading-tight text-muted-foreground/80"
+          className="truncate text-[10px] leading-tight text-muted-foreground/70"
           data-testid="message-sender-line"
           title={formatMessageMetaLine(
             message,

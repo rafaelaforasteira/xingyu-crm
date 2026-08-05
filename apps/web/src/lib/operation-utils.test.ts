@@ -9,7 +9,7 @@ import {
 } from "./operation-utils";
 import type { Deal, Pipeline, PipelineStage } from "./types";
 import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS } from "./nav";
-import { CORE_OPERATION_MODE } from "./feature-flags";
+import { CORE_OPERATION_MODE, shouldHideGlobalHeader } from "./feature-flags";
 
 function deal(partial: Partial<Deal> & Pick<Deal, "id" | "name" | "pipelineId" | "stageId">): Deal {
   return {
@@ -154,5 +154,19 @@ describe("navigation mode", () => {
     } else {
       expect(NAV_GROUPS).toEqual(FULL_NAV_GROUPS);
     }
+  });
+});
+
+describe("shouldHideGlobalHeader", () => {
+  it("hides header only on /operacao when core mode is on", () => {
+    expect(shouldHideGlobalHeader("/operacao", true)).toBe(true);
+    expect(shouldHideGlobalHeader("/operacao/", true)).toBe(true);
+    expect(shouldHideGlobalHeader("/settings", true)).toBe(false);
+    expect(shouldHideGlobalHeader("/inbox", true)).toBe(false);
+    expect(shouldHideGlobalHeader("/dashboard", true)).toBe(false);
+  });
+
+  it("keeps header when core mode is off", () => {
+    expect(shouldHideGlobalHeader("/operacao", false)).toBe(false);
   });
 });

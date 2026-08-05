@@ -41,6 +41,10 @@ test("measure CRM sidebar route transitions", async ({ page }) => {
     });
 
     await page.goto(step.from, { waitUntil: "networkidle" });
+    // Allow client data to settle so soft navigations don't trip Skeleton→Card hydration noise.
+    await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 20_000 });
+    pageErrors.length = 0;
+    consoleErrors.length = 0;
     await page.waitForTimeout(400);
 
     const navBefore = await page.evaluate(

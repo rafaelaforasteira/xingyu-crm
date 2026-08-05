@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Filter, Loader2, Plus, RefreshCw, Search } from "lucide-react";
+import { Filter, Loader2, Menu, Plus, RefreshCw, Search } from "lucide-react";
 import { dealsApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal } from "@/lib/types";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/operation-utils";
 import { moveBoardDeal } from "@/lib/board-cache";
 import { cn } from "@/lib/utils";
+import { useUiStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,13 +55,14 @@ export function OperationPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen);
 
   const pipelineParam = searchParams.get("pipeline");
   const dealParam = searchParams.get("deal");
   const search = searchParams.get("q") ?? "";
   const filter = (searchParams.get("filter") as OperationFilter | null) ?? "all";
 
-  const isDesktop = useMediaQuery("(min-width: 1280px)");
+  const isDesktop = useMediaQuery("(min-width: 1536px)");
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -230,12 +232,24 @@ export function OperationPage() {
   return (
     <div
       data-testid="operation-page"
-      className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden"
+      className="flex h-dvh min-h-0 flex-col overflow-hidden"
     >
       <header
         data-testid="operation-header"
-        className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-4 py-3"
+        className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-background px-3 py-2.5 sm:px-4"
       >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 lg:hidden"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menu"
+          data-testid="operation-open-sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h1 className="text-lg font-semibold tracking-tight">Operação</h1>
@@ -338,6 +352,7 @@ export function OperationPage() {
               onOpenDeal={openDeal}
               variant="operation"
               selectedDealId={dealParam}
+              fillColumns={!panelOpen}
               className="h-full"
             />
           )}
@@ -345,7 +360,7 @@ export function OperationPage() {
 
         {showSplit && selectedDeal ? (
           <aside
-            className="flex w-[min(680px,max(560px,38%))] shrink-0 flex-col border-l border-border bg-background"
+            className="flex w-[clamp(620px,40vw,700px)] shrink-0 flex-col border-l border-border bg-background"
             data-testid="operation-conversation-panel"
           >
             <DealConversationPanel
@@ -359,13 +374,13 @@ export function OperationPage() {
 
         {showDrawer && selectedDeal ? (
           <div
-            className="absolute inset-y-0 right-0 z-30 flex w-[min(65vw,680px)] flex-col border-l border-border bg-background shadow-xl"
+            className="absolute inset-y-0 right-0 z-30 flex w-[min(60vw,700px)] flex-col border-l border-border bg-background shadow-xl"
             data-testid="operation-conversation-panel"
           >
             <button
               type="button"
               className="absolute inset-y-0 right-full w-screen cursor-default bg-black/20"
-              aria-label="Fechar conversa"
+              aria-label="Fechar sobreposição"
               onClick={closePanel}
             />
             <DealConversationPanel

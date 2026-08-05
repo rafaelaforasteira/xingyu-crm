@@ -55,7 +55,10 @@ export function Header() {
   }, [setCommandOpen]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border/80 bg-card/90 backdrop-blur-md">
+    <header
+      data-testid="global-header"
+      className="sticky top-0 z-30 border-b border-border/80 bg-card/90 backdrop-blur-md"
+    >
       <div className="mx-auto grid h-14 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
         <div className="flex items-center gap-1 sm:gap-1.5">
           <Button

@@ -232,7 +232,7 @@ export function formatMessageMetaLine(
   if (!mounted) return who;
   const time = formatDateFn(message.createdAt, "HH:mm");
   const date = formatDateFn(message.createdAt, "dd/MM/yyyy");
-  return `${who} - ${time} - ${date}`;
+  return `${who} · ${time} · ${date}`;
 }
 
 export function shouldSendOnEnter(event: {
