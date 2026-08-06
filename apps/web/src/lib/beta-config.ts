@@ -12,6 +12,13 @@ export const BETA_PIPELINE_ID =
 export const BETA_COMING_SOON_MESSAGE =
   "Disponível nas próximas etapas do beta";
 
+/** Header search placeholder (exact copy for the beta bar). */
+export const BETA_SEARCH_PLACEHOLDER =
+  "Buscar contatos, deals e pedidos…";
+
+export const BETA_SEARCH_ARIA_LABEL =
+  "Buscar contatos, deals e pedidos";
+
 export type BetaView = "kanban" | "conversations";
 
 export function parseBetaView(
@@ -21,19 +28,27 @@ export function parseBetaView(
   return "kanban";
 }
 
-export function buildBetaKanbanHref(dealId?: string | null): string {
+export function buildBetaKanbanHref(
+  dealId?: string | null,
+  options?: { q?: string | null },
+): string {
   const params = new URLSearchParams();
   params.set("view", "kanban");
   if (dealId) params.set("deal", dealId);
+  const q = options?.q?.trim();
+  if (q) params.set("q", q);
   return `/operacao?${params.toString()}`;
 }
 
 export function buildBetaConversationsHref(
   conversationId?: string | null,
+  options?: { q?: string | null },
 ): string {
   const params = new URLSearchParams();
   params.set("view", "conversations");
   if (conversationId) params.set("conversation", conversationId);
+  const q = options?.q?.trim();
+  if (q) params.set("q", q);
   return `/operacao?${params.toString()}`;
 }
 

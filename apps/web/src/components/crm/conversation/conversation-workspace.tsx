@@ -28,6 +28,8 @@ export function ConversationWorkspace({
   clearHref,
   onSelectConversation,
   workspaceTestId = "conversation-workspace",
+  externalSearch,
+  onExternalSearchChange,
 }: {
   scope: ConversationWorkspaceScope;
   conversationId?: string;
@@ -40,6 +42,9 @@ export function ConversationWorkspace({
   clearHref?: string;
   onSelectConversation?: (conversationId: string) => void;
   workspaceTestId?: string;
+  /** Shared search with the beta header (`q`). */
+  externalSearch?: string;
+  onExternalSearchChange?: (search: string) => void;
 }) {
   const router = useRouter();
   const [mounted, setMounted] = React.useState(false);
@@ -137,6 +142,8 @@ export function ConversationWorkspace({
             getConversationHref={getConversationHref}
             mounted={mounted}
             onSelectConversation={onSelectConversation}
+            externalSearch={externalSearch}
+            onExternalSearchChange={onExternalSearchChange}
           />
         </div>
 

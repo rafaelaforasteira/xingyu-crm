@@ -24,7 +24,10 @@ test.describe("Beta single-pipeline UI", () => {
     await expect(page.getByRole("link", { name: /^Pipelines$/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /^Configurações$/i })).toHaveCount(0);
 
-    const dealCard = page.getByTestId("deal-card").first();
+    const dealCard = page
+      .getByTestId("deal-card")
+      .filter({ hasText: /Amanda Vieira|Lead WhatsApp - Amanda/i })
+      .first();
     await expect(dealCard).toBeVisible({ timeout: 20_000 });
     await dealCard.click();
 

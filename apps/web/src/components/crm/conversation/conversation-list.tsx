@@ -33,6 +33,7 @@ export function ConversationList({
   getConversationHref,
   mounted,
   externalSearch,
+  onExternalSearchChange,
   externalUnreadOnly,
   externalAwaitingReply,
   hideInternalFilters = false,
@@ -51,6 +52,8 @@ export function ConversationList({
   mounted: boolean;
   /** Controlled search from parent (e.g. Operação header). */
   externalSearch?: string;
+  /** Sync list search back to parent / URL `q`. */
+  onExternalSearchChange?: (search: string) => void;
   externalUnreadOnly?: boolean;
   externalAwaitingReply?: boolean;
   hideInternalFilters?: boolean;
@@ -65,6 +68,7 @@ export function ConversationList({
   const scopeType = scope.type;
   const scopePipelineId = scope.type === "pipeline" ? scope.pipelineId : undefined;
   const controlled = hideInternalFilters;
+  const searchSynced = externalSearch !== undefined;
 
   const [filters, setFilters] = React.useState<ConversationFiltersState>({
     search: externalSearch ?? "",
@@ -103,17 +107,51 @@ export function ConversationList({
   }, [scopePipelineId, scopeType]);
 
   React.useEffect(() => {
-    if (!controlled) return;
-    setFilters((current) => ({
-      ...current,
-      search: externalSearch ?? "",
-      unreadOnly: Boolean(externalUnreadOnly),
-      awaitingReply: Boolean(externalAwaitingReply),
-    }));
-  }, [controlled, externalSearch, externalUnreadOnly, externalAwaitingReply]);
+    if (!controlled && !searchSynced) return;
+    setFilters((current) => {
+      const nextSearch = searchSynced
+        ? (externalSearch ?? "")
+        : current.search;
+      const nextUnread = controlled
+        ? Boolean(externalUnreadOnly)
+        : current.unreadOnly;
+      const nextAwaiting = controlled
+        ? Boolean(externalAwaitingReply)
+        : current.awaitingReply;
+      if (
+        current.search === nextSearch &&
+        current.unreadOnly === nextUnread &&
+        current.awaitingReply === nextAwaiting
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        search: nextSearch,
+        unreadOnly: nextUnread,
+        awaitingReply: nextAwaiting,
+      };
+    });
+  }, [
+    controlled,
+    externalAwaitingReply,
+    externalSearch,
+    externalUnreadOnly,
+    searchSynced,
+  ]);
+
+  const patchFilters = React.useCallback(
+    (patch: Partial<ConversationFiltersState>) => {
+      setFilters((current) => ({ ...current, ...patch }));
+      if (patch.search !== undefined && onExternalSearchChange) {
+        onExternalSearchChange(patch.search);
+      }
+    },
+    [onExternalSearchChange],
+  );
 
   const debouncedSearch = useDebouncedValue(
-    controlled ? (externalSearch ?? "") : filters.search,
+    filters.search,
     controlled ? 0 : 300,
   );
 
@@ -243,9 +281,7 @@ export function ConversationList({
       {controlled ? null : (
         <ConversationFilters
           filters={filters}
-          onChange={(patch) =>
-            setFilters((current) => ({ ...current, ...patch }))
-          }
+          onChange={patchFilters}
           showPipelineFilter={scopeType === "global"}
           channels={channels}
           pipelines={pipelines}

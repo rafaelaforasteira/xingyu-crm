@@ -82,6 +82,33 @@ describe("operation filters and search", () => {
     expect(dealMatchesSearch(sample, "xyz")).toBe(false);
   });
 
+  it("searches email, company and normalized phone digits", () => {
+    const rich = deal({
+      id: "d-rich",
+      name: "Oportunidade X",
+      pipelineId: "pipe",
+      stageId: "s1",
+      contact: {
+        id: "c2",
+        name: "João",
+        email: "joao@empresa.com",
+        phone: "(34) 99999-8877",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+      company: {
+        id: "co1",
+        name: "Xingyu Comércio",
+        tradeName: "Xingyu",
+        legalName: "Xingyu LTDA",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    expect(dealMatchesSearch(rich, "JOAO@EMPRESA.COM")).toBe(true);
+    expect(dealMatchesSearch(rich, "xingyu")).toBe(true);
+    expect(dealMatchesSearch(rich, "999998877")).toBe(true);
+    expect(dealMatchesSearch(rich, "  Oportunidade  ")).toBe(true);
+  });
+
   it("preserves filters when filtering board", () => {
     const pipeline: Pipeline = {
       id: "pipe",

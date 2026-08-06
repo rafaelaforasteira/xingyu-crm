@@ -67,20 +67,37 @@ export function dealMatchesOperationFilter(
   }
 }
 
+function digitsOnly(value: string | null | undefined): string {
+  return (value ?? "").replace(/\D/g, "");
+}
+
 export function dealMatchesSearch(deal: Deal, search: string): boolean {
   const q = search.trim().toLowerCase();
   if (!q) return true;
   const haystack = [
-    deal.contact?.name,
+    deal.id,
     deal.name,
+    deal.contact?.name,
+    deal.contact?.email,
     deal.contact?.phone,
     deal.contact?.whatsapp,
+    deal.company?.name,
+    deal.company?.tradeName,
+    deal.company?.legalName,
     deal.lastMessagePreview,
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-  return haystack.includes(q);
+  if (haystack.includes(q)) return true;
+
+  const qDigits = digitsOnly(q);
+  if (qDigits.length < 3) return false;
+  const phoneHaystack = [
+    digitsOnly(deal.contact?.phone),
+    digitsOnly(deal.contact?.whatsapp),
+  ].join(" ");
+  return phoneHaystack.includes(qDigits);
 }
 
 export function filterPipelineBoard(

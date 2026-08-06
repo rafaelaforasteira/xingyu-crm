@@ -37,6 +37,18 @@ describe("beta-config", () => {
     );
   });
 
+  it("preserves search query in beta hrefs", () => {
+    expect(buildBetaKanbanHref(null, { q: " maria " })).toBe(
+      "/operacao?view=kanban&q=maria",
+    );
+    expect(buildBetaKanbanHref("deal-1", { q: "maria" })).toBe(
+      "/operacao?view=kanban&deal=deal-1&q=maria",
+    );
+    expect(buildBetaConversationsHref("conv-1", { q: "maria" })).toBe(
+      "/operacao?view=conversations&conversation=conv-1&q=maria",
+    );
+  });
+
   it("blocks hidden module paths and allows operacao/login", () => {
     expect(isBetaBlockedPath("/dashboard")).toBe(true);
     expect(isBetaBlockedPath("/pipelines")).toBe(true);

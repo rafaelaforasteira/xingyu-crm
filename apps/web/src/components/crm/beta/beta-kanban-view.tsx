@@ -13,6 +13,10 @@ import {
   buildBetaConversationsHref,
   buildBetaKanbanHref,
 } from "@/lib/beta-config";
+import {
+  countBoardDeals,
+  filterPipelineBoard,
+} from "@/lib/operation-utils";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
@@ -48,6 +52,7 @@ export function BetaKanbanView() {
   const searchParams = useSearchParams();
   const pipelineId = BETA_PIPELINE_ID;
   const dealParam = searchParams.get("deal");
+  const searchQuery = searchParams.get("q") ?? "";
   const openDealDrawer = useUiStore((state) => state.openDealDrawer);
   const closeDealDrawer = useUiStore((state) => state.closeDealDrawer);
   const [createDealOpen, setCreateDealOpen] = React.useState(false);
@@ -58,6 +63,16 @@ export function BetaKanbanView() {
     queryFn: () => pipelinesApi.board(pipelineId),
     retry: false,
   });
+
+  const filteredBoard = React.useMemo(() => {
+    if (!data) return null;
+    if (!searchQuery.trim()) return data;
+    return filterPipelineBoard(data, { search: searchQuery });
+  }, [data, searchQuery]);
+
+  const hasSearchResults =
+    !searchQuery.trim() ||
+    (filteredBoard != null && countBoardDeals(filteredBoard) > 0);
 
   const setDealParam = React.useCallback(
     (dealId: string | null) => {
@@ -95,6 +110,7 @@ export function BetaKanbanView() {
     setDealParam(null);
   }, [setDealParam]);
 
+  const qOpt = searchQuery.trim() ? { q: searchQuery } : undefined;
 
   return (
     <div data-testid="beta-kanban">
@@ -107,8 +123,8 @@ export function BetaKanbanView() {
               <PipelineViewSwitcher
                 pipelineId={pipelineId}
                 active="kanban"
-                kanbanHref={buildBetaKanbanHref()}
-                conversationsHref={buildBetaConversationsHref()}
+                kanbanHref={buildBetaKanbanHref(null, qOpt)}
+                conversationsHref={buildBetaConversationsHref(null, qOpt)}
                 kanbanLabel="Kanban"
                 dataTestIdPrefix="beta"
               />
@@ -126,8 +142,23 @@ export function BetaKanbanView() {
       </div>
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       {isLoading ? <Skeleton className="h-96 w-full" /> : null}
-      {data ? (
-        <KanbanBoard pipeline={data} onOpenDeal={onOpenDeal} />
+      {filteredBoard ? (
+        <>
+          {!hasSearchResults ? (
+            <p
+              className="mb-3 text-sm text-muted-foreground"
+              data-testid="beta-kanban-empty-search"
+              role="status"
+            >
+              Nenhum lead encontrado.
+            </p>
+          ) : null}
+          <KanbanBoard
+            pipeline={filteredBoard}
+            onOpenDeal={onOpenDeal}
+            selectedDealId={dealParam}
+          />
+        </>
       ) : null}
       {data ? (
         <CreateDealDialog

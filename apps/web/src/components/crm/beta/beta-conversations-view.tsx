@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { pipelinesApi } from "@/lib/api";
@@ -19,6 +19,7 @@ export function BetaConversationsView() {
   const searchParams = useSearchParams();
   const pipelineId = BETA_PIPELINE_ID;
   const conversationId = searchParams.get("conversation") ?? undefined;
+  const searchQuery = searchParams.get("q") ?? "";
 
   const scope = useMemo(
     () => ({ type: "pipeline" as const, pipelineId }),
@@ -31,8 +32,22 @@ export function BetaConversationsView() {
     retry: false,
   });
 
-  const getConversationHref = (id: string) => buildBetaConversationsHref(id);
-  const clearHref = buildBetaConversationsHref();
+  const qOpt = searchQuery.trim() ? { q: searchQuery } : undefined;
+  const getConversationHref = (id: string) =>
+    buildBetaConversationsHref(id, qOpt);
+  const clearHref = buildBetaConversationsHref(null, qOpt);
+
+  const onExternalSearchChange = useCallback(
+    (search: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("view", "conversations");
+      const trimmed = search.trim();
+      if (trimmed) params.set("q", trimmed);
+      else params.delete("q");
+      router.replace(`/operacao?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
 
   return (
     <div data-testid="beta-conversations-view">
@@ -42,8 +57,12 @@ export function BetaConversationsView() {
         basePath="/operacao"
         getConversationHref={getConversationHref}
         clearHref={clearHref}
+        externalSearch={searchQuery}
+        onExternalSearchChange={onExternalSearchChange}
         onSelectConversation={(id) => {
-          router.replace(buildBetaConversationsHref(id), { scroll: false });
+          router.replace(buildBetaConversationsHref(id, qOpt), {
+            scroll: false,
+          });
         }}
         workspaceTestId="beta-conversation-workspace"
         header={
@@ -57,8 +76,8 @@ export function BetaConversationsView() {
                     <PipelineViewSwitcher
                       pipelineId={pipelineId}
                       active="conversations"
-                      kanbanHref={buildBetaKanbanHref()}
-                      conversationsHref={buildBetaConversationsHref()}
+                      kanbanHref={buildBetaKanbanHref(null, qOpt)}
+                      conversationsHref={buildBetaConversationsHref(null, qOpt)}
                       kanbanLabel="Kanban"
                       dataTestIdPrefix="beta"
                     />
