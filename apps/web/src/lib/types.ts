@@ -409,9 +409,16 @@ export interface ConversationListQuery {
   search?: string;
   pipelineId?: string;
   channelId?: string;
+  channels?: string;
   stageId?: string;
+  stages?: string;
+  tags?: string;
   assigneeId?: string;
   unreadOnly?: boolean;
+  awaitingReply?: boolean;
+  replyStatus?: "mine" | "customer";
+  conversationState?: "open" | "closed";
+  period?: "today" | "7d" | "30d" | "older30";
   cursor?: string;
 }
 
