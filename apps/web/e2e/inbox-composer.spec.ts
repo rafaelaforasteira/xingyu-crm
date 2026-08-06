@@ -7,11 +7,11 @@ test("Inbox composer route redirects to operação in beta mode", async ({ page 
 
 test("composer is available in beta conversations workspace", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/operacao?view=conversations");
+  await page.goto("/operacao?view=conversations&conversation=conv-operacao-demo");
   await expect(page.getByTestId("conversation-composer")).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole("button", { name: "Inserir emoji" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Adicionar emoji" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Anexar arquivo" })).toBeVisible();
 });
 

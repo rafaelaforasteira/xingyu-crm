@@ -40,16 +40,10 @@ import {
   ConversationAttachmentPreview,
   type PendingAttachment,
 } from "./conversation-attachment-preview";
+import { useAutoResizeTextarea } from "./use-auto-resize-textarea";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
-}
-
-function resizeTextarea(el: HTMLTextAreaElement | null) {
-  if (!el) return;
-  el.style.height = "auto";
-  const next = Math.min(Math.max(el.scrollHeight, 44), 130);
-  el.style.height = `${next}px`;
 }
 
 export function ConversationComposer({
@@ -69,7 +63,7 @@ export function ConversationComposer({
   const [audioPreview, setAudioPreview] = React.useState<PendingAttachment | null>(
     null,
   );
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const { textareaRef, resize } = useAutoResizeTextarea(body);
   const mediaInputRef = React.useRef<HTMLInputElement | null>(null);
   const docInputRef = React.useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
@@ -77,6 +71,7 @@ export function ConversationComposer({
   const chunksRef = React.useRef<Blob[]>([]);
   const timerRef = React.useRef<number | null>(null);
   const queryClient = useQueryClient();
+  const hintId = React.useId();
 
   const clearRecordingResources = React.useCallback(() => {
     if (timerRef.current) {
@@ -106,8 +101,8 @@ export function ConversationComposer({
     setEmojiOpen(false);
     setAttachMenuOpen(false);
     clearRecordingResources();
-    resizeTextarea(textareaRef.current);
-  }, [conversationId, clearRecordingResources]);
+    requestAnimationFrame(() => resize());
+  }, [conversationId, clearRecordingResources, resize]);
 
   React.useEffect(() => () => clearRecordingResources(), [clearRecordingResources]);
 
@@ -168,7 +163,7 @@ export function ConversationComposer({
         return null;
       });
       requestAnimationFrame(() => {
-        resizeTextarea(textareaRef.current);
+        resize();
         textareaRef.current?.focus();
       });
       return { tempId };
@@ -200,7 +195,10 @@ export function ConversationComposer({
       }
       setBody(variables.text);
       toast.error(errorMessage(error, "Não foi possível enviar a mensagem."));
-      requestAnimationFrame(() => textareaRef.current?.focus());
+      requestAnimationFrame(() => {
+        resize();
+        textareaRef.current?.focus();
+      });
     },
   });
 
@@ -234,7 +232,7 @@ export function ConversationComposer({
       el.focus();
       const cursor = start + emoji.length;
       el.setSelectionRange(cursor, cursor);
-      resizeTextarea(el);
+      resize();
     });
     setEmojiOpen(false);
   };
@@ -344,9 +342,13 @@ export function ConversationComposer({
 
   return (
     <div
-      className="border-t border-border bg-card"
+      className="shrink-0 border-t border-border bg-card"
       data-testid="conversation-composer"
       data-beta-testid="beta-conversation-composer"
+      data-body-length={String(body.length)}
+      data-can-send={canSend ? "true" : "false"}
+      data-recording={recording ? "true" : "false"}
+      data-sending={sendMutation.isPending ? "true" : "false"}
     >
       <ConversationAttachmentPreview items={pending} onRemove={removePending} />
       {audioPreview ? (
@@ -380,180 +382,250 @@ export function ConversationComposer({
       ) : null}
 
       <form
-        className="flex items-end gap-1.5 p-2 sm:gap-2 sm:p-3"
+        className="flex flex-col gap-1 p-2 sm:p-3"
         onSubmit={(event) => {
           event.preventDefault();
           submitMessage();
         }}
       >
-        <div className="relative shrink-0">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-10 w-10 shrink-0"
-            aria-label="Inserir emoji"
-            title="Emoji"
-            disabled={sendMutation.isPending || recording}
-            onClick={() => {
-              setAttachMenuOpen(false);
-              setEmojiOpen((open) => !open);
-            }}
-          >
-            <Smile className="h-4 w-4" />
-          </Button>
-          <ConversationEmojiPicker
-            open={emojiOpen}
-            onClose={() => setEmojiOpen(false)}
-            onSelect={insertEmoji}
-          />
-        </div>
-
-        <div className="relative shrink-0">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-10 w-10 shrink-0"
-            aria-label="Anexar arquivo"
-            title="Anexar"
-            disabled={sendMutation.isPending || recording}
-            onClick={() => {
-              setEmojiOpen(false);
-              setAttachMenuOpen((open) => !open);
-            }}
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
-          {attachMenuOpen ? (
-            <div
-              role="menu"
-              className="absolute bottom-full left-0 z-40 mb-2 w-44 rounded-xl border border-border bg-card p-1 shadow-lg"
-              data-testid="attach-menu"
-            >
-              <button
+        <div
+          className="flex items-end gap-x-1.5 sm:gap-x-2"
+          data-testid="composer-main-row"
+        >
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 self-end">
+            <div className="relative shrink-0">
+              <Button
                 type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
-                onClick={() => mediaInputRef.current?.click()}
+                size="icon"
+                variant="ghost"
+                className="!h-10 !w-10 shrink-0"
+                aria-label="Adicionar emoji"
+                title="Emoji"
+                data-testid="composer-emoji-button"
+                disabled={sendMutation.isPending || recording}
+                onClick={() => {
+                  setAttachMenuOpen(false);
+                  setEmojiOpen((open) => !open);
+                }}
               >
-                <ImageIcon className="h-4 w-4" />
-                Foto ou vídeo
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
-                onClick={() => docInputRef.current?.click()}
-              >
-                <FileText className="h-4 w-4" />
-                Documento
-              </button>
+                <Smile className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <ConversationEmojiPicker
+                open={emojiOpen}
+                onClose={() => setEmojiOpen(false)}
+                onSelect={insertEmoji}
+              />
             </div>
-          ) : null}
-          <input
-            ref={mediaInputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              addFiles(event.target.files);
-              event.target.value = "";
-            }}
-          />
-          <input
-            ref={docInputRef}
-            type="file"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,text/plain,text/csv"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              addFiles(event.target.files);
-              event.target.value = "";
-            }}
-          />
+
+            <div className="relative shrink-0">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="!h-10 !w-10 shrink-0"
+                aria-label="Anexar arquivo"
+                title="Anexar"
+                data-testid="composer-attach-button"
+                disabled={sendMutation.isPending || recording}
+                onClick={() => {
+                  setEmojiOpen(false);
+                  setAttachMenuOpen((open) => !open);
+                }}
+              >
+                <Paperclip className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              {attachMenuOpen ? (
+                <div
+                  role="menu"
+                  className="absolute bottom-full left-0 z-40 mb-2 w-44 rounded-xl border border-border bg-card p-1 shadow-lg"
+                  data-testid="attach-menu"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
+                    onClick={() => mediaInputRef.current?.click()}
+                  >
+                    <ImageIcon className="h-4 w-4" aria-hidden="true" />
+                    Foto ou vídeo
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted"
+                    onClick={() => docInputRef.current?.click()}
+                  >
+                    <FileText className="h-4 w-4" aria-hidden="true" />
+                    Documento
+                  </button>
+                </div>
+              ) : null}
+              <input
+                ref={mediaInputRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  addFiles(event.target.files);
+                  event.target.value = "";
+                }}
+              />
+              <input
+                ref={docInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,text/plain,text/csv"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  addFiles(event.target.files);
+                  event.target.value = "";
+                }}
+              />
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "min-w-0 flex-1 overflow-hidden rounded-2xl border border-border/80 bg-background",
+              "focus-within:border-primary focus-within:ring-2 focus-within:ring-ring",
+            )}
+            data-testid="composer-textarea-wrapper"
+          >
+            <Textarea
+              ref={textareaRef}
+              id="conversation-composer-textarea"
+              aria-label="Digite uma mensagem"
+              aria-describedby={hintId}
+              lang="pt-BR"
+              spellCheck
+              autoCorrect="on"
+              autoCapitalize="sentences"
+              inputMode="text"
+              value={body}
+              rows={1}
+              placeholder="Digite uma mensagem…"
+              disabled={sendMutation.isPending || recording}
+              className={cn(
+                "!min-h-[44px] max-h-none w-full resize-none border-0 bg-transparent px-3 py-2.5 pr-3.5 leading-5 shadow-none",
+                "focus-visible:outline-none focus-visible:ring-0",
+                "[field-sizing:fixed] [scrollbar-gutter:stable]",
+              )}
+              style={{
+                resize: "none",
+                minHeight: `${44}px`,
+              }}
+              data-testid="composer-textarea"
+              onChange={(event) => {
+                setBody(event.target.value);
+              }}
+              onInput={() => {
+                resize();
+              }}
+              onPaste={() => {
+                requestAnimationFrame(() => resize());
+              }}
+              onKeyUp={() => {
+                resize();
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey) return;
+                if (
+                  event.nativeEvent.isComposing ||
+                  event.keyCode === 229
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                if (
+                  shouldSendOnEnter({
+                    key: event.key,
+                    shiftKey: event.shiftKey,
+                    isComposing: event.nativeEvent.isComposing,
+                    keyCode: event.keyCode,
+                    nativeEvent: event.nativeEvent,
+                  })
+                ) {
+                  submitMessage();
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 self-end">
+            {recording ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="destructive"
+                className="!h-10 !w-10 shrink-0"
+                aria-label="Parar gravação"
+                title="Parar"
+                data-testid="composer-mic-button"
+                onClick={stopRecording}
+              >
+                <Square className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="!h-10 !w-10 shrink-0"
+                aria-label="Gravar áudio"
+                title="Áudio"
+                data-testid="composer-mic-button"
+                disabled={sendMutation.isPending}
+                onClick={() => void startRecording()}
+              >
+                <Mic className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
+
+            <Button
+              type="submit"
+              size="icon"
+              className="!h-10 !w-10 shrink-0 rounded-full"
+              aria-label="Enviar mensagem"
+              title="Enviar"
+              data-testid="composer-send-button"
+              disabled={!canSend}
+            >
+              {sendMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Send className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+          </div>
         </div>
 
-        <div className="min-w-0 flex-1">
-          <Textarea
-            ref={textareaRef}
-            aria-label="Mensagem"
-            value={body}
-            rows={1}
-            placeholder="Digite uma mensagem…"
-            disabled={sendMutation.isPending || recording}
-            className={cn(
-              "max-h-[130px] min-h-[44px] resize-none overflow-y-auto rounded-2xl border-border/80 bg-background py-2.5 leading-5 shadow-none",
-              "[field-sizing:fixed]",
-            )}
-            style={{ resize: "none" }}
-            data-testid="composer-textarea"
-            onChange={(event) => {
-              setBody(event.target.value);
-              resizeTextarea(event.target);
-            }}
-            onKeyDown={(event) => {
-              if (shouldSendOnEnter(event)) {
-                event.preventDefault();
-                submitMessage();
-              }
-            }}
-          />
+        <div
+          className="flex gap-x-1.5 sm:gap-x-2"
+          data-testid="composer-hint-row"
+        >
+          <div
+            className="pointer-events-none invisible flex shrink-0 gap-0.5 sm:gap-1"
+            aria-hidden="true"
+          >
+            <span className="h-0 w-10" />
+            <span className="h-0 w-10" />
+          </div>
           <p
-            className="mt-1 truncate text-center text-[10px] leading-tight text-muted-foreground max-[380px]:text-[9px]"
+            id={hintId}
+            className="min-w-0 flex-1 truncate text-center text-[10px] leading-tight text-muted-foreground"
             data-testid="composer-keyboard-hint"
           >
-            <span className="max-[360px]:hidden">
-              Enter para enviar · Shift + Enter para quebrar linha
-            </span>
-            <span className="hidden max-[360px]:inline">
-              Enter envia · Shift+Enter quebra
-            </span>
+            Enter para enviar · Shift + Enter para quebrar linha
           </p>
+          <div
+            className="pointer-events-none invisible flex shrink-0 gap-0.5 sm:gap-1"
+            aria-hidden="true"
+          >
+            <span className="h-0 w-10" />
+            <span className="h-0 w-10" />
+          </div>
         </div>
-
-        {recording ? (
-          <Button
-            type="button"
-            size="icon"
-            variant="destructive"
-            className="h-10 w-10 shrink-0"
-            aria-label="Parar gravação"
-            title="Parar"
-            onClick={stopRecording}
-          >
-            <Square className="h-4 w-4" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-10 w-10 shrink-0"
-            aria-label="Gravar áudio"
-            title="Áudio"
-            disabled={sendMutation.isPending}
-            onClick={() => void startRecording()}
-          >
-            <Mic className="h-4 w-4" />
-          </Button>
-        )}
-
-        <Button
-          type="submit"
-          size="icon"
-          className="h-10 w-10 shrink-0"
-          aria-label="Enviar mensagem"
-          title="Enviar"
-          disabled={!canSend}
-        >
-          {sendMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
       </form>
     </div>
   );
