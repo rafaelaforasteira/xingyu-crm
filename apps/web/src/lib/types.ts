@@ -348,6 +348,7 @@ export interface Deal {
   company?: Company | null;
   ownerId?: string | null;
   owner?: UserRef | null;
+  leadSequence?: number | null;
   priority?: DealPriority;
   tags?: Tag[];
   lastInteractionAt?: string | null;
@@ -379,6 +380,9 @@ export interface ConversationContactSummary {
   firstName: string;
   lastName?: string | null;
   name: string;
+  phone?: string | null;
+  whatsapp?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface ConversationDealSummary {
@@ -387,7 +391,11 @@ export interface ConversationDealSummary {
   pipelineId: string;
   stageId: string;
   stageName?: string | null;
+  stageColor?: string | null;
   priority?: string | null;
+  leadSequence?: number | null;
+  ownerId?: string | null;
+  owner?: UserRef | null;
 }
 
 export interface ConversationListItem {
@@ -396,6 +404,8 @@ export interface ConversationListItem {
   lastMessageAt?: string | null;
   unreadCount: number;
   lastMessagePreview?: string | null;
+  lastMessageDirection?: string | null;
+  awaitingReply?: boolean;
   contact?: ConversationContactSummary | null;
   assignee?: UserRef | null;
   channel?: ConversationChannelSummary | null;
@@ -433,6 +443,7 @@ export interface Conversation {
     pipelineId: string;
     stageId: string;
     priority?: string | null;
+    leadSequence?: number | null;
     pipeline?: Pick<Pipeline, "id" | "name" | "color"> | null;
     stage?: PipelineStage | null;
     owner?: UserRef | null;

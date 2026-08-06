@@ -50,15 +50,22 @@ test.describe("Beta conversation filters popover", () => {
       fullPage: false,
     });
 
-    await popover.getByText("Somente não lidas").click();
-    await popover.getByLabel("Aguardando minha resposta").click();
-    await popover.getByLabel("Últimos 7 dias").click();
+    await popover.getByRole("checkbox", { name: /Somente não lidas/i }).check();
+    await popover.getByRole("radio", { name: /Aguardando minha resposta/i }).check();
+    await popover.getByRole("radio", { name: /Últimos 7 dias/i }).check();
 
-    const stageChecks = popover.locator('input[type="checkbox"]');
+    const stageChecks = popover.getByText("Etapas da esteira").locator("..").locator('input[type="checkbox"]');
     const stageCount = await stageChecks.count();
-    if (stageCount > 2) {
+    if (stageCount >= 2) {
+      await stageChecks.nth(0).check();
       await stageChecks.nth(1).check();
-      await stageChecks.nth(2).check();
+    } else {
+      const allChecks = popover.locator('input[type="checkbox"]');
+      const total = await allChecks.count();
+      if (total > 2) {
+        await allChecks.nth(total - 2).check();
+        await allChecks.nth(total - 1).check();
+      }
     }
 
     await page.screenshot({

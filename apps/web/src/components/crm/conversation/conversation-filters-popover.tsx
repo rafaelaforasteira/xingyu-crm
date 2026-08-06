@@ -59,7 +59,9 @@ export function ConversationFiltersPopover({
     if (!open) return;
     setDraft(cloneConversationFilters(applied));
     setTagSearch("");
-  }, [open, applied]);
+    // Sync draft only when the popover opens — not when parent re-renders `applied`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional open-only sync
+  }, [open]);
 
   const channelsQuery = useQuery({
     queryKey: pipelineId

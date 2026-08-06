@@ -216,7 +216,7 @@ function prepareSimulation(prisma: PrismaMock, configuredConnection = connection
     name: "Entrada",
     type: "OPEN",
   });
-  prisma.$queryRaw.mockResolvedValue([]);
+  prisma.$queryRaw.mockResolvedValue([{ seq: 42 }]);
   prisma.contact.findMany.mockResolvedValue([]);
   prisma.contact.create.mockResolvedValue(simulatedContact());
   prisma.conversation.create.mockResolvedValue(simulatedConversation());
@@ -488,7 +488,7 @@ describe("PipelineChannelsService", () => {
       expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
         isolationLevel: "Serializable",
       });
-      expect(prisma.$queryRaw).toHaveBeenCalledTimes(3);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
       expect(prisma.contact.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
@@ -557,6 +557,7 @@ describe("PipelineChannelsService", () => {
           stageId,
           contactId: "contact-simulated",
           conversationId: "conversation-simulated",
+          leadSequence: 42,
           value: 0.29,
           status: "OPEN",
         }),

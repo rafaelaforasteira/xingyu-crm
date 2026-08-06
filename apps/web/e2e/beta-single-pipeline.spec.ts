@@ -62,7 +62,7 @@ test.describe("Beta single-pipeline UI", () => {
     ).toBeVisible();
     await expect(page.getByTestId("conversation-filters-trigger")).toBeVisible();
     await expect(page.getByText("Todos os canais")).toHaveCount(0);
-    await expect(page.getByLabel("Não lidas")).toHaveCount(0);
+    await expect(page.getByLabel("Não lidas", { exact: true })).toHaveCount(0);
     await expect(page.getByTestId("beta-conversation-thread")).toBeVisible();
     await expect(page.getByTestId("conversation-composer")).toBeVisible({
       timeout: 20_000,

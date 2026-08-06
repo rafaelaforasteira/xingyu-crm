@@ -259,6 +259,9 @@ export function contactName(contact: unknown): string {
 export function channelName(channel: unknown): string {
   if (typeof channel === "string" && channel.trim()) return channel;
   if (!isRecord(channel)) return "Canal não informado";
+  if (typeof channel.displayName === "string" && channel.displayName.trim()) {
+    return channel.displayName;
+  }
   if (typeof channel.name === "string" && channel.name.trim()) return channel.name;
   if (typeof channel.type === "string" && channel.type.trim()) return channel.type;
   return "Canal não informado";

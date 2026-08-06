@@ -5,6 +5,7 @@ import { DealsService } from "./deals.service";
 type MockMethod = jest.Mock<Promise<unknown>, unknown[]>;
 
 type TransactionMock = {
+  $queryRaw: MockMethod;
   pipeline: { findFirst: MockMethod };
   pipelineStage: { findFirst: MockMethod };
   deal: {
@@ -43,6 +44,7 @@ function method(): MockMethod {
 
 function createTransactionMock(): TransactionMock {
   return {
+    $queryRaw: method(),
     pipeline: { findFirst: method() },
     pipelineStage: { findFirst: method() },
     deal: {
@@ -124,6 +126,7 @@ describe("DealsService Kanban integrity", () => {
     transaction.pipeline.findFirst.mockResolvedValue({ id: pipelineId });
     transaction.dealStageHistory.create.mockResolvedValue({});
     transaction.activity.create.mockResolvedValue({});
+    transaction.$queryRaw.mockResolvedValue([{ seq: 1 }]);
   });
 
   it("rejects a stage that is not active in the selected pipeline", async () => {

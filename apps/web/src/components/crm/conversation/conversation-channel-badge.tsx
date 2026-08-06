@@ -29,6 +29,7 @@ export function ConversationChannelBadge({
   return (
     <Badge
       variant="outline"
+      title={label}
       className={cn("border-0 font-normal", colorClass, className)}
     >
       {label}

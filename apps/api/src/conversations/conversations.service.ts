@@ -27,6 +27,8 @@ const LIST_INCLUDE = {
       id: true,
       firstName: true,
       lastName: true,
+      phone: true,
+      whatsapp: true,
       tags: { include: { tag: true } },
     },
   },
@@ -50,7 +52,10 @@ const LIST_INCLUDE = {
       pipelineId: true,
       stageId: true,
       priority: true,
-      stage: { select: { name: true } },
+      leadSequence: true,
+      ownerId: true,
+      stage: { select: { name: true, color: true } },
+      owner: { select: { id: true, name: true, avatarUrl: true } },
       tags: { include: { tag: true } },
     },
   },
@@ -429,11 +434,13 @@ export class ConversationsService {
         include: LIST_INCLUDE,
       });
       const previews = await this.loadLastMessagePreviews(data.map((c) => c.id));
+      const directions = await this.loadLastMessageDirections(data.map((c) => c.id));
       return {
         data: data.map((conversation) =>
           toConversationListItem({
             ...conversation,
             lastMessagePreview: previews.get(conversation.id) ?? null,
+            lastMessageDirection: directions.get(conversation.id) ?? null,
           }),
         ),
         meta: {
@@ -482,6 +489,7 @@ export class ConversationsService {
         toConversationListItem({
           ...conversation,
           lastMessagePreview: previews.get(conversation.id) ?? null,
+          lastMessageDirection: directions.get(conversation.id) ?? null,
         }),
       ),
       total,
@@ -533,6 +541,7 @@ export class ConversationsService {
             pipelineId: deal.pipelineId,
             stageId: deal.stageId,
             priority: deal.priority,
+            leadSequence: deal.leadSequence ?? null,
             pipeline: deal.pipeline
               ? { id: deal.pipeline.id, name: deal.pipeline.name, color: deal.pipeline.color }
               : null,

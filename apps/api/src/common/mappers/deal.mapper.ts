@@ -23,6 +23,7 @@ export type DealMapperInput = {
   contactId?: string | null;
   companyId?: string | null;
   ownerId?: string | null;
+  leadSequence?: number | null;
   status?: string;
   priority?: string;
   lastInteractionAt?: Date | string | null;
@@ -48,6 +49,7 @@ export type DealResponse = {
   contactId: string | null;
   companyId: string | null;
   ownerId: string | null;
+  leadSequence: number | null;
   contact: ReturnType<typeof toContactResponse> | null;
   company: ReturnType<typeof toCompanyResponse> | null;
   owner?: { id: string; name: string; avatarUrl?: string | null } | null;
@@ -85,6 +87,7 @@ export function toDealResponse(deal: DealMapperInput): DealResponse {
     contactId: deal.contactId ?? null,
     companyId: deal.companyId ?? null,
     ownerId: deal.ownerId ?? null,
+    leadSequence: deal.leadSequence ?? null,
     contact: contact ? toContactResponse(contact) : null,
     company: company ? toCompanyResponse(company) : null,
     stage: stage ? toPipelineStageResponse(stage) : null,
