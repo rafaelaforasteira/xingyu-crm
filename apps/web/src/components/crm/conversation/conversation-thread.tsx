@@ -16,6 +16,11 @@ import {
 import { ConversationEmptyState } from "./conversation-empty-state";
 import { ConversationLeadHeader } from "./conversation-lead-header";
 import { conversationContactDisplayName } from "./conversation-list-utils";
+import {
+  CONVERSATION_THREAD_SCROLL_CLASS,
+  CONVERSATION_THREAD_SHELL_CLASS,
+  CONVERSATION_THREAD_TEXTURE_CLASS,
+} from "./conversation-thread-surface";
 import { MessageBubble } from "./message-bubble";
 import type { Conversation } from "@/lib/types";
 
@@ -135,86 +140,96 @@ export function ConversationThread({
           ) : null}
 
           <div
-            ref={listRef}
-            className="conversation-thread-bg scrollbar-thin flex-1 space-y-2 overflow-y-auto p-3 sm:p-4"
-            data-testid="message-list"
-            aria-label="Histórico de mensagens"
-            aria-live="polite"
-            aria-busy={messagesQuery.isLoading || loadingOlder}
+            className={CONVERSATION_THREAD_SHELL_CLASS}
+            data-testid="conversation-thread-shell"
           >
-            {hasMore ? (
-              <div className="flex justify-center pb-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  data-testid="load-older-messages"
-                  disabled={loadingOlder}
-                  onClick={() => void handleLoadOlder()}
-                >
-                  {loadingOlder ? (
-                    <Loader2 className="mr-2 h-3 w-3 animate-spin" aria-hidden />
-                  ) : null}
-                  Carregar mensagens anteriores
-                </Button>
-              </div>
-            ) : null}
-
-            {messagesQuery.isLoading ? (
-              <div className="space-y-3" aria-label="Carregando mensagens">
-                <Skeleton className="h-14 w-3/4" />
-                <Skeleton className="ml-auto h-14 w-2/3" />
-                <Skeleton className="h-14 w-1/2" />
-              </div>
-            ) : messagesQuery.error ? (
-              <div>
-                <ErrorBanner
-                  message={errorMessage(
-                    messagesQuery.error,
-                    "Falha ao carregar mensagens.",
-                  )}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void messagesQuery.refetch()}
-                >
-                  Tentar novamente
-                </Button>
-              </div>
-            ) : sortedMessages.length === 0 ? (
-              <EmptyState
-                title="Ainda não existem mensagens"
-                description="O histórico aparecerá aqui quando houver mensagens vinculadas a esta conversa."
-                className="m-auto border-0 bg-transparent"
-              />
-            ) : (
-              timeline.map((item) =>
-                item.type === "day" ? (
-                  <div
-                    key={`day-${item.key}`}
-                    data-testid="message-day-separator"
-                    className="flex items-center justify-center py-2"
+            <div
+              className={CONVERSATION_THREAD_TEXTURE_CLASS}
+              aria-hidden="true"
+              data-testid="conversation-thread-texture"
+            />
+            <div
+              ref={listRef}
+              className={CONVERSATION_THREAD_SCROLL_CLASS}
+              data-testid="message-list"
+              aria-label="Histórico de mensagens"
+              aria-live="polite"
+              aria-busy={messagesQuery.isLoading || loadingOlder}
+            >
+              {hasMore ? (
+                <div className="flex justify-center pb-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    data-testid="load-older-messages"
+                    disabled={loadingOlder}
+                    onClick={() => void handleLoadOlder()}
                   >
-                    <span className="rounded-full bg-background/80 px-3 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm">
-                      {item.label}
-                    </span>
-                  </div>
-                ) : (
-                  <MessageBubble
-                    key={item.message.id}
-                    message={item.message}
-                    inboundName={
-                      detailContactName === "Contato sem nome"
-                        ? "Cliente"
-                        : detailContactName
-                    }
-                    mounted={mounted}
+                    {loadingOlder ? (
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" aria-hidden />
+                    ) : null}
+                    Carregar mensagens anteriores
+                  </Button>
+                </div>
+              ) : null}
+
+              {messagesQuery.isLoading ? (
+                <div className="space-y-3" aria-label="Carregando mensagens">
+                  <Skeleton className="h-14 w-3/4" />
+                  <Skeleton className="ml-auto h-14 w-2/3" />
+                  <Skeleton className="h-14 w-1/2" />
+                </div>
+              ) : messagesQuery.error ? (
+                <div>
+                  <ErrorBanner
+                    message={errorMessage(
+                      messagesQuery.error,
+                      "Falha ao carregar mensagens.",
+                    )}
                   />
-                ),
-              )
-            )}
-            <div ref={messagesEndRef} data-testid="messages-end" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void messagesQuery.refetch()}
+                  >
+                    Tentar novamente
+                  </Button>
+                </div>
+              ) : sortedMessages.length === 0 ? (
+                <EmptyState
+                  title="Ainda não existem mensagens"
+                  description="O histórico aparecerá aqui quando houver mensagens vinculadas a esta conversa."
+                  className="m-auto border-0 bg-transparent"
+                />
+              ) : (
+                timeline.map((item) =>
+                  item.type === "day" ? (
+                    <div
+                      key={`day-${item.key}`}
+                      data-testid="message-day-separator"
+                      className="flex items-center justify-center py-2"
+                    >
+                      <span className="rounded-full bg-background/80 px-3 py-0.5 text-[11px] font-medium text-muted-foreground shadow-sm">
+                        {item.label}
+                      </span>
+                    </div>
+                  ) : (
+                    <MessageBubble
+                      key={item.message.id}
+                      message={item.message}
+                      inboundName={
+                        detailContactName === "Contato sem nome"
+                          ? "Cliente"
+                          : detailContactName
+                      }
+                      mounted={mounted}
+                    />
+                  ),
+                )
+              )}
+              <div ref={messagesEndRef} data-testid="messages-end" />
+            </div>
           </div>
 
           {!detailError && !hideComposer ? (
