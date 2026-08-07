@@ -64,6 +64,15 @@ test.describe("Beta single-pipeline UI", () => {
     await expect(page.getByText("Todos os canais")).toHaveCount(0);
     await expect(page.getByLabel("Não lidas", { exact: true })).toHaveCount(0);
     await expect(page.getByTestId("beta-conversation-thread")).toBeVisible();
+    await expect(page.getByTestId("conversation-empty-state")).toBeVisible();
+    await expect(page.getByTestId("conversation-composer")).toHaveCount(0);
+
+    const amandaConversation = page
+      .locator('[data-testid^="conversation-conv-"]')
+      .filter({ hasText: /Amanda Vieira/i })
+      .first();
+    await amandaConversation.click();
+    await expect(page).toHaveURL(/conversation=/);
     await expect(page.getByTestId("conversation-composer")).toBeVisible({
       timeout: 20_000,
     });

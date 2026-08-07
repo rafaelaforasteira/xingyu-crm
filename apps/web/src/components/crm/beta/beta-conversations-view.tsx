@@ -13,12 +13,26 @@ import {
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { ConversationWorkspace } from "@/components/crm/conversation/conversation-workspace";
+import { resolveSelectedConversationId } from "@/components/crm/conversation/conversation-selection";
+
+function buildConversationsHrefPreserving(
+  searchParams: URLSearchParams,
+  conversationId?: string | null,
+): string {
+  const params = new URLSearchParams(searchParams.toString());
+  params.set("view", "conversations");
+  if (conversationId) params.set("conversation", conversationId);
+  else params.delete("conversation");
+  return `/operacao?${params.toString()}`;
+}
 
 export function BetaConversationsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pipelineId = BETA_PIPELINE_ID;
-  const conversationId = searchParams.get("conversation") ?? undefined;
+  const conversationId = resolveSelectedConversationId(
+    searchParams.get("conversation"),
+  );
   const searchQuery = searchParams.get("q") ?? "";
 
   const scope = useMemo(
@@ -33,9 +47,15 @@ export function BetaConversationsView() {
   });
 
   const qOpt = searchQuery.trim() ? { q: searchQuery } : undefined;
-  const getConversationHref = (id: string) =>
-    buildBetaConversationsHref(id, qOpt);
-  const clearHref = buildBetaConversationsHref(null, qOpt);
+
+  const getConversationHref = useCallback(
+    (id: string) => buildConversationsHrefPreserving(searchParams, id),
+    [searchParams],
+  );
+  const clearHref = useMemo(
+    () => buildConversationsHrefPreserving(searchParams, null),
+    [searchParams],
+  );
 
   const onExternalSearchChange = useCallback(
     (search: string) => {
@@ -60,7 +80,7 @@ export function BetaConversationsView() {
         externalSearch={searchQuery}
         onExternalSearchChange={onExternalSearchChange}
         onSelectConversation={(id) => {
-          router.replace(buildBetaConversationsHref(id, qOpt), {
+          router.replace(buildConversationsHrefPreserving(searchParams, id), {
             scroll: false,
           });
         }}

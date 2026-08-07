@@ -1,13 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, Info, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { ErrorBanner } from "@/components/crm/page-header";
-import {
-  buildMessageTimeline,
-  channelName,
-  contactName,
-} from "@/lib/inbox-utils";
+import { buildMessageTimeline } from "@/lib/inbox-utils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -17,7 +13,9 @@ import {
   useConversationMessages,
   useMarkConversationRead,
 } from "./conversation-composer";
-import { ConversationChannelBadge } from "./conversation-channel-badge";
+import { ConversationEmptyState } from "./conversation-empty-state";
+import { ConversationLeadHeader } from "./conversation-lead-header";
+import { conversationContactDisplayName } from "./conversation-list-utils";
 import { MessageBubble } from "./message-bubble";
 import type { Conversation } from "@/lib/types";
 
@@ -65,7 +63,7 @@ export function ConversationThread({
   const messagesEndRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = React.useRef(true);
-  const detailContactName = contactName(detail?.contact);
+  const detailContactName = conversationContactDisplayName(detail?.contact);
 
   React.useEffect(() => {
     stickToBottomRef.current = true;
@@ -111,74 +109,20 @@ export function ConversationThread({
       )}
     >
       {!conversationId ? (
-        <EmptyState
-          title="Selecione uma conversa"
-          description="Escolha um item na lista para abrir o histórico."
-          className="m-auto border-0"
-        />
+        <ConversationEmptyState />
       ) : (
         <>
           {!hideHeader ? (
-          <div className="border-b border-border bg-card px-3 py-3 sm:px-4">
-            <div className="flex items-center gap-2">
-              {onBack ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Voltar para conversas"
-                  onClick={onBack}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              ) : null}
-              {detailLoading ? (
-                <div className="flex-1 space-y-2" aria-label="Carregando conversa">
-                  <Skeleton className="h-5 w-40" />
-                  <Skeleton className="h-3 w-28" />
-                </div>
-              ) : (
-                <div className="min-w-0 flex-1">
-                  <p
-                    className="truncate font-semibold"
-                    data-testid="conversation-header"
-                  >
-                    {detailContactName}
-                  </p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                    {detail?.channel ? (
-                      <ConversationChannelBadge channel={detail.channel} />
-                    ) : (
-                      <span>{channelName(detail?.channel)}</span>
-                    )}
-                    {detail?.status ? <span>· {detail.status}</span> : null}
-                  </div>
-                </div>
-              )}
-              {showContextButton && onOpenContext ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Abrir contexto do lead"
-                  className="lg:hidden"
-                  onClick={onOpenContext}
-                >
-                  <Info className="h-4 w-4" />
-                </Button>
-              ) : null}
-            </div>
-            {detailError ? (
-              <div className="mt-3">
-                <ErrorBanner
-                  message={errorMessage(detailError, "Falha ao carregar a conversa.")}
-                />
-                <Button variant="outline" size="sm" onClick={onRetryDetail}>
-                  Tentar novamente
-                </Button>
-              </div>
-            ) : null}
-          </div>
+            <ConversationLeadHeader
+              conversationId={conversationId}
+              detail={detail}
+              detailLoading={detailLoading}
+              detailError={detailError}
+              onRetryDetail={onRetryDetail}
+              onBack={onBack}
+              onOpenContext={onOpenContext}
+              showContextButton={showContextButton}
+            />
           ) : detailError ? (
             <div className="border-b border-border px-3 py-2">
               <ErrorBanner
@@ -261,7 +205,7 @@ export function ConversationThread({
                     key={item.message.id}
                     message={item.message}
                     inboundName={
-                      detailContactName === "Conversa"
+                      detailContactName === "Contato sem nome"
                         ? "Cliente"
                         : detailContactName
                     }

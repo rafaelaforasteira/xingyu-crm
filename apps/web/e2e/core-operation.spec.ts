@@ -236,10 +236,18 @@ test.describe("Core operation workspace (beta single-pipeline)", () => {
     await page.getByTestId("beta-view-conversations").click();
     await expect(page).toHaveURL(/view=conversations/);
     await expect(page.getByTestId("beta-conversation-workspace")).toBeVisible();
+    await expect(page.getByTestId("conversation-empty-state")).toBeVisible();
+    await expect(page.getByTestId("conversation-list")).toBeVisible();
+    await expect(page.getByTestId("lead-context-panel")).toBeVisible();
+
+    const firstConversation = page
+      .locator('[data-testid^="conversation-conv-"]')
+      .first();
+    await firstConversation.click();
+    await expect(page).toHaveURL(/conversation=/);
     await expect(page.getByTestId("conversation-composer")).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByTestId("lead-context-panel")).toBeVisible();
 
     await page.getByTestId("beta-view-kanban").click();
     await expect(page).toHaveURL(/view=kanban/);

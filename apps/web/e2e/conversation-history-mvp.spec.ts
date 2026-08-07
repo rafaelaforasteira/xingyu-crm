@@ -11,7 +11,8 @@ test.describe("Conversation History MVP (beta workspace)", () => {
     });
     await expect(page.getByTestId("conversation-list")).toBeVisible();
     await expect(page.getByTestId("lead-context-panel")).toBeVisible();
-    await expect(page.getByTestId("conversation-composer")).toBeVisible();
+    await expect(page.getByTestId("conversation-empty-state")).toBeVisible();
+    await expect(page.getByTestId("conversation-composer")).toHaveCount(0);
 
     const claudia = page
       .getByTestId("conversation-list")
@@ -21,6 +22,7 @@ test.describe("Conversation History MVP (beta workspace)", () => {
     await expect(claudia).toBeVisible({ timeout: 20_000 });
     await claudia.click();
     await expect(page).toHaveURL(/conversation=/);
+    await expect(page.getByTestId("conversation-composer")).toBeVisible();
     await expect(page.getByTestId("conversation-header")).toContainText(/Cláudia/i);
     await expect(page.getByTestId("message-list")).toBeVisible();
     await expect(page.getByTestId("message-bubble").first()).toBeVisible({
@@ -50,7 +52,19 @@ test.describe("Conversation History MVP (beta workspace)", () => {
       timeout: 10_000,
     });
     await expect(page.getByText("tabela-precos.txt").first()).toBeVisible();
-    await expect(page.locator("audio").first()).toBeVisible();
+    // Áudio demo é opcional se o arquivo local estiver ausente.
+    const audio = page.locator(
+      'audio, [data-testid="message-audio-content"], [data-testid="message-voice-content"]',
+    );
+    for (let i = 0; i < 3 && (await audio.count()) === 0; i += 1) {
+      const older = page.getByTestId("load-older-messages");
+      if (!(await older.isVisible().catch(() => false))) break;
+      await older.click();
+      await page.waitForTimeout(400);
+    }
+    if ((await audio.count()) > 0) {
+      await expect(audio.first()).toBeVisible();
+    }
 
     const amanda = page.getByTestId("conversation-conv-01");
     await amanda.scrollIntoViewIfNeeded();

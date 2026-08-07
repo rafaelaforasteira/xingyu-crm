@@ -15,9 +15,13 @@ const channelColors: Record<string, string> = {
 export function ConversationChannelBadge({
   channel,
   className,
+  "data-testid": dataTestId,
+  "aria-label": ariaLabel,
 }: {
   channel: ConversationChannelSummary | string | null | undefined;
   className?: string;
+  "data-testid"?: string;
+  "aria-label"?: string;
 }) {
   const label = channelName(channel);
   const type =
@@ -30,6 +34,8 @@ export function ConversationChannelBadge({
     <Badge
       variant="outline"
       title={label}
+      aria-label={ariaLabel ?? `Canal: ${label}`}
+      data-testid={dataTestId}
       className={cn("border-0 font-normal", colorClass, className)}
     >
       {label}
