@@ -17,6 +17,7 @@ export function PipelineViewSwitcher({
   conversationsHref,
   kanbanLabel = "Kanban",
   onNavigate,
+  dataTestIdPrefix = "operation",
 }: {
   pipelineId: string;
   active: PipelineView;
@@ -26,10 +27,22 @@ export function PipelineViewSwitcher({
   kanbanLabel?: string;
   /** When set, uses buttons instead of Links (query-param navigation). */
   onNavigate?: (view: PipelineView) => void;
+  /** Prefix for data-testid attributes (`operation` or `beta`). */
+  dataTestIdPrefix?: "operation" | "beta";
 }) {
   const kanban = kanbanHref ?? `/pipelines/${pipelineId}`;
   const conversations =
     conversationsHref ?? `/pipelines/${pipelineId}/conversations`;
+  const switcherTestId =
+    dataTestIdPrefix === "beta"
+      ? "beta-view-switcher"
+      : "operation-view-switcher";
+  const kanbanTestId =
+    dataTestIdPrefix === "beta" ? "beta-view-kanban" : "operation-view-kanban";
+  const conversationsTestId =
+    dataTestIdPrefix === "beta"
+      ? "beta-view-conversations"
+      : "operation-view-conversations";
 
   const itemClass = (selected: boolean) =>
     cn(
@@ -44,7 +57,7 @@ export function PipelineViewSwitcher({
       className="inline-flex gap-1 rounded-lg border border-border bg-muted/30 p-1"
       role="tablist"
       aria-label="Visualização do pipeline"
-      data-testid="operation-view-switcher"
+      data-testid={switcherTestId}
     >
       {onNavigate ? (
         <>
@@ -52,7 +65,7 @@ export function PipelineViewSwitcher({
             type="button"
             role="tab"
             aria-selected={active === "kanban"}
-            data-testid="operation-view-kanban"
+            data-testid={kanbanTestId}
             className={itemClass(active === "kanban")}
             onClick={() => onNavigate("kanban")}
           >
@@ -63,7 +76,7 @@ export function PipelineViewSwitcher({
             type="button"
             role="tab"
             aria-selected={active === "conversations"}
-            data-testid="operation-view-conversations"
+            data-testid={conversationsTestId}
             className={itemClass(active === "conversations")}
             onClick={() => onNavigate("conversations")}
           >
@@ -77,7 +90,7 @@ export function PipelineViewSwitcher({
             href={kanban}
             role="tab"
             aria-selected={active === "kanban"}
-            data-testid="operation-view-kanban"
+            data-testid={kanbanTestId}
             className={itemClass(active === "kanban")}
           >
             <Kanban className="h-3.5 w-3.5" aria-hidden />
@@ -87,7 +100,7 @@ export function PipelineViewSwitcher({
             href={conversations}
             role="tab"
             aria-selected={active === "conversations"}
-            data-testid="operation-view-conversations"
+            data-testid={conversationsTestId}
             className={itemClass(active === "conversations")}
           >
             <MessagesSquare className="h-3.5 w-3.5" aria-hidden />

@@ -20,6 +20,7 @@ import {
   UpdatePipelineChannelDto,
 } from "./dto/pipeline-channel.dto";
 import { acquirePipelineChannelIdentityLock } from "./pipeline-channel-lock";
+import { allocateLeadSequence } from "../common/lead-sequence";
 
 const channelPublicSelect = {
   id: true,
@@ -547,6 +548,7 @@ export class PipelineChannelsService {
 
         let deal: SimulatedDeal | null = null;
         if (connection.createDeal) {
+          const leadSequence = await allocateLeadSequence(tx, organizationId);
           deal = await tx.deal.create({
             data: {
               organizationId,
@@ -557,6 +559,7 @@ export class PipelineChannelsService {
               teamId,
               conversationId: conversation?.id ?? null,
               name: `Oportunidade — ${lead.name}`,
+              leadSequence,
               value: lead.estimatedValue,
               status: "OPEN",
               source: connection.source ?? channel.displayName ?? channel.name ?? channel.type,

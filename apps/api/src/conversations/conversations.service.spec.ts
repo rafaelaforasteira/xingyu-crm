@@ -22,6 +22,7 @@ type PrismaMock = {
   task: { count: MockMethod; findFirst: MockMethod };
   order: { count: MockMethod; findFirst: MockMethod };
   activity: { count: MockMethod; create: MockMethod };
+  $queryRaw: MockMethod;
 };
 
 const organizationId = "org-test";
@@ -49,6 +50,7 @@ function createPrismaMock(): PrismaMock {
     task: { count: method(), findFirst: method() },
     order: { count: method(), findFirst: method() },
     activity: { count: method(), create: method() },
+    $queryRaw: method(),
   };
 }
 
@@ -148,7 +150,6 @@ describe("ConversationsService", () => {
   describe("findAll", () => {
     it("filters by pipelineId through linked deal", async () => {
       prisma.conversation.findMany.mockResolvedValue([]);
-      prisma.conversation.count.mockResolvedValue(0);
       prisma.message.findMany.mockResolvedValue([]);
 
       await service.findAll(organizationId, { pipelineId: "pipeline-1", page: 1, pageSize: 20 });
@@ -165,17 +166,70 @@ describe("ConversationsService", () => {
               }),
             ]),
           }),
+          select: expect.any(Object),
+        }),
+      );
+    });
+
+    it("filters by channels stages tags period and replyStatus", async () => {
+      prisma.conversation.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.message.findMany.mockResolvedValue([]);
+      prisma.$queryRaw.mockResolvedValue([{ id: "conv-9" }]);
+
+      await service.findAll(organizationId, {
+        page: 1,
+        pageSize: 20,
+        channels: ["ch-1", "ch-2"],
+        stages: ["st-1"],
+        tags: ["tag-1"],
+        unreadOnly: true,
+        replyStatus: "customer",
+        conversationState: "open",
+        period: "7d",
+      });
+
+      expect(prisma.$queryRaw).toHaveBeenCalled();
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.any(Object),
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({
+                channelId: { in: ["ch-1", "ch-2"] },
+                unreadCount: { gt: 0 },
+                status: { in: ["OPEN", "PENDING"] },
+              }),
+              expect.objectContaining({
+                id: { in: ["conv-9"] },
+              }),
+            ]),
+          }),
         }),
       );
     });
 
     it("returns light list items without messages", async () => {
       const row = conversationRow();
-      prisma.conversation.findMany.mockResolvedValue([row]);
-      prisma.conversation.count.mockResolvedValue(1);
-      prisma.message.findMany.mockResolvedValue([
-        { conversationId: "conv-1", body: "Hello there" },
-      ]);
+      prisma.conversation.findMany
+        .mockResolvedValueOnce([
+          {
+            id: row.id,
+            status: row.status,
+            unreadCount: row.unreadCount,
+            lastMessageAt: row.lastMessageAt,
+            updatedAt: row.updatedAt,
+          },
+        ])
+        .mockResolvedValueOnce([row]);
+      prisma.message.findMany
+        .mockResolvedValueOnce([
+          { conversationId: "conv-1", direction: "INBOUND" },
+        ])
+        .mockResolvedValueOnce([
+          { conversationId: "conv-1", body: "Hello there" },
+        ]);
 
       const result = await service.findAll(organizationId, { page: 1, pageSize: 20 });
 

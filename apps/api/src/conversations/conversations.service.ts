@@ -27,6 +27,8 @@ const LIST_INCLUDE = {
       id: true,
       firstName: true,
       lastName: true,
+      phone: true,
+      whatsapp: true,
       tags: { include: { tag: true } },
     },
   },
@@ -50,7 +52,10 @@ const LIST_INCLUDE = {
       pipelineId: true,
       stageId: true,
       priority: true,
-      stage: { select: { name: true } },
+      leadSequence: true,
+      ownerId: true,
+      stage: { select: { name: true, color: true } },
+      owner: { select: { id: true, name: true, avatarUrl: true } },
       tags: { include: { tag: true } },
     },
   },
@@ -117,14 +122,30 @@ export class ConversationsService {
     organizationId: string,
     query: QueryConversationsDto,
   ): Prisma.ConversationWhereInput {
-    const channelFilter = query.channelId ?? query.integrationAccountId;
+    const channelIds =
+      query.channels?.length
+        ? query.channels
+        : query.channelId || query.integrationAccountId
+          ? [query.channelId ?? query.integrationAccountId!]
+          : [];
+    const stageIds =
+      query.stages?.length
+        ? query.stages
+        : query.stageId
+          ? [query.stageId]
+          : [];
+    const tagIds =
+      query.tags?.length ? query.tags : query.tagId ? [query.tagId] : [];
+
     const andFilters: Prisma.ConversationWhereInput[] = [];
 
     if (query.pipelineId) {
       andFilters.push({ deal: { pipelineId: query.pipelineId, ...notDeleted } });
     }
-    if (query.stageId) {
-      andFilters.push({ deal: { stageId: query.stageId, ...notDeleted } });
+    if (stageIds.length) {
+      andFilters.push({
+        deal: { stageId: { in: stageIds }, ...notDeleted },
+      });
     }
     if (query.teamId) {
       andFilters.push({
@@ -134,11 +155,21 @@ export class ConversationsService {
         ],
       });
     }
-    if (query.tagId) {
+    if (tagIds.length) {
       andFilters.push({
         OR: [
-          { contact: { tags: { some: { tagId: query.tagId } }, ...notDeleted } },
-          { deal: { tags: { some: { tagId: query.tagId } }, ...notDeleted } },
+          {
+            contact: {
+              tags: { some: { tagId: { in: tagIds } } },
+              ...notDeleted,
+            },
+          },
+          {
+            deal: {
+              tags: { some: { tagId: { in: tagIds } } },
+              ...notDeleted,
+            },
+          },
         ],
       });
     }
@@ -161,17 +192,164 @@ export class ConversationsService {
       });
     }
 
+    const periodFilter = this.buildPeriodFilter(query.period);
+    if (periodFilter) andFilters.push(periodFilter);
+
+    let statusFilter: Prisma.ConversationWhereInput["status"] | undefined;
+    if (query.conversationState === "open") {
+      statusFilter = { in: ["OPEN", "PENDING"] };
+    } else if (query.conversationState === "closed") {
+      statusFilter = { in: ["RESOLVED", "ARCHIVED"] };
+    } else if (query.status) {
+      statusFilter = query.status as never;
+    }
+
     return {
       organizationId,
       ...notDeleted,
       ...(query.contactId ? { contactId: query.contactId } : {}),
-      ...(query.status ? { status: query.status as never } : {}),
+      ...(statusFilter ? { status: statusFilter } : {}),
       ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
       ...(query.withoutAssignee ? { assigneeId: null } : {}),
       ...(query.unreadOnly ? { unreadCount: { gt: 0 } } : {}),
-      ...(channelFilter ? { channelId: channelFilter } : {}),
+      ...(channelIds.length === 1
+        ? { channelId: channelIds[0] }
+        : channelIds.length > 1
+          ? { channelId: { in: channelIds } }
+          : {}),
       ...(andFilters.length ? { AND: andFilters } : {}),
     };
+  }
+
+  private buildPeriodFilter(
+    period?: QueryConversationsDto["period"],
+  ): Prisma.ConversationWhereInput | null {
+    if (!period) return null;
+    const now = new Date();
+    if (period === "today") {
+      const day = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(now);
+      return { lastMessageAt: { gte: new Date(`${day}T00:00:00-03:00`) } };
+    }
+    if (period === "7d") {
+      return {
+        lastMessageAt: {
+          gte: new Date(now.getTime() - 7 * 86_400_000),
+        },
+      };
+    }
+    if (period === "30d") {
+      return {
+        lastMessageAt: {
+          gte: new Date(now.getTime() - 30 * 86_400_000),
+        },
+      };
+    }
+    if (period === "older30") {
+      return {
+        lastMessageAt: {
+          lt: new Date(now.getTime() - 30 * 86_400_000),
+          not: null,
+        },
+      };
+    }
+    return null;
+  }
+
+  private async filterIdsByLastMessageDirection(
+    organizationId: string,
+    direction: "INBOUND" | "OUTBOUND",
+  ): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT c.id
+      FROM "Conversation" c
+      INNER JOIN LATERAL (
+        SELECT m.direction
+        FROM "Message" m
+        WHERE m."conversationId" = c.id
+          AND m."deletedAt" IS NULL
+          AND m."isInternal" = false
+        ORDER BY m."sentAt" DESC
+        LIMIT 1
+      ) last_msg ON true
+      WHERE c."organizationId" = ${organizationId}
+        AND c."deletedAt" IS NULL
+        AND c.status = 'OPEN'
+        AND last_msg.direction::text = ${direction}
+    `;
+    return rows.map((row) => row.id);
+  }
+
+  private async loadLastMessageDirections(
+    conversationIds: string[],
+  ): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (!conversationIds.length) return map;
+    const messages = await this.prisma.message.findMany({
+      where: {
+        conversationId: { in: conversationIds },
+        isInternal: false,
+        ...notDeleted,
+      },
+      orderBy: { sentAt: "desc" },
+      distinct: ["conversationId"],
+      select: { conversationId: true, direction: true },
+    });
+    for (const message of messages) {
+      map.set(message.conversationId, message.direction);
+    }
+    return map;
+  }
+
+  private sortCandidatesByPriority<
+    T extends {
+      id: string;
+      status: string;
+      unreadCount: number;
+      lastMessageAt: Date | null;
+      updatedAt: Date;
+    },
+  >(
+    candidates: T[],
+    directions: Map<string, string>,
+  ): T[] {
+    return candidates.slice().sort((left, right) => {
+      const leftGroup = this.priorityGroup(
+        left.status,
+        left.unreadCount,
+        directions.get(left.id),
+      );
+      const rightGroup = this.priorityGroup(
+        right.status,
+        right.unreadCount,
+        directions.get(right.id),
+      );
+      if (leftGroup !== rightGroup) return leftGroup - rightGroup;
+      const leftTime = left.lastMessageAt?.getTime() ?? 0;
+      const rightTime = right.lastMessageAt?.getTime() ?? 0;
+      if (leftTime !== rightTime) return rightTime - leftTime;
+      const leftUpdated = left.updatedAt.getTime();
+      const rightUpdated = right.updatedAt.getTime();
+      if (leftUpdated !== rightUpdated) return rightUpdated - leftUpdated;
+      return left.id < right.id ? 1 : left.id > right.id ? -1 : 0;
+    });
+  }
+
+  private priorityGroup(
+    status: string,
+    unreadCount: number,
+    direction?: string,
+  ): number {
+    const closed = status === "RESOLVED" || status === "ARCHIVED";
+    if (closed) return 5;
+    if (direction === "INBOUND" && unreadCount > 0) return 1;
+    if (direction === "INBOUND") return 2;
+    if (direction === "OUTBOUND") return 3;
+    return 4;
   }
 
   private async applyListCursor(
@@ -227,40 +405,28 @@ export class ConversationsService {
     const pageSize = query.pageSize ?? 20;
     let where = this.buildListWhere(organizationId, query);
 
-    if (query.awaitingReply) {
-      const awaitingIds = await this.prisma.$queryRaw<Array<{ id: string }>>`
-        SELECT c.id
-        FROM "Conversation" c
-        INNER JOIN LATERAL (
-          SELECT m.direction
-          FROM "Message" m
-          WHERE m."conversationId" = c.id
-            AND m."deletedAt" IS NULL
-            AND m."isInternal" = false
-          ORDER BY m."sentAt" DESC
-          LIMIT 1
-        ) last_msg ON true
-        WHERE c."organizationId" = ${organizationId}
-          AND c."deletedAt" IS NULL
-          AND c.status = 'OPEN'
-          AND last_msg.direction = 'INBOUND'
-      `;
+    const replyStatus =
+      query.replyStatus ??
+      (query.awaitingReply ? ("mine" as const) : undefined);
+    if (replyStatus === "mine" || replyStatus === "customer") {
+      const direction =
+        replyStatus === "mine" ? ("INBOUND" as const) : ("OUTBOUND" as const);
+      const ids = await this.filterIdsByLastMessageDirection(
+        organizationId,
+        direction,
+      );
       where = {
-        AND: [where, { id: { in: awaitingIds.map((row) => row.id) } }],
+        AND: [where, { id: { in: ids } }],
       };
     }
 
     if (query.cursor) {
       where = await this.applyListCursor(where, organizationId, query.cursor);
-    }
-
-    const orderBy: Prisma.ConversationOrderByWithRelationInput[] = [
-      { lastMessageAt: "desc" },
-      { unreadCount: "desc" },
-      { updatedAt: "desc" },
-    ];
-
-    if (query.cursor) {
+      const orderBy: Prisma.ConversationOrderByWithRelationInput[] = [
+        { lastMessageAt: "desc" },
+        { unreadCount: "desc" },
+        { updatedAt: "desc" },
+      ];
       const data = await this.prisma.conversation.findMany({
         where,
         take: pageSize,
@@ -268,11 +434,13 @@ export class ConversationsService {
         include: LIST_INCLUDE,
       });
       const previews = await this.loadLastMessagePreviews(data.map((c) => c.id));
+      const directions = await this.loadLastMessageDirections(data.map((c) => c.id));
       return {
         data: data.map((conversation) =>
           toConversationListItem({
             ...conversation,
             lastMessagePreview: previews.get(conversation.id) ?? null,
+            lastMessageDirection: directions.get(conversation.id) ?? null,
           }),
         ),
         meta: {
@@ -285,22 +453,43 @@ export class ConversationsService {
 
     const page = query.page ?? 1;
     const { skip, take } = paginationArgs(page, pageSize);
-    const [rows, total] = await Promise.all([
-      this.prisma.conversation.findMany({
-        where,
-        skip,
-        take,
-        orderBy,
-        include: LIST_INCLUDE,
-      }),
-      this.prisma.conversation.count({ where }),
-    ]);
-    const previews = await this.loadLastMessagePreviews(rows.map((c) => c.id));
+
+    const candidates = await this.prisma.conversation.findMany({
+      where,
+      select: {
+        id: true,
+        status: true,
+        unreadCount: true,
+        lastMessageAt: true,
+        updatedAt: true,
+      },
+    });
+    const directions = await this.loadLastMessageDirections(
+      candidates.map((row) => row.id),
+    );
+    const sorted = this.sortCandidatesByPriority(candidates, directions);
+    const total = sorted.length;
+    const pageIds = sorted.slice(skip, skip + take).map((row) => row.id);
+
+    if (!pageIds.length) {
+      return paginate([], total, page, pageSize);
+    }
+
+    const rows = await this.prisma.conversation.findMany({
+      where: { id: { in: pageIds }, organizationId, ...notDeleted },
+      include: LIST_INCLUDE,
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const ordered = pageIds
+      .map((id) => byId.get(id))
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
+    const previews = await this.loadLastMessagePreviews(ordered.map((c) => c.id));
     return paginate(
-      rows.map((conversation) =>
+      ordered.map((conversation) =>
         toConversationListItem({
           ...conversation,
           lastMessagePreview: previews.get(conversation.id) ?? null,
+          lastMessageDirection: directions.get(conversation.id) ?? null,
         }),
       ),
       total,
@@ -352,6 +541,7 @@ export class ConversationsService {
             pipelineId: deal.pipelineId,
             stageId: deal.stageId,
             priority: deal.priority,
+            leadSequence: deal.leadSequence ?? null,
             pipeline: deal.pipeline
               ? { id: deal.pipeline.id, name: deal.pipeline.name, color: deal.pipeline.color }
               : null,

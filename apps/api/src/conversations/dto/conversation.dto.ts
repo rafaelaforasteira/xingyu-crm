@@ -1,12 +1,25 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import {
+  IsArray,
   IsBoolean,
+  IsIn,
   IsOptional,
   IsString,
   MaxLength,
 } from "class-validator";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
+
+function splitCsvIds(value: unknown): string[] | undefined {
+  if (value == null || value === "") return undefined;
+  const parts = Array.isArray(value)
+    ? value.map(String)
+    : String(value).split(",");
+  const unique = Array.from(
+    new Set(parts.map((part) => part.trim()).filter(Boolean)),
+  );
+  return unique.length ? unique.slice(0, 50) : undefined;
+}
 
 export class CreateConversationDto {
   @ApiPropertyOptional()
@@ -78,6 +91,33 @@ export class QueryConversationsDto extends PaginationQueryDto {
   @IsString()
   stageId?: string;
 
+  @ApiPropertyOptional({
+    description: "Comma-separated channel ids (OR within group)",
+  })
+  @IsOptional()
+  @Transform(({ value }) => splitCsvIds(value))
+  @IsArray()
+  @IsString({ each: true })
+  channels?: string[];
+
+  @ApiPropertyOptional({
+    description: "Comma-separated stage ids (OR within group)",
+  })
+  @IsOptional()
+  @Transform(({ value }) => splitCsvIds(value))
+  @IsArray()
+  @IsString({ each: true })
+  stages?: string[];
+
+  @ApiPropertyOptional({
+    description: "Comma-separated tag ids (OR within group)",
+  })
+  @IsOptional()
+  @Transform(({ value }) => splitCsvIds(value))
+  @IsArray()
+  @IsString({ each: true })
+  tags?: string[];
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -102,6 +142,29 @@ export class QueryConversationsDto extends PaginationQueryDto {
   @Type(() => Boolean)
   @IsBoolean()
   awaitingReply?: boolean;
+
+  @ApiPropertyOptional({
+    description: "mine = awaiting seller reply; customer = awaiting client reply",
+    enum: ["mine", "customer"],
+  })
+  @IsOptional()
+  @IsIn(["mine", "customer"])
+  replyStatus?: "mine" | "customer";
+
+  @ApiPropertyOptional({
+    description: "open = OPEN/PENDING; closed = RESOLVED/ARCHIVED",
+    enum: ["open", "closed"],
+  })
+  @IsOptional()
+  @IsIn(["open", "closed"])
+  conversationState?: "open" | "closed";
+
+  @ApiPropertyOptional({
+    enum: ["today", "7d", "30d", "older30"],
+  })
+  @IsOptional()
+  @IsIn(["today", "7d", "30d", "older30"])
+  period?: "today" | "7d" | "30d" | "older30";
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
+import { BETA_SINGLE_PIPELINE_MODE } from "@/lib/beta-config";
 
 export interface NavItem {
   href: string;
@@ -92,10 +93,29 @@ export const CORE_OPERATION_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+/** Beta single-pipeline: Operação only. */
+export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
+  {
+    id: "beta",
+    label: "Principal",
+    items: [
+      {
+        href: "/operacao",
+        label: "Operação",
+        icon: Kanban,
+        countKey: "waitingConversations",
+        exact: true,
+      },
+    ],
+  },
+];
+
 /** Grouped sidebar — only real routes. */
-export const NAV_GROUPS: NavGroup[] = CORE_OPERATION_MODE
-  ? CORE_OPERATION_NAV_GROUPS
-  : FULL_NAV_GROUPS;
+export const NAV_GROUPS: NavGroup[] = BETA_SINGLE_PIPELINE_MODE
+  ? BETA_SINGLE_PIPELINE_NAV_GROUPS
+  : CORE_OPERATION_MODE
+    ? CORE_OPERATION_NAV_GROUPS
+    : FULL_NAV_GROUPS;
 
 /** Flat list kept for command palette / legacy helpers. */
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items).filter(

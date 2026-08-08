@@ -81,3 +81,6 @@ secrets
 *.pid
 *.seed
 *.pid.lock
+
+apps/web/e2e/.beta-screenshots/
+apps/web/.nav-perf/

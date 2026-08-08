@@ -38,6 +38,42 @@ loadEnv({ path: path.resolve(__dirname, "../../../.env") });
 const prisma = new PrismaClient();
 
 const ORG_ID = "org-xingyu";
+
+async function ensureLeadSequences(): Promise<void> {
+  const organizations = await prisma.organization.findMany({
+    select: { id: true },
+  });
+
+  for (const organization of organizations) {
+    const maxRow = await prisma.deal.aggregate({
+      where: {
+        organizationId: organization.id,
+        leadSequence: { not: null },
+      },
+      _max: { leadSequence: true },
+    });
+    let next = (maxRow._max.leadSequence ?? 0) + 1;
+
+    const missing = await prisma.deal.findMany({
+      where: { organizationId: organization.id, leadSequence: null },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true },
+    });
+
+    for (const deal of missing) {
+      await prisma.deal.update({
+        where: { id: deal.id },
+        data: { leadSequence: next },
+      });
+      next += 1;
+    }
+
+    await prisma.organization.update({
+      where: { id: organization.id },
+      data: { nextLeadSequence: next },
+    });
+  }
+}
 const NOW = new Date();
 
 const ARGON2_OPTIONS = {
@@ -359,6 +395,7 @@ async function main() {
     await ensureAdminAuthUser();
     await ensureOperationDemoConversation();
     await ensureConversationHistoryMvp(prisma, ORG_ID, { hoursAgo, daysAgo });
+    await ensureLeadSequences();
     console.log("Demo seed already exists; preserving existing and manually created data.");
     console.log("Credenciais de admin sincronizadas a partir de ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD.");
     return;
@@ -1040,7 +1077,7 @@ async function main() {
     { id: "deal-28", pipelineId: "pipe-comercial", stageId: "st-com-negociacao", contactId: "ct-06", companyId: "co-06", ownerId: "user-carla", teamId: "team-comercial", name: "Negociação Luar POA", value: 3800, status: DealStatus.OPEN, priority: DealPriority.MEDIUM, source: "Feira", enteredStageAt: daysAgo(6), lastInteractionAt: daysAgo(3) },
   ];
 
-  for (const d of dealSeeds) {
+  for (const [index, d] of dealSeeds.entries()) {
     await prisma.deal.create({
       data: {
         id: d.id,
@@ -1053,6 +1090,7 @@ async function main() {
         teamId: d.teamId,
         conversationId: d.conversationId,
         name: d.name,
+        leadSequence: index + 1,
         value: d.value,
         status: d.status,
         priority: d.priority,
@@ -1800,6 +1838,7 @@ async function main() {
 
   await ensureOperationDemoConversation();
   await ensureConversationHistoryMvp(prisma, ORG_ID, { hoursAgo, daysAgo });
+  await ensureLeadSequences();
 
   console.log("\nXingyu CRM seed complete\n");
   console.log("Record counts:");

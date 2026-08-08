@@ -290,6 +290,7 @@ model Organization {
   slug      String    @unique
   timezone  String    @default("America/Sao_Paulo")
   currency  String    @default("BRL")
+  nextLeadSequence Int    @default(1)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
@@ -622,6 +623,7 @@ model Deal {
   teamId            String?
   conversationId    String?      @unique
   name              String
+  leadSequence      Int?
   value             Decimal      @default(0) @db.Decimal(14, 2)
   status            DealStatus   @default(OPEN)
   priority          DealPriority @default(MEDIUM)
@@ -656,6 +658,7 @@ model Deal {
   customValues    CustomFieldValue[]
   lifecycleAction LifecycleAction?
 
+  @@unique([organizationId, leadSequence])
   @@index([organizationId])
   @@index([pipelineId])
   @@index([stageId])

@@ -2,20 +2,26 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Inbox, Loader2 } from "lucide-react";
-import { conversationsApi, pipelinesApi, settingsApi } from "@/lib/api";
+import { conversationsApi } from "@/lib/api";
 import { normalizeConversationListItems } from "@/lib/inbox-utils";
 import { queryKeys } from "@/lib/query-keys";
 import type { ConversationListItem } from "@/lib/types";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  ConversationFilters,
-  type ConversationFiltersState,
-} from "./conversation-filters";
+import { Input } from "@/components/ui/input";
+import { ConversationFiltersPopover } from "./conversation-filters-popover";
 import { ConversationListItemRow } from "./conversation-list-item";
+import {
+  EMPTY_CONVERSATION_FILTERS,
+  applyConversationFiltersToSearchParams,
+  conversationFiltersEqual,
+  conversationFiltersToApiQuery,
+  parseConversationFiltersFromSearchParams,
+  type ConversationAppliedFilters,
+} from "./conversation-filter-utils";
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = React.useState(value);
@@ -30,8 +36,10 @@ export function ConversationList({
   scope,
   activeId,
   basePath,
+  getConversationHref,
   mounted,
   externalSearch,
+  onExternalSearchChange,
   externalUnreadOnly,
   externalAwaitingReply,
   hideInternalFilters = false,
@@ -45,10 +53,13 @@ export function ConversationList({
   scope: { type: "global" } | { type: "pipeline"; pipelineId: string };
   activeId?: string;
   basePath: string;
+  getConversationHref?: (conversationId: string) => string;
   visible?: boolean;
   mounted: boolean;
   /** Controlled search from parent (e.g. Operação header). */
   externalSearch?: string;
+  /** Sync list search back to parent / URL `q`. */
+  onExternalSearchChange?: (search: string) => void;
   externalUnreadOnly?: boolean;
   externalAwaitingReply?: boolean;
   hideInternalFilters?: boolean;
@@ -59,68 +70,90 @@ export function ConversationList({
   emptyDescription?: string;
   className?: string;
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const scopeType = scope.type;
   const scopePipelineId = scope.type === "pipeline" ? scope.pipelineId : undefined;
   const controlled = hideInternalFilters;
+  const searchSynced = externalSearch !== undefined;
 
-  const [filters, setFilters] = React.useState<ConversationFiltersState>({
-    search: externalSearch ?? "",
-    channelId: "",
-    pipelineId: scopePipelineId ?? "",
-    unreadOnly:
-      externalUnreadOnly ?? searchParams.get("unreadOnly") === "1",
-    awaitingReply:
-      externalAwaitingReply ?? searchParams.get("awaitingReply") === "1",
-  });
+  const appliedFilters = React.useMemo(
+    () =>
+      controlled
+        ? {
+            ...EMPTY_CONVERSATION_FILTERS,
+            unreadOnly: Boolean(externalUnreadOnly),
+            reply: externalAwaitingReply
+              ? ("mine" as const)
+              : ("any" as const),
+          }
+        : parseConversationFiltersFromSearchParams(searchParams),
+    [
+      controlled,
+      externalAwaitingReply,
+      externalUnreadOnly,
+      searchParams,
+    ],
+  );
+
+  const [search, setSearch] = React.useState(
+    () => externalSearch ?? searchParams.get("q") ?? "",
+  );
   const [page, setPage] = React.useState(1);
   const [accumulated, setAccumulated] = React.useState<ConversationListItem[]>(
     [],
   );
 
   React.useEffect(() => {
-    if (!controlled) {
-      const unreadOnly = searchParams.get("unreadOnly") === "1";
-      const awaitingReply = searchParams.get("awaitingReply") === "1";
-      setFilters((current) => ({
-        ...current,
-        unreadOnly: unreadOnly || current.unreadOnly,
-        awaitingReply: awaitingReply || current.awaitingReply,
-      }));
-    }
-  }, [controlled, searchParams]);
+    if (!searchSynced) return;
+    setSearch((current) =>
+      current === (externalSearch ?? "") ? current : (externalSearch ?? ""),
+    );
+  }, [externalSearch, searchSynced]);
 
-  React.useEffect(() => {
-    if (scopeType === "pipeline" && scopePipelineId) {
-      setFilters((current) =>
-        current.pipelineId === scopePipelineId
-          ? current
-          : { ...current, pipelineId: scopePipelineId },
-      );
-    }
-  }, [scopePipelineId, scopeType]);
-
-  React.useEffect(() => {
-    if (!controlled) return;
-    setFilters((current) => ({
-      ...current,
-      search: externalSearch ?? "",
-      unreadOnly: Boolean(externalUnreadOnly),
-      awaitingReply: Boolean(externalAwaitingReply),
-    }));
-  }, [controlled, externalSearch, externalUnreadOnly, externalAwaitingReply]);
-
-  const debouncedSearch = useDebouncedValue(
-    controlled ? (externalSearch ?? "") : filters.search,
-    controlled ? 0 : 300,
+  const onSearchChange = React.useCallback(
+    (value: string) => {
+      setSearch(value);
+      onExternalSearchChange?.(value);
+    },
+    [onExternalSearchChange],
   );
 
-  const unreadOnly = controlled
-    ? Boolean(externalUnreadOnly)
-    : filters.unreadOnly;
-  const awaitingReply = controlled
-    ? Boolean(externalAwaitingReply)
-    : filters.awaitingReply;
+  const debouncedSearch = useDebouncedValue(search, controlled ? 0 : 300);
+
+  const writeFiltersToUrl = React.useCallback(
+    (filters: ConversationAppliedFilters) => {
+      const params = applyConversationFiltersToSearchParams(
+        new URLSearchParams(searchParams.toString()),
+        filters,
+      );
+      if (!params.get("view") && basePath.includes("operacao")) {
+        params.set("view", "conversations");
+      }
+      const query = params.toString();
+      const path = basePath.includes("?")
+        ? basePath
+        : `${basePath.startsWith("/") ? basePath : `/${basePath}`}`;
+      const href = path.includes("/operacao")
+        ? `/operacao?${query}`
+        : query
+          ? `${path}?${query}`
+          : path;
+      router.replace(href, { scroll: false });
+    },
+    [basePath, router, searchParams],
+  );
+
+  const onApplyFilters = React.useCallback(
+    (filters: ConversationAppliedFilters) => {
+      writeFiltersToUrl(filters);
+    },
+    [writeFiltersToUrl],
+  );
+
+  const onClearFilters = React.useCallback(() => {
+    writeFiltersToUrl(EMPTY_CONVERSATION_FILTERS);
+  }, [writeFiltersToUrl]);
 
   const listParams = React.useMemo(() => {
     const params: Record<string, string | number | boolean> = {
@@ -128,50 +161,35 @@ export function ConversationList({
       page,
     };
     if (debouncedSearch) params.search = debouncedSearch;
-    if (!controlled && filters.channelId) params.channelId = filters.channelId;
     if (scopeType === "pipeline" && scopePipelineId) {
       params.pipelineId = scopePipelineId;
-    } else if (filters.pipelineId) {
-      params.pipelineId = filters.pipelineId;
     }
-    if (unreadOnly) params.unreadOnly = true;
-    if (awaitingReply) params.awaitingReply = true;
+
+    if (controlled) {
+      if (externalUnreadOnly) params.unreadOnly = true;
+      if (externalAwaitingReply) params.awaitingReply = true;
+      return params;
+    }
+
+    const apiFilters = conversationFiltersToApiQuery(appliedFilters);
+    for (const [key, value] of Object.entries(apiFilters)) {
+      if (value !== undefined) params[key] = value;
+    }
     return params;
   }, [
-    awaitingReply,
+    appliedFilters,
     controlled,
     debouncedSearch,
-    filters.channelId,
-    filters.pipelineId,
+    externalAwaitingReply,
+    externalUnreadOnly,
     page,
     scopePipelineId,
     scopeType,
-    unreadOnly,
   ]);
 
   const filterKey = React.useMemo(
-    () =>
-      JSON.stringify({
-        search: debouncedSearch || "",
-        channelId: controlled ? "" : filters.channelId || "",
-        pipelineId:
-          scopeType === "pipeline"
-            ? scopePipelineId || ""
-            : filters.pipelineId || "",
-        unreadOnly: Boolean(unreadOnly),
-        awaitingReply: Boolean(awaitingReply),
-        scopeType,
-      }),
-    [
-      awaitingReply,
-      controlled,
-      debouncedSearch,
-      filters.channelId,
-      filters.pipelineId,
-      scopePipelineId,
-      scopeType,
-      unreadOnly,
-    ],
+    () => JSON.stringify(listParams),
+    [listParams],
   );
 
   React.useEffect(() => {
@@ -212,25 +230,10 @@ export function ConversationList({
       typeof meta?.totalPages === "number" &&
       meta.page < meta.totalPages);
 
-  const pipelinesQuery = useQuery({
-    queryKey: queryKeys.pipelines.navigation,
-    queryFn: () => pipelinesApi.navigation(),
-    enabled: scopeType === "global" && !controlled,
-    staleTime: 60_000,
-  });
-
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.settings,
-    queryFn: () => settingsApi.overview(),
-    enabled: !controlled,
-    staleTime: 60_000,
-  });
-
-  const channels = settingsQuery.data?.channels ?? [];
-  const pipelines =
-    pipelinesQuery.data?.map((item) => ({ id: item.id, name: item.name })) ?? [];
-
   const showInitialLoading = listQuery.isPending && conversations.length === 0;
+  const hasActiveFilters =
+    !controlled &&
+    !conversationFiltersEqual(appliedFilters, EMPTY_CONVERSATION_FILTERS);
 
   return (
     <section
@@ -239,15 +242,24 @@ export function ConversationList({
       data-testid="conversation-list-panel"
     >
       {controlled ? null : (
-        <ConversationFilters
-          filters={filters}
-          onChange={(patch) =>
-            setFilters((current) => ({ ...current, ...patch }))
-          }
-          showPipelineFilter={scopeType === "global"}
-          channels={channels}
-          pipelines={pipelines}
-        />
+        <div
+          className="flex items-center gap-2 border-b border-border p-2"
+          data-testid="conversation-list-toolbar"
+        >
+          <Input
+            aria-label="Filtrar conversas"
+            placeholder="Buscar conversas…"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            className="h-9 min-w-0 flex-1"
+          />
+          <ConversationFiltersPopover
+            pipelineId={scopePipelineId}
+            applied={appliedFilters}
+            onApply={onApplyFilters}
+            onClear={onClearFilters}
+          />
+        </div>
       )}
       <div
         className="scrollbar-thin min-h-[12rem] flex-1 overflow-y-auto"
@@ -276,10 +288,20 @@ export function ConversationList({
         ) : conversations.length === 0 ? (
           <EmptyState
             icon={Inbox}
-            title={emptyTitle ?? "Nenhuma conversa"}
-            description={
-              emptyDescription ?? "Ajuste os filtros ou aguarde novos leads."
+            title={
+              emptyTitle ??
+              (hasActiveFilters || debouncedSearch
+                ? "Nenhuma conversa encontrada com estes filtros."
+                : "Nenhuma conversa")
             }
+            description={
+              emptyDescription ??
+              (hasActiveFilters
+                ? "Ajuste ou limpe os filtros para ver mais conversas."
+                : "Ajuste os filtros ou aguarde novos leads.")
+            }
+            actionLabel={hasActiveFilters ? "Limpar filtros" : undefined}
+            onAction={hasActiveFilters ? onClearFilters : undefined}
             className="m-3 border-0"
           />
         ) : (
@@ -287,7 +309,11 @@ export function ConversationList({
             <ConversationListItemRow
               key={conversation.id}
               conversation={conversation}
-              href={`${basePath}/${conversation.id}`}
+              href={
+                getConversationHref
+                  ? getConversationHref(conversation.id)
+                  : `${basePath}/${conversation.id}`
+              }
               active={activeId === conversation.id}
               mounted={mounted}
               variant={variant}

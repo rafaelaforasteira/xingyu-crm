@@ -9,6 +9,7 @@ import {
   CreateReactivationOpportunityDto,
   ReactivationActionType,
 } from "./dto/reactivation.dto";
+import { allocateLeadSequence } from "../common/lead-sequence";
 
 /**
  * Extends ReactivationService with opportunity conversion + workflow actions.
@@ -121,6 +122,7 @@ export async function createLifecycleOpportunity(
       conversationId = conversation.id;
     }
 
+    const leadSequence = await allocateLeadSequence(tx, organizationId);
     const deal = await tx.deal.create({
       data: {
         organizationId,
@@ -132,6 +134,7 @@ export async function createLifecycleOpportunity(
         teamId: contact.teamId,
         conversationId,
         name: dealName,
+        leadSequence,
         value: dto.value ?? 0,
         status: "OPEN",
         priority: "MEDIUM",

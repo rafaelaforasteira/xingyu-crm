@@ -4,7 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { conversationsApi } from "@/lib/api";
-import { normalizeConversationListItems } from "@/lib/inbox-utils";
 import { queryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { Dialog } from "@/components/ui/dialog";
@@ -24,12 +23,27 @@ export function ConversationWorkspace({
   basePath,
   header,
   className,
+  getConversationHref,
+  clearHref,
+  onSelectConversation,
+  workspaceTestId = "conversation-workspace",
+  externalSearch,
+  onExternalSearchChange,
 }: {
   scope: ConversationWorkspaceScope;
-  conversationId?: string;
+  conversationId?: string | null;
   basePath: string;
   header?: React.ReactNode;
   className?: string;
+  /** Override path-style hrefs (e.g. /operacao?view=conversations&conversation=id). */
+  getConversationHref?: (conversationId: string) => string;
+  /** Href used when clearing the active conversation (mobile back). */
+  clearHref?: string;
+  onSelectConversation?: (conversationId: string) => void;
+  workspaceTestId?: string;
+  /** Shared search with the beta header (`q`). */
+  externalSearch?: string;
+  onExternalSearchChange?: (search: string) => void;
 }) {
   const router = useRouter();
   const [mounted, setMounted] = React.useState(false);
@@ -47,40 +61,21 @@ export function ConversationWorkspace({
     setPanelDrawerOpen(false);
   }, [conversationId]);
 
-  const scopeType = scope.type;
-  const scopePipelineId = scope.type === "pipeline" ? scope.pipelineId : undefined;
+  const selectedConversationId = conversationId ?? null;
+  const listBaseHref = clearHref ?? basePath;
 
-  // Stable list params — never put `undefined` keys in the object or recreate
-  // from an inline `scope` identity, or infinite queries thrash forever.
   const listParams = React.useMemo(() => {
     const params: Record<string, string | number> = { pageSize: 30 };
-    if (scopeType === "pipeline" && scopePipelineId) {
-      params.pipelineId = scopePipelineId;
+    if (scope.type === "pipeline") {
+      params.pipelineId = scope.pipelineId;
     }
     return params;
-  }, [scopePipelineId, scopeType]);
-
-  const bootstrapListQuery = useQuery({
-    queryKey: [...queryKeys.conversations.lists, "bootstrap", listParams] as const,
-    queryFn: async () => {
-      const response = await conversationsApi.list(listParams);
-      return normalizeConversationListItems(response);
-    },
-    retry: false,
-    staleTime: 30_000,
-  });
-
-  React.useEffect(() => {
-    const first = bootstrapListQuery.data?.[0];
-    if (!conversationId && first) {
-      router.replace(`${basePath}/${encodeURIComponent(first.id)}`);
-    }
-  }, [basePath, bootstrapListQuery.data, conversationId, router]);
+  }, [scope]);
 
   const detailQuery = useQuery({
-    queryKey: queryKeys.conversations.detail(conversationId ?? ""),
-    queryFn: () => conversationsApi.get(conversationId!),
-    enabled: Boolean(conversationId),
+    queryKey: queryKeys.conversations.detail(selectedConversationId ?? ""),
+    queryFn: () => conversationsApi.get(selectedConversationId!),
+    enabled: Boolean(selectedConversationId),
     retry: false,
   });
 
@@ -92,39 +87,52 @@ export function ConversationWorkspace({
         "mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[34rem] w-full max-w-[1480px] flex-col",
         className,
       )}
-      data-testid="conversation-workspace"
+      data-testid={workspaceTestId}
     >
       {header}
-      <div className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-card md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)_300px]">
+      <div
+        className="grid min-h-0 flex-1 overflow-hidden rounded-xl border border-border bg-card shadow-card md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)_300px]"
+        data-testid="beta-conversation-columns"
+      >
         <div
           className={cn(
             "min-h-0 border-border md:border-r md:flex md:flex-col",
-            conversationId && mobileView !== "list" ? "hidden md:flex" : "flex flex-col",
+            selectedConversationId && mobileView !== "list"
+              ? "hidden md:flex"
+              : "flex flex-col",
           )}
+          data-testid="beta-conversation-list"
         >
           <ConversationList
             scope={scope}
-            activeId={conversationId}
+            activeId={selectedConversationId ?? undefined}
             basePath={basePath}
+            getConversationHref={getConversationHref}
             mounted={mounted}
+            onSelectConversation={onSelectConversation}
+            externalSearch={externalSearch}
+            onExternalSearchChange={onExternalSearchChange}
           />
         </div>
 
-        <div className="flex min-h-0 min-w-0 justify-center bg-muted/20">
+        <div
+          className="flex min-h-0 min-w-0 justify-center bg-muted/20"
+          data-testid="beta-conversation-thread"
+        >
           <ConversationThread
-            conversationId={conversationId}
+            conversationId={selectedConversationId ?? undefined}
             detail={detailQuery.data}
             detailLoading={detailQuery.isLoading}
             detailError={detailQuery.error}
             onRetryDetail={() => void detailQuery.refetch()}
             listQueryKey={listQueryKey}
             mounted={mounted}
-            visible={Boolean(conversationId) && mobileView === "thread"}
+            visible={Boolean(selectedConversationId) && mobileView === "thread"}
             onBack={
-              conversationId
+              selectedConversationId
                 ? () => {
                     setMobileView("list");
-                    router.push(basePath);
+                    router.push(listBaseHref);
                   }
                 : undefined
             }
@@ -140,16 +148,18 @@ export function ConversationWorkspace({
           />
         </div>
 
-        <LeadContextPanel
-          conversationId={conversationId}
-          visible={mobileView === "panel"}
-          onBack={
-            conversationId
-              ? () => setMobileView("thread")
-              : undefined
-          }
-          className="border-l"
-        />
+        <div data-testid="beta-lead-context" className="min-h-0 min-w-0">
+          <LeadContextPanel
+            conversationId={selectedConversationId ?? undefined}
+            visible={mobileView === "panel"}
+            onBack={
+              selectedConversationId
+                ? () => setMobileView("thread")
+                : undefined
+            }
+            className="border-l"
+          />
+        </div>
       </div>
 
       <Dialog
@@ -160,7 +170,7 @@ export function ConversationWorkspace({
         className="max-h-[85dvh] overflow-hidden p-0"
       >
         <LeadContextPanel
-          conversationId={conversationId}
+          conversationId={selectedConversationId ?? undefined}
           visible
           className="max-h-[70dvh] border-0"
         />

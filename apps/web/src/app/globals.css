@@ -59,25 +59,142 @@
     scrollbar-color: hsl(var(--border)) transparent;
   }
 
+  /**
+   * Conversation thread surface shell: beige base + clipped radius.
+   * Texture lives on a non-interactive layer so it stays fixed while messages scroll.
+   */
+  .conversation-thread-shell {
+    background-color: #efeae2;
+  }
+
+  .conversation-thread-texture {
+    background-image:
+      radial-gradient(
+        circle at 12% 18%,
+        hsl(250 12% 38% / 0.045) 0 1.1px,
+        transparent 1.7px
+      ),
+      radial-gradient(
+        circle at 78% 32%,
+        hsl(262 18% 42% / 0.04) 0 1px,
+        transparent 1.6px
+      ),
+      radial-gradient(
+        circle at 34% 76%,
+        hsl(250 10% 40% / 0.038) 0 1.25px,
+        transparent 1.9px
+      ),
+      radial-gradient(
+        48px 48px at 88% 68%,
+        transparent 58%,
+        hsl(262 14% 40% / 0.035) 59% 61%,
+        transparent 62%
+      ),
+      linear-gradient(
+        148deg,
+        transparent 46%,
+        hsl(250 10% 36% / 0.028) 46.5%,
+        transparent 47.5%
+      ),
+      linear-gradient(
+        -32deg,
+        transparent 62%,
+        hsl(262 12% 38% / 0.022) 62.5%,
+        transparent 63.5%
+      );
+    background-size:
+      112px 112px,
+      128px 128px,
+      96px 96px,
+      140px 140px,
+      120px 120px,
+      104px 104px;
+    background-repeat: repeat;
+    opacity: 1;
+  }
+
+  .conversation-thread-scroll {
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+    scrollbar-color: hsl(250 12% 55% / 0.45) transparent;
+  }
+
+  .conversation-thread-scroll::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .conversation-thread-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: 6px;
+    margin-inline-end: 2px;
+  }
+
+  .conversation-thread-scroll::-webkit-scrollbar-thumb {
+    background-color: hsl(250 12% 55% / 0.42);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .conversation-thread-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(250 12% 48% / 0.55);
+  }
+
+  /* Legacy alias — prefer shell + texture + scroll split */
   .conversation-thread-bg {
     background-color: #efeae2;
+  }
+
+  .dark .conversation-thread-shell {
+    background-color: hsl(var(--muted) / 0.35);
+  }
+
+  .dark .conversation-thread-texture {
     background-image:
-      radial-gradient(circle at 8% 12%, rgba(0, 0, 0, 0.035) 0 1.2px, transparent 1.8px),
-      radial-gradient(circle at 68% 28%, rgba(0, 0, 0, 0.028) 0 1px, transparent 1.6px),
-      radial-gradient(circle at 42% 72%, rgba(0, 0, 0, 0.03) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 88% 64%, rgba(0, 0, 0, 0.025) 0 1px, transparent 1.6px),
-      linear-gradient(135deg, rgba(0, 0, 0, 0.012) 25%, transparent 25%) 0 0 / 18px 18px,
-      linear-gradient(225deg, rgba(0, 0, 0, 0.01) 25%, transparent 25%) 0 0 / 18px 18px;
+      radial-gradient(
+        circle at 12% 18%,
+        hsl(var(--foreground) / 0.05) 0 1.1px,
+        transparent 1.7px
+      ),
+      radial-gradient(
+        circle at 78% 32%,
+        hsl(var(--foreground) / 0.04) 0 1px,
+        transparent 1.6px
+      ),
+      radial-gradient(
+        circle at 34% 76%,
+        hsl(var(--foreground) / 0.045) 0 1.25px,
+        transparent 1.9px
+      ),
+      radial-gradient(
+        48px 48px at 88% 68%,
+        transparent 58%,
+        hsl(var(--foreground) / 0.04) 59% 61%,
+        transparent 62%
+      ),
+      linear-gradient(
+        148deg,
+        transparent 46%,
+        hsl(var(--foreground) / 0.03) 46.5%,
+        transparent 47.5%
+      ),
+      linear-gradient(
+        -32deg,
+        transparent 62%,
+        hsl(var(--foreground) / 0.022) 62.5%,
+        transparent 63.5%
+      );
   }
 
   .dark .conversation-thread-bg {
     background-color: hsl(var(--muted) / 0.35);
-    background-image:
-      radial-gradient(circle at 8% 12%, hsl(var(--foreground) / 0.05) 0 1.2px, transparent 1.8px),
-      radial-gradient(circle at 68% 28%, hsl(var(--foreground) / 0.04) 0 1px, transparent 1.6px),
-      radial-gradient(circle at 42% 72%, hsl(var(--foreground) / 0.045) 0 1.4px, transparent 2px),
-      radial-gradient(circle at 88% 64%, hsl(var(--foreground) / 0.035) 0 1px, transparent 1.6px),
-      linear-gradient(135deg, hsl(var(--foreground) / 0.03) 25%, transparent 25%) 0 0 / 18px 18px,
-      linear-gradient(225deg, hsl(var(--foreground) / 0.022) 25%, transparent 25%) 0 0 / 18px 18px;
+  }
+
+  .dark .conversation-thread-scroll {
+    scrollbar-color: hsl(var(--foreground) / 0.28) transparent;
+  }
+
+  .dark .conversation-thread-scroll::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--foreground) / 0.28);
   }
 }

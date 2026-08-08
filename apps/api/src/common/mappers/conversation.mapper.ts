@@ -15,7 +15,16 @@ export type ContactSummaryInput = {
   id: string;
   firstName: string;
   lastName?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  avatarUrl?: string | null;
   tags?: TagJunction[] | null;
+};
+
+export type DealOwnerSummaryInput = {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
 };
 
 export type DealSummaryInput = {
@@ -24,7 +33,10 @@ export type DealSummaryInput = {
   pipelineId: string;
   stageId: string;
   priority?: string;
-  stage?: { name: string } | null;
+  leadSequence?: number | null;
+  ownerId?: string | null;
+  stage?: { name: string; color?: string | null } | null;
+  owner?: DealOwnerSummaryInput | null;
   tags?: TagJunction[] | null;
 };
 
@@ -38,6 +50,8 @@ export type ConversationListInput = {
   channel?: ChannelSummaryInput | null;
   deal?: DealSummaryInput | null;
   lastMessagePreview?: string | null;
+  lastMessageDirection?: string | null;
+  awaitingReply?: boolean;
 };
 
 export function toChannelSummary(
@@ -62,6 +76,9 @@ export function toContactSummary(contact: ContactSummaryInput | null | undefined
     firstName: contact.firstName,
     lastName: contact.lastName ?? null,
     name: fullName(contact.firstName, contact.lastName),
+    phone: contact.phone ?? null,
+    whatsapp: contact.whatsapp ?? null,
+    avatarUrl: contact.avatarUrl ?? null,
   };
 }
 
@@ -73,7 +90,17 @@ export function toCurrentDealSummary(deal: DealSummaryInput | null | undefined) 
     pipelineId: deal.pipelineId,
     stageId: deal.stageId,
     stageName: deal.stage?.name ?? null,
+    stageColor: deal.stage?.color ?? null,
     priority: deal.priority ?? null,
+    leadSequence: deal.leadSequence ?? null,
+    ownerId: deal.ownerId ?? null,
+    owner: deal.owner
+      ? {
+          id: deal.owner.id,
+          name: deal.owner.name,
+          avatarUrl: deal.owner.avatarUrl ?? null,
+        }
+      : null,
   };
 }
 
@@ -92,12 +119,20 @@ export function mergeConversationTags(
 }
 
 export function toConversationListItem(conversation: ConversationListInput) {
+  const status = conversation.status;
+  const direction = conversation.lastMessageDirection ?? null;
+  const awaitingReply =
+    conversation.awaitingReply ??
+    (status === "OPEN" && direction === "INBOUND");
+
   return {
     id: conversation.id,
-    status: conversation.status,
+    status,
     lastMessageAt: conversation.lastMessageAt ?? null,
     unreadCount: conversation.unreadCount,
     lastMessagePreview: conversation.lastMessagePreview ?? null,
+    lastMessageDirection: direction,
+    awaitingReply,
     contact: toContactSummary(conversation.contact),
     assignee: conversation.assignee ?? null,
     channel: toChannelSummary(conversation.channel),

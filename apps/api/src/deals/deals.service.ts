@@ -16,6 +16,7 @@ import {
   UpdateDealDto,
   WinLoseDto,
 } from "./dto/deal.dto";
+import { allocateLeadSequence } from "../common/lead-sequence";
 import { toDealResponse } from "../common/mappers";
 
 type DbClient = Prisma.TransactionClient | PrismaService;
@@ -149,11 +150,13 @@ export class DealsService {
       });
 
       const now = new Date();
+      const leadSequence = await allocateLeadSequence(tx, organizationId);
       const created = await tx.deal.create({
         data: {
           ...dto,
           ownerId,
           organizationId,
+          leadSequence,
           createdById: userId,
           updatedById: userId,
           ...this.stageTransitionData(stage, now),

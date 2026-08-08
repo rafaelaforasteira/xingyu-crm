@@ -356,9 +356,18 @@ function ContextBody({ context }: { context: ConversationContext }) {
       </CollapsibleSection>
 
       <CollapsibleSection title="Negociação" count={context.currentDeal ? 1 : 0}>
-        {context.currentDeal ? (
+          {context.currentDeal ? (
           <div className="space-y-1 text-xs">
             <p className="font-medium">{context.currentDeal.name}</p>
+            {typeof context.currentDeal.leadSequence === "number" ? (
+              <p
+                className="text-muted-foreground"
+                data-testid="lead-context-lead-code"
+              >
+                Lead #
+                {String(context.currentDeal.leadSequence).padStart(4, "0")}
+              </p>
+            ) : null}
             {context.stage?.name ? (
               <p className="text-muted-foreground">Etapa: {context.stage.name}</p>
             ) : null}
