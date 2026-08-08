@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Activity,
   Automation,
   Company,
@@ -55,7 +55,7 @@ const API_URL =
   (process.env.NODE_ENV === "development" ? "http://localhost:3000/api" : "");
 const REQUEST_TIMEOUT_MS = 10_000;
 
-if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL não foi definida.");
+if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL nÃ£o foi definida.");
 
 export class ApiError extends Error {
   status: number;
@@ -78,13 +78,21 @@ function buildUrl(path: string, query?: Record<string, QueryValue>) {
     /\/api$/i.test(base) && normalizedPath.startsWith("/api/")
       ? normalizedPath.slice(4)
       : normalizedPath;
-  const url = new URL(`${base}${requestPath}`);
+
+  const rawUrl = `${base}${requestPath}`;
+
+  const url = new URL(
+    rawUrl,
+    typeof window !== "undefined" ? window.location.origin : "http://localhost",
+  );
+
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null || value === "") continue;
       url.searchParams.set(key, String(value));
     }
   }
+
   return url.toString();
 }
 
@@ -153,7 +161,7 @@ async function request<T>(
     });
   } catch {
     throw new ApiError(
-      "Não foi possível conectar à API do Xingyu CRM.",
+      "NÃ£o foi possÃ­vel conectar Ã  API do Xingyu CRM.",
       0,
     );
   } finally {
@@ -166,7 +174,7 @@ async function request<T>(
       return request<T>(path, { ...options, _retried: true });
     }
     redirectToLogin();
-    throw new ApiError("Sessão expirada.", 401);
+    throw new ApiError("SessÃ£o expirada.", 401);
   }
 
   if (response.status === 204) {
@@ -185,9 +193,9 @@ async function request<T>(
         : null;
     const message =
       response.status === 503
-        ? "O banco de dados local não está disponível. Inicie o ambiente com pnpm dev:local."
+        ? "O banco de dados local nÃ£o estÃ¡ disponÃ­vel. Inicie o ambiente com pnpm dev:local."
         : response.status >= 500
-          ? "O Xingyu CRM encontrou um erro ao processar a solicitação."
+          ? "O Xingyu CRM encontrou um erro ao processar a solicitaÃ§Ã£o."
           : serverMessage ?? `Erro ${response.status}`;
     throw new ApiError(message, response.status, body);
   }
@@ -445,7 +453,7 @@ export const conversationsApi = {
     const raw = await api.post<unknown>(`/conversations/${id}/messages`, { body });
     const messages = normalizeMessages(raw);
     if (!messages[0]) {
-      throw new ApiError("Resposta de mensagem inválida.", 500, raw);
+      throw new ApiError("Resposta de mensagem invÃ¡lida.", 500, raw);
     }
     return messages[0];
   },
@@ -461,7 +469,7 @@ export const conversationsApi = {
     const raw = await api.post<unknown>(`/conversations/${id}/messages`, form);
     const messages = normalizeMessages(raw);
     if (!messages[0]) {
-      throw new ApiError("Resposta de mensagem inválida.", 500, raw);
+      throw new ApiError("Resposta de mensagem invÃ¡lida.", 500, raw);
     }
     return messages[0];
   },
@@ -642,3 +650,4 @@ export const activitiesApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<Activity[]>("/activities", query),
 };
+
