@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   Activity,
   Automation,
   Company,
@@ -79,21 +79,28 @@ function buildUrl(path: string, query?: Record<string, QueryValue>) {
       ? normalizedPath.slice(4)
       : normalizedPath;
 
-  const rawUrl = `${base}${requestPath}`;
-
-  const url = new URL(
-    rawUrl,
-    typeof window !== "undefined" ? window.location.origin : "http://localhost",
-  );
+  let url = `${base}${requestPath}`;
 
   if (query) {
+    const params = new URLSearchParams();
+
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined || value === null || value === "") continue;
-      url.searchParams.set(key, String(value));
+      params.set(key, String(value));
+    }
+
+    const search = params.toString();
+
+    if (search) {
+      url += `${url.includes("?") ? "&" : "?"}${search}`;
     }
   }
 
-  return url.toString();
+  if (typeof window !== "undefined") {
+    return url;
+  }
+
+  return new URL(url, "http://localhost").toString();
 }
 
 function isAuthPath(path: string): boolean {
