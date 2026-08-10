@@ -22,6 +22,7 @@ type PrismaMock = {
   task: { count: MockMethod; findFirst: MockMethod };
   order: { count: MockMethod; findFirst: MockMethod };
   activity: { count: MockMethod; create: MockMethod };
+  attribution: { findFirst: MockMethod };
   $queryRaw: MockMethod;
 };
 
@@ -50,6 +51,7 @@ function createPrismaMock(): PrismaMock {
     task: { count: method(), findFirst: method() },
     order: { count: method(), findFirst: method() },
     activity: { count: method(), create: method() },
+    attribution: { findFirst: method() },
     $queryRaw: method(),
   };
 }
@@ -96,6 +98,7 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
       pipelineId: "pipeline-1",
       stageId: "stage-1",
       priority: "MEDIUM",
+      createdAt: new Date("2026-08-10T17:32:00.000Z"),
       stage: { id: "stage-1", name: "Qualification", pipelineId: "pipeline-1", color: "#fff" },
       pipeline: { id: "pipeline-1", name: "Sales", color: "#000" },
       owner: { id: "user-1", name: "Agent", avatarUrl: null },
@@ -331,7 +334,16 @@ describe("ConversationsService", () => {
     it("returns summary shape with counts and no message lists", async () => {
       const row = conversationRow();
       prisma.conversation.findFirst.mockResolvedValue(row);
-      prisma.message.findFirst.mockResolvedValue({ body: "Preview", sentAt: new Date() });
+      prisma.message.findFirst.mockImplementation(async (args: unknown) => {
+        const orderBy = (args as { orderBy?: { sentAt?: string } })?.orderBy;
+        if (orderBy?.sentAt === "asc") {
+          return {
+            direction: "INBOUND",
+            sentAt: new Date("2026-08-10T17:32:00.000Z"),
+          };
+        }
+        return { body: "Preview", sentAt: new Date() };
+      });
       prisma.note.count.mockResolvedValue(3);
       prisma.task.count.mockResolvedValue(2);
       prisma.order.count.mockResolvedValue(1);
@@ -352,6 +364,7 @@ describe("ConversationsService", () => {
         finalValue: 100,
         orderedAt: new Date(),
       });
+      prisma.attribution.findFirst.mockResolvedValue(null);
 
       const result = await service.getContext(organizationId, "conv-1");
 
@@ -365,6 +378,14 @@ describe("ConversationsService", () => {
           channel: expect.objectContaining({ id: "channel-1" }),
           nextTask: expect.objectContaining({ id: "task-1" }),
           lastOrder: expect.objectContaining({ number: "1001" }),
+          tracking: expect.objectContaining({
+            firstContactAt: new Date("2026-08-10T17:32:00.000Z"),
+            firstContactDirection: "INBOUND",
+            leadCreatedAt: new Date("2026-08-10T17:32:00.000Z"),
+            utm: null,
+            landingPage: null,
+            referrer: null,
+          }),
           counts: {
             notesCount: 3,
             filesCount: 4,
@@ -376,6 +397,92 @@ describe("ConversationsService", () => {
       );
       expect(result).not.toHaveProperty("messages");
       expect(result).not.toHaveProperty("notes");
+      expect(prisma.message.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { sentAt: "asc" },
+          select: { direction: true, sentAt: true },
+        }),
+      );
+    });
+
+    it("maps first OUTBOUND message and structured Attribution UTMs", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversationRow());
+      prisma.message.findFirst.mockImplementation(async (args: unknown) => {
+        const orderBy = (args as { orderBy?: { sentAt?: string } })?.orderBy;
+        if (orderBy?.sentAt === "asc") {
+          return {
+            direction: "OUTBOUND",
+            sentAt: new Date("2026-08-01T11:00:00.000Z"),
+          };
+        }
+        return { body: "Preview", sentAt: new Date() };
+      });
+      prisma.note.count.mockResolvedValue(0);
+      prisma.task.count.mockResolvedValue(0);
+      prisma.order.count.mockResolvedValue(0);
+      prisma.activity.count.mockResolvedValue(0);
+      prisma.messageAttachment.count.mockResolvedValue(0);
+      prisma.task.findFirst.mockResolvedValue(null);
+      prisma.order.findFirst.mockResolvedValue(null);
+      prisma.attribution.findFirst.mockResolvedValue({
+        source: "meta",
+        medium: "paid_social",
+        campaign: "china_no_brasil",
+        content: "video_03",
+        term: null,
+        page: "/collections/origem",
+      });
+
+      const result = await service.getContext(organizationId, "conv-1");
+
+      expect(result.tracking).toEqual(
+        expect.objectContaining({
+          firstContactDirection: "OUTBOUND",
+          utm: {
+            source: "meta",
+            medium: "paid_social",
+            campaign: "china_no_brasil",
+            content: "video_03",
+            term: null,
+          },
+          landingPage: "/collections/origem",
+        }),
+      );
+      expect(prisma.attribution.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            contactId: "contact-1",
+            orderId: null,
+          }),
+          orderBy: { createdAt: "asc" },
+        }),
+      );
+    });
+
+    it("omits invented UTMs when Attribution is empty", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        conversationRow({ deal: null }),
+      );
+      prisma.message.findFirst.mockImplementation(async (args: unknown) => {
+        const orderBy = (args as { orderBy?: { sentAt?: string } })?.orderBy;
+        if (orderBy?.sentAt === "asc") return null;
+        return { body: null, sentAt: null };
+      });
+      prisma.note.count.mockResolvedValue(0);
+      prisma.task.count.mockResolvedValue(0);
+      prisma.order.count.mockResolvedValue(0);
+      prisma.activity.count.mockResolvedValue(0);
+      prisma.messageAttachment.count.mockResolvedValue(0);
+      prisma.task.findFirst.mockResolvedValue(null);
+      prisma.order.findFirst.mockResolvedValue(null);
+      prisma.attribution.findFirst.mockResolvedValue(null);
+
+      const result = await service.getContext(organizationId, "conv-1");
+
+      expect(result.tracking.firstContactAt).toBeNull();
+      expect(result.tracking.firstContactDirection).toBeNull();
+      expect(result.tracking.leadCreatedAt).toBeNull();
+      expect(result.tracking.utm).toBeNull();
     });
   });
 

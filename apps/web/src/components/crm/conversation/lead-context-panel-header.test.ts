@@ -19,7 +19,7 @@ describe("LeadContextPanel header cleanup contract", () => {
     const sections = [
       "Resumo",
       "Negociação",
-      "Canal",
+      "Rastreamento",
       "Tarefas",
       "Pedidos",
       "Notas",
@@ -30,5 +30,7 @@ describe("LeadContextPanel header cleanup contract", () => {
     expect(sections).toHaveLength(9);
     expect(sections[0]).toBe("Resumo");
     expect(sections.includes("Negociação")).toBe(true);
+    expect(sections.includes("Rastreamento")).toBe(true);
+    expect(sections.includes("Canal")).toBe(false);
   });
 });

@@ -489,6 +489,23 @@ export interface ConversationContextCounts {
   activitiesCount: number;
 }
 
+export interface ConversationContextUtm {
+  source: string | null;
+  medium: string | null;
+  campaign: string | null;
+  content: string | null;
+  term: string | null;
+}
+
+export interface ConversationContextTracking {
+  firstContactAt: string | null;
+  firstContactDirection: "INBOUND" | "OUTBOUND" | null;
+  leadCreatedAt: string | null;
+  utm: ConversationContextUtm | null;
+  landingPage: string | null;
+  referrer: string | null;
+}
+
 export interface ConversationContext {
   conversation: {
     id: string;
@@ -521,6 +538,7 @@ export interface ConversationContext {
     finalValue?: number | string;
     orderedAt?: string | null;
   } | null;
+  tracking?: ConversationContextTracking | null;
   counts: ConversationContextCounts;
 }
 

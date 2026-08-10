@@ -33,6 +33,7 @@ import {
   conversationContactDisplayName,
   formatLeadCode,
 } from "./conversation-list-utils";
+import { buildLeadTrackingFields } from "./lead-tracking-utils";
 
 function CollapsibleSection({
   title,
@@ -409,12 +410,28 @@ function ContextBody({ context }: { context: ConversationContext }) {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Canal">
-        {context.channel ? (
-          <ConversationChannelBadge channel={context.channel} />
-        ) : (
-          <p className="text-xs text-muted-foreground">Canal não informado.</p>
-        )}
+      <CollapsibleSection title="Rastreamento">
+        <div className="space-y-2.5" data-testid="lead-context-tracking">
+          {buildLeadTrackingFields({
+            channel: context.channel,
+            tracking: context.tracking,
+          }).map((field) => (
+            <div key={`${field.label}-${field.value}`} className="min-w-0">
+              <p className="text-[11px] text-muted-foreground">{field.label}</p>
+              <p
+                className={
+                  field.truncate
+                    ? "truncate break-all text-xs font-medium"
+                    : "break-words text-xs font-medium"
+                }
+                title={field.truncate ? field.value : undefined}
+                data-testid={field.testId}
+              >
+                {field.value}
+              </p>
+            </div>
+          ))}
+        </div>
       </CollapsibleSection>
 
       <CollapsibleSection title="Tarefas" count={context.counts.tasksCount}>

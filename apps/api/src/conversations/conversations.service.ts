@@ -639,6 +639,8 @@ export class ConversationsService {
       filesCount,
       nextTask,
       lastOrder,
+      firstContactMessage,
+      leadAttribution,
     ] = await Promise.all([
       this.latestMessagePreview(id),
       this.prisma.note.count({ where: noteScope }),
@@ -677,9 +679,61 @@ export class ConversationsService {
           orderedAt: true,
         },
       }),
+      this.prisma.message.findFirst({
+        where: {
+          conversationId: id,
+          ...notDeleted,
+          direction: { in: ["INBOUND", "OUTBOUND"] },
+        },
+        orderBy: { sentAt: "asc" },
+        select: { direction: true, sentAt: true },
+      }),
+      contactId
+        ? this.prisma.attribution.findFirst({
+            where: {
+              organizationId,
+              contactId,
+              orderId: null,
+            },
+            orderBy: { createdAt: "asc" },
+            select: {
+              source: true,
+              medium: true,
+              campaign: true,
+              content: true,
+              term: true,
+              page: true,
+            },
+          })
+        : Promise.resolve(null),
     ]);
 
     const { contact, deal, channel, assignee, ...rest } = conversation;
+
+    const firstContactDirection =
+      firstContactMessage?.direction === "INBOUND" ||
+      firstContactMessage?.direction === "OUTBOUND"
+        ? firstContactMessage.direction
+        : null;
+
+    const utmFields = leadAttribution
+      ? {
+          source: leadAttribution.source?.trim() || null,
+          medium: leadAttribution.medium?.trim() || null,
+          campaign: leadAttribution.campaign?.trim() || null,
+          content: leadAttribution.content?.trim() || null,
+          term: leadAttribution.term?.trim() || null,
+        }
+      : null;
+    const hasAnyUtm = Boolean(
+      utmFields &&
+        (utmFields.source ||
+          utmFields.medium ||
+          utmFields.campaign ||
+          utmFields.content ||
+          utmFields.term),
+    );
+    const landingPage = leadAttribution?.page?.trim() || null;
 
     return {
       conversation: {
@@ -708,6 +762,14 @@ export class ConversationsService {
       tags: mergeConversationTags(contact, deal),
       nextTask,
       lastOrder,
+      tracking: {
+        firstContactAt: firstContactMessage?.sentAt ?? null,
+        firstContactDirection,
+        leadCreatedAt: deal?.createdAt ?? null,
+        utm: hasAnyUtm ? utmFields : null,
+        landingPage,
+        referrer: null as string | null,
+      },
       counts: {
         notesCount,
         filesCount,
