@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -480,12 +479,10 @@ function LazyDealFiles({ dealId, count }: { dealId: string; count: number }) {
 export function LeadContextPanel({
   conversationId,
   visible,
-  onBack,
   className,
 }: {
   conversationId?: string;
   visible: boolean;
-  onBack?: () => void;
   className?: string;
 }) {
   const contextQuery = useQuery({
@@ -504,18 +501,10 @@ export function LeadContextPanel({
         className,
       )}
     >
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        {onBack ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Voltar para conversa"
-            onClick={onBack}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        ) : null}
+      <div
+        className="border-b border-border px-4 py-3"
+        data-testid="lead-context-panel-header"
+      >
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Contexto do lead
         </p>
