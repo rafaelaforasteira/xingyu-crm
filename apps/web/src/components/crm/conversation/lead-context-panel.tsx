@@ -17,16 +17,20 @@ import {
   ordersApi,
   tasksApi,
 } from "@/lib/api";
-import { contactName } from "@/lib/inbox-utils";
 import { queryKeys } from "@/lib/query-keys";
 import type { ConversationContext } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
+import {
+  formatPrimaryPhoneForDisplay,
+  resolvePrimaryPhone,
+} from "@/lib/format-phone-display";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConversationChannelBadge } from "./conversation-channel-badge";
+import { conversationContactDisplayName } from "./conversation-list-utils";
 
 function CollapsibleSection({
   title,
@@ -297,60 +301,77 @@ function LazyOtherDeals({ contactId, currentDealId }: {
 function ContextBody({ context }: { context: ConversationContext }) {
   const contactId = context.contact?.id;
   const dealId = context.currentDeal?.id;
-  const name = contactName(context.contact);
+  const name = conversationContactDisplayName(context.contact);
+  const primaryPhoneRaw = resolvePrimaryPhone(context.contact);
+  const phoneDisplay = formatPrimaryPhoneForDisplay(context.contact);
+  const stageName =
+    context.stage?.name?.trim() ||
+    context.currentDeal?.stageName?.trim() ||
+    null;
+  const hasDeal = Boolean(context.currentDeal);
+  const ownerName = context.owner?.name?.trim() || null;
 
   return (
     <div className="space-y-1">
       <CollapsibleSection title="Resumo" defaultOpen>
-        <div className="space-y-2 text-sm">
+        <div className="space-y-2 text-sm" data-testid="lead-context-summary">
           <div className="flex items-center gap-2">
             <Avatar name={name} />
             <div className="min-w-0">
               <p
                 className="truncate font-medium"
                 data-testid="lead-context-contact-name"
+                title={name}
               >
                 {name}
               </p>
-              {contactId ? (
-                <Link
-                  href={`/contacts/${contactId}`}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Ver contato
-                </Link>
-              ) : null}
+              <p
+                className="truncate text-xs text-muted-foreground"
+                data-testid="lead-context-phone"
+                title={primaryPhoneRaw ?? undefined}
+              >
+                {phoneDisplay}
+              </p>
             </div>
           </div>
-          {context.contact?.email || context.contact?.phone || context.contact?.whatsapp ? (
-            <p className="break-words text-xs text-muted-foreground">
-              {context.contact.email ??
-                context.contact.phone ??
-                context.contact.whatsapp}
-            </p>
-          ) : null}
-          {context.company ? (
-            <p className="text-xs text-muted-foreground">
-              Empresa:{" "}
-              <Link href={`/companies/${context.company.id}`} className="text-primary">
-                {context.company.name}
-              </Link>
-            </p>
-          ) : null}
-          {context.tags.length ? (
-            <div className="flex flex-wrap gap-1">
-              {context.tags.map((tag) => (
-                <Badge key={tag.id} variant="outline" className="text-[10px]">
-                  {tag.name}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-          {context.owner?.name ? (
-            <p className="text-xs text-muted-foreground">
-              Responsável: {context.owner.name}
-            </p>
-          ) : null}
+
+          <div
+            className="flex flex-wrap items-center gap-1.5"
+            data-testid="lead-context-summary-badges"
+          >
+            {context.channel ? (
+              <ConversationChannelBadge
+                channel={context.channel}
+                className="h-5 max-w-full truncate px-1.5 py-0 text-[10px]"
+                data-testid="lead-context-channel-badge"
+              />
+            ) : (
+              <Badge
+                variant="outline"
+                className="h-5 px-1.5 py-0 text-[10px] font-normal text-muted-foreground"
+                data-testid="lead-context-channel-badge"
+              >
+                Canal não informado
+              </Badge>
+            )}
+            {hasDeal ? (
+              <Badge
+                variant="outline"
+                className="h-5 max-w-full truncate px-1.5 py-0 text-[10px] font-normal"
+                title={stageName ?? "Sem etapa"}
+                data-testid="lead-context-stage-badge"
+              >
+                {stageName || "Sem etapa"}
+              </Badge>
+            ) : null}
+          </div>
+
+          <p
+            className="text-xs text-muted-foreground"
+            data-testid="lead-context-owner"
+          >
+            Responsável: {ownerName || "Não atribuído"}
+          </p>
         </div>
       </CollapsibleSection>
 
