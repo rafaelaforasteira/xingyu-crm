@@ -6,7 +6,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
-  ExternalLink,
 } from "lucide-react";
 import {
   activitiesApi,
@@ -30,7 +29,10 @@ import { Button } from "@/components/ui/button";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConversationChannelBadge } from "./conversation-channel-badge";
-import { conversationContactDisplayName } from "./conversation-list-utils";
+import {
+  conversationContactDisplayName,
+  formatLeadCode,
+} from "./conversation-list-utils";
 
 function CollapsibleSection({
   title,
@@ -310,6 +312,8 @@ function ContextBody({ context }: { context: ConversationContext }) {
     null;
   const hasDeal = Boolean(context.currentDeal);
   const ownerName = context.owner?.name?.trim() || null;
+  const leadCode = formatLeadCode(context.currentDeal?.leadSequence);
+  const pipelineName = context.pipeline?.name?.trim() || null;
 
   return (
     <div className="space-y-1">
@@ -375,34 +379,33 @@ function ContextBody({ context }: { context: ConversationContext }) {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Negociação" count={context.currentDeal ? 1 : 0}>
-          {context.currentDeal ? (
-          <div className="space-y-1 text-xs">
-            <p className="font-medium">{context.currentDeal.name}</p>
-            {typeof context.currentDeal.leadSequence === "number" ? (
+      <CollapsibleSection title="Negociação">
+        {context.currentDeal ? (
+          <div
+            className="space-y-2 text-xs"
+            data-testid="lead-context-negotiation"
+          >
+            {leadCode ? (
               <p
-                className="text-muted-foreground"
+                className="font-medium"
                 data-testid="lead-context-lead-code"
               >
-                Lead #
-                {String(context.currentDeal.leadSequence).padStart(4, "0")}
+                {leadCode}
               </p>
             ) : null}
-            {context.stage?.name ? (
-              <p className="text-muted-foreground">Etapa: {context.stage.name}</p>
-            ) : null}
-            {context.pipeline?.name ? (
-              <p className="text-muted-foreground">Pipeline: {context.pipeline.name}</p>
-            ) : null}
-            <Link
-              href={`/pipelines/${context.currentDeal.pipelineId}?deal=${context.currentDeal.id}`}
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-            >
-              Abrir negociação <ExternalLink className="h-3 w-3" />
-            </Link>
+            <div className="space-y-1 text-muted-foreground">
+              <p className="break-words" data-testid="lead-context-pipeline">
+                Pipeline: {pipelineName || "Não informado"}
+              </p>
+              <p className="break-words" data-testid="lead-context-stage">
+                Etapa: {stageName || "Sem etapa"}
+              </p>
+            </div>
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">Sem negociação vinculada.</p>
+          <p className="text-xs text-muted-foreground">
+            Sem negociação vinculada.
+          </p>
         )}
       </CollapsibleSection>
 
