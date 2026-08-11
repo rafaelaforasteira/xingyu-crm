@@ -361,7 +361,9 @@ export function LeadTasks({
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     void queryClient.invalidateQueries({ queryKey: ["notes"] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
-    if (links.dealId) void queryClient.invalidateQueries({ queryKey: queryKeys.deals.history(links.dealId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.all });
+    if (links.dealId)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.deals.history(links.dealId) });
   };
   const statusMutation = useMutation({
     mutationFn: ({ id, statusDefinitionId }: { id: string; statusDefinitionId: string }) =>

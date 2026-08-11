@@ -18,7 +18,7 @@ import {
   UpdatePipelineDto,
   UpdateStageDto,
 } from "./dto/pipeline.dto";
-import { buildBoardConversationSummary } from "./board-deal.mapper";
+import { buildBoardConversationSummary, summarizeBoardTasks } from "./board-deal.mapper";
 
 const activeStageWhere = { deletedAt: null, archived: false } as const;
 const pipelineChannelConnectionsInclude = {
@@ -236,6 +236,7 @@ export class PipelinesService {
                     email: true,
                     phone: true,
                     whatsapp: true,
+                    tags: { include: { tag: true } },
                   },
                 },
                 company: {
@@ -275,6 +276,7 @@ export class PipelinesService {
         .map((deal) => deal.conversation?.id)
         .filter((conversationId): conversationId is string => Boolean(conversationId)),
     );
+    const dealIds = pipeline.stages.flatMap((stage) => stage.deals.map((deal) => deal.id));
 
     const latestByConversation = new Map<
       string,
@@ -302,6 +304,22 @@ export class PipelinesService {
       }
     }
 
+    const taskRows = dealIds.length
+      ? await this.prisma.task.findMany({
+          where: {
+            organizationId,
+            dealId: { in: dealIds },
+            deletedAt: null,
+            OR: [
+              { statusDefinition: { category: { not: "DONE" } } },
+              { statusDefinitionId: null, status: { in: ["PENDING", "IN_PROGRESS"] } },
+            ],
+          },
+          select: { dealId: true, dueAt: true },
+        })
+      : [];
+    const tasksByDeal = summarizeBoardTasks(taskRows);
+
     return {
       ...pipeline,
       stages: pipeline.stages.map((stage) => ({
@@ -326,13 +344,14 @@ export class PipelinesService {
           return {
             ...dealRest,
             value: Number(deal.value),
-            unreadCount: deal.unreadMessages,
+            unreadCount: summary.conversationUnreadCount,
             conversationId: summary.conversationId ?? deal.conversationId,
             conversationStatus: summary.conversationStatus,
             channel: summary.channel,
             lastMessagePreview: summary.lastMessagePreview,
             lastMessageAt: summary.lastMessageAt,
             awaitingReply: summary.awaitingReply,
+            taskSummary: tasksByDeal.get(deal.id) ?? { open: 0, today: 0, overdue: 0 },
             contact: contact
               ? {
                   ...contact,
@@ -345,7 +364,10 @@ export class PipelinesService {
                   name: company.tradeName ?? company.legalName,
                 }
               : null,
-            tags: tags.map(({ tag }) => tag),
+            tags: [
+              ...(contact?.tags.map(({ tag }) => tag) ?? []),
+              ...tags.map(({ tag }) => tag),
+            ].filter((tag, index, all) => all.findIndex((item) => item.id === tag.id) === index),
           };
         }),
       })),

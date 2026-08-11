@@ -4,13 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CheckSquare,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Settings2,
-} from "lucide-react";
+import { CheckSquare, ChevronDown, ChevronRight, Plus, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { pipelinesApi, settingsApi, tasksApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -122,6 +116,7 @@ export function TasksPage() {
 
   const invalidateTasks = () => {
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.all });
   };
 
   const createTask = useMutation({
@@ -134,8 +129,7 @@ export function TasksPage() {
         dealId: form.dealId || undefined,
         contactId: form.contactId || undefined,
         pipelineId: form.pipelineId || undefined,
-        statusDefinitionId:
-          form.statusDefinitionId || draftStatusId || undefined,
+        statusDefinitionId: form.statusDefinitionId || draftStatusId || undefined,
       }),
     onSuccess: () => {
       invalidateTasks();
@@ -156,13 +150,8 @@ export function TasksPage() {
   });
 
   const patchTask = useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: string;
-      data: Parameters<typeof tasksApi.update>[1];
-    }) => tasksApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof tasksApi.update>[1] }) =>
+      tasksApi.update(id, data),
     onSuccess: () => {
       invalidateTasks();
       toast.success("Tarefa atualizada");
@@ -226,9 +215,7 @@ export function TasksPage() {
           </div>
         }
       />
-      {boardQuery.error ? (
-        <ErrorBanner message={(boardQuery.error as Error).message} />
-      ) : null}
+      {boardQuery.error ? <ErrorBanner message={(boardQuery.error as Error).message} /> : null}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Input
@@ -388,11 +375,7 @@ export function TasksPage() {
                     {group.count}
                   </Badge>
                 </button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => openCreateForStatus(group.status)}
-                >
+                <Button size="sm" variant="ghost" onClick={() => openCreateForStatus(group.status)}>
                   <Plus className="h-3.5 w-3.5" />
                   Adicionar
                 </Button>
@@ -430,9 +413,7 @@ export function TasksPage() {
                       </Select>
                       <div className="flex items-center gap-2 truncate">
                         <Avatar name={task.assignee?.name ?? "?"} size="sm" />
-                        <span className="truncate text-xs">
-                          {task.assignee?.name ?? "—"}
-                        </span>
+                        <span className="truncate text-xs">{task.assignee?.name ?? "—"}</span>
                       </div>
                       <span
                         className={cn(
@@ -457,12 +438,8 @@ export function TasksPage() {
                           "—"
                         )}
                       </span>
-                      <span className="truncate text-xs">
-                        {task.pipeline?.name ?? "—"}
-                      </span>
-                      <span className="truncate text-xs">
-                        {task.stage?.name ?? "—"}
-                      </span>
+                      <span className="truncate text-xs">{task.pipeline?.name ?? "—"}</span>
+                      <span className="truncate text-xs">{task.stage?.name ?? "—"}</span>
                       <div className="flex flex-wrap gap-1">
                         <Select
                           aria-label={`Status de ${task.title}`}

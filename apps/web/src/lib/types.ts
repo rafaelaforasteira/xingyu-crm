@@ -360,6 +360,7 @@ export interface Deal {
   lastMessagePreview?: string | null;
   lastMessageAt?: string | null;
   awaitingReply?: boolean;
+  taskSummary?: { open: number; today: number; overdue: number };
   status?: string;
   createdAt: string;
   updatedAt?: string;
