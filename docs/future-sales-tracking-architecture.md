@@ -14,40 +14,40 @@ A compra mais recente **não** altera snapshots anteriores.
 
 ### Primeira jornada
 
-- 01/08/2026  
-- `utm_source=meta`  
-- `utm_medium=paid_social`  
+- 01/08/2026
+- `utm_source=meta`
+- `utm_medium=paid_social`
 - `utm_campaign=china_no_brasil`
 
 ### Compra A
 
-- Pedido **#5832**  
-- 10/08/2026  
-- R$ 1.842,90  
+- Pedido **#5832**
+- 10/08/2026
+- R$ 1.842,90
 
 **SaleTrackingRecord A**
 
-- source=`meta`  
-- medium=`paid_social`  
+- source=`meta`
+- medium=`paid_social`
 - campaign=`china_no_brasil`
 
 ### Segunda jornada
 
-- 01/10/2026  
-- `utm_source=whatsapp`  
-- `utm_medium=remarketing`  
+- 01/10/2026
+- `utm_source=whatsapp`
+- `utm_medium=remarketing`
 - `utm_campaign=alta_temporada`
 
 ### Compra B
 
-- Pedido **#6179**  
-- 04/10/2026  
-- R$ 2.310,00  
+- Pedido **#6179**
+- 04/10/2026
+- R$ 2.310,00
 
 **SaleTrackingRecord B**
 
-- source=`whatsapp`  
-- medium=`remarketing`  
+- source=`whatsapp`
+- medium=`remarketing`
 - campaign=`alta_temporada`
 
 **Record B NÃO modifica Record A.**
@@ -125,10 +125,10 @@ Mais recente primeiro; accordion por pedido; **não** renderizar UI morta sem da
 
 ## Distinção crítica
 
-| Bloco | Significado |
-|-------|-------------|
-| Rastreamento (lead) | Origem/jornada conhecida do lead |
-| Rastreamento de vendas | Snapshot **por compra** |
+| Bloco                  | Significado                      |
+| ---------------------- | -------------------------------- |
+| Rastreamento (lead)    | Origem/jornada conhecida do lead |
+| Rastreamento de vendas | Snapshot **por compra**          |
 
 Tags CRM **não** são banco de atribuição.
 
@@ -139,3 +139,9 @@ Receita por origem/UTM/campanha; conversão; ticket; recompra; tempo até compra
 ## Correção auditável
 
 Correções futuras devem **adicionar** registro/evento de correção, não apagar silenciosamente o snapshot original.
+
+# Snapshot de venda por pedido
+
+O histórico comercial implementado em `docs/beta-lead-context-orders.md` estabelece `Order` como unidade persistente do fato de compra. Identidade, endereço, itens, pagamento e tracking devem ser copiados como snapshot no momento da importação; alterações posteriores em `Contact`, conversa ou atribuição não podem reescrever pedidos antigos.
+
+O matching futuro de múltiplos números deve associar pedidos ao contato consolidado sem usar o telefone da conversa como chave exclusiva e sem alterar os snapshots originais.

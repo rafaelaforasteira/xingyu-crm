@@ -518,19 +518,23 @@ export interface ConversationContext {
   };
   contact: Contact | null;
   company: Company | null;
-  currentDeal: (ConversationDealSummary & {
-    owner?: UserRef | null;
-    team?: Team | null;
-  }) | null;
+  currentDeal:
+    | (ConversationDealSummary & {
+        owner?: UserRef | null;
+        team?: Team | null;
+      })
+    | null;
   pipeline: Pipeline | null;
   stage: PipelineStage | null;
   owner: UserRef | null;
   team: Team | null;
   channel: ConversationChannelSummary | null;
   tags: Tag[];
-  nextTask: Pick<Task, "id" | "title" | "dueAt" | "status" | "priority"> & {
-    assignee?: UserRef | null;
-  } | null;
+  nextTask:
+    | (Pick<Task, "id" | "title" | "dueAt" | "status" | "priority"> & {
+        assignee?: UserRef | null;
+      })
+    | null;
   lastOrder: {
     id: string;
     number: string;
@@ -647,13 +651,57 @@ export interface Order {
   company?: Company | null;
   dealId?: string | null;
   status: OrderStatus;
-  total: number;
+  total?: number;
+  grossValue?: number | string;
+  discount?: number | string;
+  coupon?: string | null;
+  shippingCost?: number | string;
+  taxes?: number | string;
+  finalValue?: number | string;
   currency?: string;
+  channel?: string | null;
+  source?: string | null;
+  campaign?: string | null;
+  orderedAt?: string | null;
+  createdAt?: string;
+  externalId?: string | null;
+  externalName?: string | null;
+  externalUrl?: string | null;
+  financialStatus?: string | null;
+  paymentGateway?: string | null;
+  customerNameSnapshot?: string | null;
+  customerEmailSnapshot?: string | null;
+  customerPhoneSnapshot?: string | null;
+  recipientNameSnapshot?: string | null;
+  address1Snapshot?: string | null;
+  address2Snapshot?: string | null;
+  addressNumberSnapshot?: string | null;
+  complementSnapshot?: string | null;
+  neighborhoodSnapshot?: string | null;
+  citySnapshot?: string | null;
+  provinceSnapshot?: string | null;
+  postalCodeSnapshot?: string | null;
+  countrySnapshot?: string | null;
+  countryCodeSnapshot?: string | null;
+  formattedAddressSnapshot?: string | null;
+  isFirstPurchase?: boolean | null;
+  purchaseOrdinal?: number | null;
+  trackingSourceSnapshot?: string | null;
+  trackingMediumSnapshot?: string | null;
+  trackingCampaignSnapshot?: string | null;
+  trackingContentSnapshot?: string | null;
+  trackingTermSnapshot?: string | null;
+  landingPageSnapshot?: string | null;
+  referrerSnapshot?: string | null;
   itemsCount?: number;
   placedAt?: string | null;
   updatedAt?: string;
   timeline?: Activity[];
   items?: OrderItem[];
+  payments?: OrderPayment[];
+  shipments?: OrderShipment[];
+  attributions?: OrderAttribution[];
+  events?: OrderEvent[];
 }
 
 export interface OrderItem {
@@ -662,7 +710,49 @@ export interface OrderItem {
   sku?: string | null;
   quantity: number;
   unitPrice: number;
-  total: number;
+  discount?: number | string;
+  total?: number;
+  totalPrice?: number | string;
+  externalProductId?: string | null;
+  externalVariantId?: string | null;
+  variantTitle?: string | null;
+}
+
+export interface OrderPayment {
+  id: string;
+  amount: number | string;
+  method: string;
+  status: string;
+  paidAt?: string | null;
+  dueAt?: string | null;
+  paymentLink?: string | null;
+  receiptUrl?: string | null;
+}
+export interface OrderShipment {
+  id: string;
+  carrier?: string | null;
+  trackingCode?: string | null;
+  status: string;
+  postedAt?: string | null;
+  deliveredAt?: string | null;
+}
+export interface OrderAttribution {
+  id: string;
+  source?: string | null;
+  medium?: string | null;
+  campaign?: string | null;
+  content?: string | null;
+  term?: string | null;
+  page?: string | null;
+  channel?: string | null;
+}
+export interface OrderEvent {
+  id: string;
+  type: string;
+  title: string;
+  description?: string | null;
+  occurredAt: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface Activity {
@@ -713,30 +803,15 @@ export interface RepurchaseLead {
   team?: Team | null;
 }
 
-export type ReactivationStatus =
-  | "LEAD"
-  | "QUALIFIED"
-  | "ACTIVE_CUSTOMER"
-  | "INACTIVE"
-  | "ARCHIVED";
+export type ReactivationStatus = "LEAD" | "QUALIFIED" | "ACTIVE_CUSTOMER" | "INACTIVE" | "ARCHIVED";
 
-export type ReactivationFilterStatus = Exclude<
-  ReactivationStatus,
-  "ARCHIVED"
->;
+export type ReactivationFilterStatus = Exclude<ReactivationStatus, "ARCHIVED">;
 
 export type ReactivationSegment =
-  | "lead_nunca_comprou"
-  | "comprou_uma_vez"
-  | "recorrente_parou"
-  | "cliente_sem_resposta";
+  "lead_nunca_comprou" | "comprou_uma_vez" | "recorrente_parou" | "cliente_sem_resposta";
 
 export type ReactivationSortBy =
-  | "score"
-  | "daysInactive"
-  | "lastPurchaseAt"
-  | "lastInteractionAt"
-  | "name";
+  "score" | "daysInactive" | "lastPurchaseAt" | "lastInteractionAt" | "name";
 
 export interface ReactivationContact {
   id: string;
@@ -765,11 +840,7 @@ export interface ReactivationConversation {
   lastMessageAt: string | null;
 }
 
-export type ReactivationWorkflowStatus =
-  | "APPROACHED"
-  | "POSTPONED"
-  | "DISCARDED"
-  | "CONVERTED";
+export type ReactivationWorkflowStatus = "APPROACHED" | "POSTPONED" | "DISCARDED" | "CONVERTED";
 
 export interface ReactivationWorkflow {
   status: ReactivationWorkflowStatus;

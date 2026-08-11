@@ -4,14 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import {
-  activitiesApi,
-  contactsApi,
-  conversationsApi,
-  dealsApi,
-  notesApi,
-  ordersApi,
-} from "@/lib/api";
+import { activitiesApi, contactsApi, conversationsApi, dealsApi, notesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { ConversationContext } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -24,6 +17,7 @@ import { ConversationChannelBadge } from "./conversation-channel-badge";
 import { conversationContactDisplayName, formatLeadCode } from "./conversation-list-utils";
 import { buildLeadTrackingFields } from "./lead-tracking-utils";
 import { LeadTasks } from "./lead-tasks";
+import { LeadOrders } from "./lead-orders";
 
 function CollapsibleSection({
   title,
@@ -88,39 +82,6 @@ function LazyNotes({ contactId, dealId }: { contactId?: string; dealId?: string 
       {query.data.slice(0, 5).map((note) => (
         <li key={note.id} className="rounded-md bg-muted/50 p-2">
           {note.content ?? note.body}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function LazyOrders({ contactId, dealId }: { contactId?: string; dealId?: string }) {
-  const query = useQuery({
-    queryKey: queryKeys.orders.list({ contactId, dealId }),
-    queryFn: () =>
-      ordersApi.list({
-        contactId: contactId || undefined,
-        dealId: dealId || undefined,
-        pageSize: 5,
-      }),
-    enabled: Boolean(contactId || dealId),
-  });
-  if (query.isLoading) return <Skeleton className="h-8 w-full" />;
-  const orders = query.data?.data ?? [];
-  if (!orders.length) {
-    return (
-      <Link href="/orders" className="text-xs text-primary hover:underline">
-        Abrir pedidos
-      </Link>
-    );
-  }
-  return (
-    <ul className="space-y-2 text-xs">
-      {orders.map((order) => (
-        <li key={order.id}>
-          <Link href={`/orders/${order.id}`} className="hover:text-primary">
-            #{order.number} · {order.status}
-          </Link>
         </li>
       ))}
     </ul>
@@ -196,6 +157,7 @@ function LazyOtherDeals({
 
 function ContextBody({ context }: { context: ConversationContext }) {
   const [openTasksCount, setOpenTasksCount] = React.useState(context.counts.tasksCount);
+  const [ordersCount, setOrdersCount] = React.useState(context.counts.ordersCount);
   const contactId = context.contact?.id;
   const dealId = context.currentDeal?.id;
   const name = conversationContactDisplayName(context.contact);
@@ -327,13 +289,13 @@ function ContextBody({ context }: { context: ConversationContext }) {
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Pedidos" count={context.counts.ordersCount}>
-        {context.lastOrder ? (
-          <p className="mb-2 text-xs text-muted-foreground">
-            Último: #{context.lastOrder.number} · {context.lastOrder.status}
-          </p>
-        ) : null}
-        <LazyOrders contactId={contactId} dealId={dealId} />
+      <CollapsibleSection title="Pedidos" count={ordersCount}>
+        <LeadOrders
+          contactId={contactId}
+          contactName={name}
+          initialCount={context.counts.ordersCount}
+          onCountChange={setOrdersCount}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection title="Notas" count={context.counts.notesCount}>

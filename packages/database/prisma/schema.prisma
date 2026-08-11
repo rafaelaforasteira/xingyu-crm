@@ -1127,32 +1127,62 @@ model Product {
 }
 
 model Order {
-  id             String      @id @default(cuid())
-  organizationId String
-  number         String
-  contactId      String?
-  companyId      String?
-  ownerId        String?
-  dealId         String?
-  channel        String?
-  source         String?
-  campaign       String?
-  orderedAt      DateTime    @default(now())
-  grossValue     Decimal     @default(0) @db.Decimal(14, 2)
-  discount       Decimal     @default(0) @db.Decimal(14, 2)
-  coupon         String?
-  shippingCost   Decimal     @default(0) @db.Decimal(14, 2)
-  taxes          Decimal     @default(0) @db.Decimal(14, 2)
-  finalValue     Decimal     @default(0) @db.Decimal(14, 2)
-  status         OrderStatus @default(ORDER_PLACED)
-  expectedAt     DateTime?
-  trackingCode   String?
-  observations   String?
-  createdById    String?
-  updatedById    String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?
+  id                       String      @id @default(cuid())
+  organizationId           String
+  number                   String
+  contactId                String?
+  companyId                String?
+  ownerId                  String?
+  dealId                   String?
+  channel                  String?
+  source                   String?
+  campaign                 String?
+  currency                 String      @default("BRL")
+  externalId               String?
+  externalName             String?
+  externalUrl              String?
+  financialStatus          String?
+  paymentGateway           String?
+  customerNameSnapshot     String?
+  customerEmailSnapshot    String?
+  customerPhoneSnapshot    String?
+  recipientNameSnapshot    String?
+  address1Snapshot         String?
+  address2Snapshot         String?
+  addressNumberSnapshot    String?
+  complementSnapshot       String?
+  neighborhoodSnapshot     String?
+  citySnapshot             String?
+  provinceSnapshot         String?
+  postalCodeSnapshot       String?
+  countrySnapshot          String?
+  countryCodeSnapshot      String?
+  formattedAddressSnapshot String?
+  isFirstPurchase          Boolean?
+  purchaseOrdinal          Int?
+  trackingSourceSnapshot   String?
+  trackingMediumSnapshot   String?
+  trackingCampaignSnapshot String?
+  trackingContentSnapshot  String?
+  trackingTermSnapshot     String?
+  landingPageSnapshot      String?
+  referrerSnapshot         String?
+  orderedAt                DateTime    @default(now())
+  grossValue               Decimal     @default(0) @db.Decimal(14, 2)
+  discount                 Decimal     @default(0) @db.Decimal(14, 2)
+  coupon                   String?
+  shippingCost             Decimal     @default(0) @db.Decimal(14, 2)
+  taxes                    Decimal     @default(0) @db.Decimal(14, 2)
+  finalValue               Decimal     @default(0) @db.Decimal(14, 2)
+  status                   OrderStatus @default(ORDER_PLACED)
+  expectedAt               DateTime?
+  trackingCode             String?
+  observations             String?
+  createdById              String?
+  updatedById              String?
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+  deletedAt                DateTime?
 
   organization Organization  @relation(fields: [organizationId], references: [id])
   contact      Contact?      @relation(fields: [contactId], references: [id])
@@ -1167,6 +1197,7 @@ model Order {
   activities   Activity[]
   notes        Note[]
   attributions Attribution[]
+  events       OrderEvent[]
 
   @@unique([organizationId, number])
   @@index([organizationId])
@@ -1174,26 +1205,46 @@ model Order {
   @@index([status])
   @@index([orderedAt])
   @@index([ownerId])
+  @@index([contactId, orderedAt])
+  @@index([organizationId, externalId])
 }
 
 model OrderItem {
-  id          String  @id @default(cuid())
-  orderId     String
-  productId   String?
-  productName String
-  sku         String?
-  collection  String?
-  quantity    Int     @default(1)
-  unitPrice   Decimal @db.Decimal(12, 2)
-  discount    Decimal @default(0) @db.Decimal(12, 2)
-  totalPrice  Decimal @db.Decimal(12, 2)
-  imageUrl    String?
+  id                String  @id @default(cuid())
+  orderId           String
+  productId         String?
+  externalProductId String?
+  externalVariantId String?
+  variantTitle      String?
+  productName       String
+  sku               String?
+  collection        String?
+  quantity          Int     @default(1)
+  unitPrice         Decimal @db.Decimal(12, 2)
+  discount          Decimal @default(0) @db.Decimal(12, 2)
+  totalPrice        Decimal @db.Decimal(12, 2)
+  imageUrl          String?
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
+}
+
+model OrderEvent {
+  id          String   @id @default(cuid())
+  orderId     String
+  type        String
+  title       String
+  description String?
+  occurredAt  DateTime @default(now())
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, occurredAt])
 }
 
 model Payment {
