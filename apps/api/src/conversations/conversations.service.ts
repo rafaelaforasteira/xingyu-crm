@@ -122,20 +122,13 @@ export class ConversationsService {
     organizationId: string,
     query: QueryConversationsDto,
   ): Prisma.ConversationWhereInput {
-    const channelIds =
-      query.channels?.length
-        ? query.channels
-        : query.channelId || query.integrationAccountId
-          ? [query.channelId ?? query.integrationAccountId!]
-          : [];
-    const stageIds =
-      query.stages?.length
-        ? query.stages
-        : query.stageId
-          ? [query.stageId]
-          : [];
-    const tagIds =
-      query.tags?.length ? query.tags : query.tagId ? [query.tagId] : [];
+    const channelIds = query.channels?.length
+      ? query.channels
+      : query.channelId || query.integrationAccountId
+        ? [query.channelId ?? query.integrationAccountId!]
+        : [];
+    const stageIds = query.stages?.length ? query.stages : query.stageId ? [query.stageId] : [];
+    const tagIds = query.tags?.length ? query.tags : query.tagId ? [query.tagId] : [];
 
     const andFilters: Prisma.ConversationWhereInput[] = [];
 
@@ -284,9 +277,7 @@ export class ConversationsService {
     return rows.map((row) => row.id);
   }
 
-  private async loadLastMessageDirections(
-    conversationIds: string[],
-  ): Promise<Map<string, string>> {
+  private async loadLastMessageDirections(conversationIds: string[]): Promise<Map<string, string>> {
     const map = new Map<string, string>();
     if (!conversationIds.length) return map;
     const messages = await this.prisma.message.findMany({
@@ -313,16 +304,9 @@ export class ConversationsService {
       lastMessageAt: Date | null;
       updatedAt: Date;
     },
-  >(
-    candidates: T[],
-    directions: Map<string, string>,
-  ): T[] {
+  >(candidates: T[], directions: Map<string, string>): T[] {
     return candidates.slice().sort((left, right) => {
-      const leftGroup = this.priorityGroup(
-        left.status,
-        left.unreadCount,
-        directions.get(left.id),
-      );
+      const leftGroup = this.priorityGroup(left.status, left.unreadCount, directions.get(left.id));
       const rightGroup = this.priorityGroup(
         right.status,
         right.unreadCount,
@@ -339,11 +323,7 @@ export class ConversationsService {
     });
   }
 
-  private priorityGroup(
-    status: string,
-    unreadCount: number,
-    direction?: string,
-  ): number {
+  private priorityGroup(status: string, unreadCount: number, direction?: string): number {
     const closed = status === "RESOLVED" || status === "ARCHIVED";
     if (closed) return 5;
     if (direction === "INBOUND" && unreadCount > 0) return 1;
@@ -405,16 +385,10 @@ export class ConversationsService {
     const pageSize = query.pageSize ?? 20;
     let where = this.buildListWhere(organizationId, query);
 
-    const replyStatus =
-      query.replyStatus ??
-      (query.awaitingReply ? ("mine" as const) : undefined);
+    const replyStatus = query.replyStatus ?? (query.awaitingReply ? ("mine" as const) : undefined);
     if (replyStatus === "mine" || replyStatus === "customer") {
-      const direction =
-        replyStatus === "mine" ? ("INBOUND" as const) : ("OUTBOUND" as const);
-      const ids = await this.filterIdsByLastMessageDirection(
-        organizationId,
-        direction,
-      );
+      const direction = replyStatus === "mine" ? ("INBOUND" as const) : ("OUTBOUND" as const);
+      const ids = await this.filterIdsByLastMessageDirection(organizationId, direction);
       where = {
         AND: [where, { id: { in: ids } }],
       };
@@ -464,9 +438,7 @@ export class ConversationsService {
         updatedAt: true,
       },
     });
-    const directions = await this.loadLastMessageDirections(
-      candidates.map((row) => row.id),
-    );
+    const directions = await this.loadLastMessageDirections(candidates.map((row) => row.id));
     const sorted = this.sortCandidatesByPriority(candidates, directions);
     const total = sorted.length;
     const pageIds = sorted.slice(skip, skip + take).map((row) => row.id);
@@ -606,28 +578,26 @@ export class ConversationsService {
     const noteScope = {
       organizationId,
       ...notDeleted,
-      OR: [
-        ...(contactId ? [{ contactId }] : []),
-        ...(dealId ? [{ dealId }] : []),
-      ],
+      OR: [...(contactId ? [{ contactId }] : []), ...(dealId ? [{ dealId }] : [])],
     };
 
-    const taskScope = {
+    const taskScope: Prisma.TaskWhereInput = {
       organizationId,
       ...notDeleted,
+      ...(dealId ? { dealId } : contactId ? { contactId } : { id: "__none__" }),
+    };
+    const openTaskScope: Prisma.TaskWhereInput = {
+      ...taskScope,
       OR: [
-        ...(contactId ? [{ contactId }] : []),
-        ...(dealId ? [{ dealId }] : []),
+        { statusDefinition: { category: { not: "DONE" } } },
+        { statusDefinitionId: null, status: { notIn: ["COMPLETED", "CANCELLED"] } },
       ],
     };
 
     const orderScope = {
       organizationId,
       ...notDeleted,
-      OR: [
-        ...(contactId ? [{ contactId }] : []),
-        ...(dealId ? [{ dealId }] : []),
-      ],
+      OR: [...(contactId ? [{ contactId }] : []), ...(dealId ? [{ dealId }] : [])],
     };
 
     const [
@@ -644,7 +614,7 @@ export class ConversationsService {
     ] = await Promise.all([
       this.latestMessagePreview(id),
       this.prisma.note.count({ where: noteScope }),
-      this.prisma.task.count({ where: taskScope }),
+      this.prisma.task.count({ where: openTaskScope }),
       this.prisma.order.count({ where: orderScope }),
       this.prisma.activity.count({ where: { organizationId, ...entityScope } }),
       this.prisma.messageAttachment.count({
@@ -654,8 +624,7 @@ export class ConversationsService {
       }),
       this.prisma.task.findFirst({
         where: {
-          ...taskScope,
-          status: "PENDING",
+          ...openTaskScope,
           dueAt: { not: null },
         },
         orderBy: { dueAt: "asc" },
@@ -711,8 +680,7 @@ export class ConversationsService {
     const { contact, deal, channel, assignee, ...rest } = conversation;
 
     const firstContactDirection =
-      firstContactMessage?.direction === "INBOUND" ||
-      firstContactMessage?.direction === "OUTBOUND"
+      firstContactMessage?.direction === "INBOUND" || firstContactMessage?.direction === "OUTBOUND"
         ? firstContactMessage.direction
         : null;
 
@@ -727,11 +695,11 @@ export class ConversationsService {
       : null;
     const hasAnyUtm = Boolean(
       utmFields &&
-        (utmFields.source ||
-          utmFields.medium ||
-          utmFields.campaign ||
-          utmFields.content ||
-          utmFields.term),
+      (utmFields.source ||
+        utmFields.medium ||
+        utmFields.campaign ||
+        utmFields.content ||
+        utmFields.term),
     );
     const landingPage = leadAttribution?.page?.trim() || null;
 
@@ -829,8 +797,7 @@ export class ConversationsService {
   ) {
     const conversation = await this.assertConversationExists(organizationId, conversationId);
     const now = new Date();
-    const direction =
-      dto.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const);
+    const direction = dto.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const);
     const trimmedBody = dto.body?.trim() ?? "";
     const hasFiles = files.length > 0;
 
@@ -840,8 +807,7 @@ export class ConversationsService {
 
     const savedUploads = files.map((file) => validateAndSaveUpload(file));
     const isAutomation = dto.senderType === "automation";
-    const senderId =
-      direction === "OUTBOUND" && !isAutomation ? userId : null;
+    const senderId = direction === "OUTBOUND" && !isAutomation ? userId : null;
 
     const message = await this.prisma.message.create({
       data: {
@@ -875,10 +841,7 @@ export class ConversationsService {
     });
 
     const preview =
-      trimmedBody ||
-      (savedUploads[0]
-        ? `Anexo: ${savedUploads[0].originalName}`
-        : "Nova mensagem");
+      trimmedBody || (savedUploads[0] ? `Anexo: ${savedUploads[0].originalName}` : "Nova mensagem");
 
     await this.prisma.conversation.update({
       where: { id: conversationId },
@@ -917,11 +880,7 @@ export class ConversationsService {
     return null;
   }
 
-  async listMessages(
-    organizationId: string,
-    conversationId: string,
-    query: QueryMessagesDto,
-  ) {
+  async listMessages(organizationId: string, conversationId: string, query: QueryMessagesDto) {
     await this.assertConversationExists(organizationId, conversationId);
     const pageSize = Math.min(query.pageSize ?? 50, 200);
     const baseWhere: Prisma.MessageWhereInput = {
@@ -990,7 +949,11 @@ export class ConversationsService {
 
     const hasMore = rows.length === pageSize;
     const nextCursor =
-      rows.length && query.before !== false ? rows[0]!.id : rows.length ? rows[rows.length - 1]!.id : null;
+      rows.length && query.before !== false
+        ? rows[0]!.id
+        : rows.length
+          ? rows[rows.length - 1]!.id
+          : null;
 
     return {
       data: rows,

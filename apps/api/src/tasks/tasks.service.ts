@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { Prisma, TaskStatus, TaskStatusCategory } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
@@ -53,8 +49,7 @@ function mapTask(task: Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>) 
           name: contactName,
         }
       : null,
-    status:
-      task.status === "COMPLETED" ? "COMPLETED" : task.status,
+    status: task.status === "COMPLETED" ? "COMPLETED" : task.status,
   };
 }
 
@@ -143,11 +138,7 @@ export class TasksService {
     });
   }
 
-  async updateStatus(
-    organizationId: string,
-    id: string,
-    dto: UpdateTaskStatusDto,
-  ) {
+  async updateStatus(organizationId: string, id: string, dto: UpdateTaskStatusDto) {
     const existing = await this.prisma.taskStatusDefinition.findFirst({
       where: { id, organizationId, deletedAt: null },
     });
@@ -159,9 +150,7 @@ export class TasksService {
         ...(dto.name ? { name: dto.name.trim().toUpperCase() } : {}),
         ...(dto.slug ? { slug: dto.slug } : {}),
         ...(dto.color ? { color: dto.color } : {}),
-        ...(dto.category
-          ? { category: dto.category as TaskStatusCategory }
-          : {}),
+        ...(dto.category ? { category: dto.category as TaskStatusCategory } : {}),
         ...(typeof dto.position === "number" ? { position: dto.position } : {}),
         ...(typeof dto.active === "boolean" ? { active: dto.active } : {}),
         ...(typeof dto.archived === "boolean" ? { archived: dto.archived } : {}),
@@ -230,6 +219,15 @@ export class TasksService {
     };
   }
 
+  private async validateAssignee(organizationId: string, assigneeId?: string | null) {
+    if (!assigneeId) return;
+    const assignee = await this.prisma.user.findFirst({
+      where: { id: assigneeId, organizationId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!assignee) throw new BadRequestException("Responsável inválido");
+  }
+
   async findAll(organizationId: string, query: QueryTasksDto) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 50;
@@ -280,10 +278,7 @@ export class TasksService {
     });
   }
 
-  private buildWhere(
-    organizationId: string,
-    query: QueryTasksDto,
-  ): Prisma.TaskWhereInput {
+  private buildWhere(organizationId: string, query: QueryTasksDto): Prisma.TaskWhereInput {
     const now = new Date();
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
@@ -296,8 +291,7 @@ export class TasksService {
     if (query.statusDefinitionId) {
       statusFilter = { statusDefinitionId: query.statusDefinitionId };
     } else if (query.status) {
-      const normalized =
-        query.status === "DONE" ? "COMPLETED" : (query.status as TaskStatus);
+      const normalized = query.status === "DONE" ? "COMPLETED" : (query.status as TaskStatus);
       statusFilter = { status: normalized };
     }
 
@@ -312,18 +306,10 @@ export class TasksService {
       ...(query.pipelineId ? { pipelineId: query.pipelineId } : {}),
       ...(query.stageId ? { stageId: query.stageId } : {}),
       ...(query.priority ? { priority: query.priority as never } : {}),
-      ...(query.overdue
-        ? { dueAt: { lt: now }, status: { not: "COMPLETED" } }
-        : {}),
-      ...(query.due === "today"
-        ? { dueAt: { gte: startOfDay, lt: endOfDay } }
-        : {}),
-      ...(query.due === "week"
-        ? { dueAt: { gte: startOfDay, lt: endOfWeek } }
-        : {}),
-      ...(query.search
-        ? { title: { contains: query.search, mode: "insensitive" } }
-        : {}),
+      ...(query.overdue ? { dueAt: { lt: now }, status: { not: "COMPLETED" } } : {}),
+      ...(query.due === "today" ? { dueAt: { gte: startOfDay, lt: endOfDay } } : {}),
+      ...(query.due === "week" ? { dueAt: { gte: startOfDay, lt: endOfWeek } } : {}),
+      ...(query.search ? { title: { contains: query.search, mode: "insensitive" } } : {}),
     };
   }
 
@@ -356,6 +342,7 @@ export class TasksService {
   }
 
   async create(organizationId: string, dto: CreateTaskDto, userId: string) {
+    await this.validateAssignee(organizationId, dto.assigneeId ?? userId);
     const statusDef = await this.resolveStatusDefinitionId(organizationId, dto);
     const dealLinks = await this.resolveDealLinks(organizationId, dto.dealId);
     const pipelineId = dto.pipelineId ?? dealLinks.pipelineId;
@@ -401,6 +388,9 @@ export class TasksService {
 
   async update(organizationId: string, id: string, dto: UpdateTaskDto) {
     await this.findOne(organizationId, id);
+    if (dto.assigneeId !== undefined) {
+      await this.validateAssignee(organizationId, dto.assigneeId);
+    }
     let statusDefId = dto.statusDefinitionId;
     let legacyStatus = dto.status === "DONE" ? "COMPLETED" : dto.status;
 
@@ -410,9 +400,7 @@ export class TasksService {
       legacyStatus = categoryToLegacyStatus(def.category);
     }
 
-    const dealLinks = dto.dealId
-      ? await this.resolveDealLinks(organizationId, dto.dealId)
-      : null;
+    const dealLinks = dto.dealId ? await this.resolveDealLinks(organizationId, dto.dealId) : null;
 
     const updated = await this.prisma.task.update({
       where: { id },
@@ -440,9 +428,7 @@ export class TasksService {
           : dealLinks
             ? { stageId: dealLinks.stageId }
             : {}),
-        ...(dto.dueAt !== undefined
-          ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null }
-          : {}),
+        ...(dto.dueAt !== undefined ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null } : {}),
         ...(legacyStatus === "COMPLETED"
           ? { completedAt: new Date() }
           : legacyStatus
@@ -460,6 +446,7 @@ export class TasksService {
   }
 
   async complete(organizationId: string, id: string, userId: string) {
+    await this.findOne(organizationId, id);
     await this.ensureDefaultStatuses(organizationId);
     const done = await this.prisma.taskStatusDefinition.findFirst({
       where: {
@@ -494,6 +481,7 @@ export class TasksService {
   }
 
   async reopen(organizationId: string, id: string) {
+    await this.findOne(organizationId, id);
     await this.ensureDefaultStatuses(organizationId);
     const open = await this.prisma.taskStatusDefinition.findFirst({
       where: {

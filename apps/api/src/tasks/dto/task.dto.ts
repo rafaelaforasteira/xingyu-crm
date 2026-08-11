@@ -6,13 +6,16 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  MinLength,
 } from "class-validator";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export class CreateTaskDto {
   @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
+  @MinLength(1)
   @MaxLength(200)
   title!: string;
 

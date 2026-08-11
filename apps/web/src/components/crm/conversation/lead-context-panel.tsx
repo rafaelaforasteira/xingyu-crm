@@ -2,11 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronDown,
-  ChevronRight,
-} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   activitiesApi,
   contactsApi,
@@ -14,26 +11,19 @@ import {
   dealsApi,
   notesApi,
   ordersApi,
-  tasksApi,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { ConversationContext } from "@/lib/types";
-import { cn, formatDate } from "@/lib/utils";
-import {
-  formatPrimaryPhoneForDisplay,
-  resolvePrimaryPhone,
-} from "@/lib/format-phone-display";
+import { cn } from "@/lib/utils";
+import { formatPrimaryPhoneForDisplay, resolvePrimaryPhone } from "@/lib/format-phone-display";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConversationChannelBadge } from "./conversation-channel-badge";
-import {
-  conversationContactDisplayName,
-  formatLeadCode,
-} from "./conversation-list-utils";
+import { conversationContactDisplayName, formatLeadCode } from "./conversation-list-utils";
 import { buildLeadTrackingFields } from "./lead-tracking-utils";
+import { LeadTasks } from "./lead-tasks";
 
 function CollapsibleSection({
   title,
@@ -104,110 +94,6 @@ function LazyNotes({ contactId, dealId }: { contactId?: string; dealId?: string 
   );
 }
 
-function LazyTasks({
-  contactId,
-  dealId,
-  pipelineId,
-  stageId,
-}: {
-  contactId?: string;
-  dealId?: string;
-  pipelineId?: string;
-  stageId?: string;
-}) {
-  const queryClient = useQueryClient();
-  const [title, setTitle] = React.useState("");
-  const query = useQuery({
-    queryKey: queryKeys.tasks.list({ contactId, dealId, pageSize: 8 }),
-    queryFn: () =>
-      tasksApi.list({
-        contactId: contactId || undefined,
-        dealId: dealId || undefined,
-        pageSize: 8,
-      }),
-    enabled: Boolean(contactId || dealId),
-  });
-
-  const create = useMutation({
-    mutationFn: () =>
-      tasksApi.create({
-        title,
-        contactId: contactId || undefined,
-        dealId: dealId || undefined,
-        pipelineId: pipelineId || undefined,
-        stageId: stageId || undefined,
-      }),
-    onSuccess: () => {
-      setTitle("");
-      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations.all,
-      });
-    },
-  });
-
-  const complete = useMutation({
-    mutationFn: (id: string) => tasksApi.complete(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    },
-  });
-
-  if (query.isLoading) return <Skeleton className="h-8 w-full" />;
-  const tasks = query.data?.data ?? [];
-
-  return (
-    <div className="space-y-2">
-      <form
-        className="flex gap-1"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!title.trim()) return;
-          create.mutate();
-        }}
-      >
-        <input
-          className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs"
-          placeholder="Nova tarefa…"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          aria-label="Nova tarefa no lead"
-        />
-        <Button type="submit" size="sm" disabled={!title.trim() || create.isPending}>
-          +
-        </Button>
-      </form>
-      {tasks.length ? (
-        <ul className="space-y-2 text-xs">
-          {tasks.map((task) => (
-            <li key={task.id} className="flex items-start justify-between gap-2">
-              <span className="min-w-0 flex-1">{task.title}</span>
-              {task.status !== "COMPLETED" ? (
-                <button
-                  type="button"
-                  className="shrink-0 text-[10px] text-primary hover:underline"
-                  onClick={() => complete.mutate(task.id)}
-                >
-                  Concluir
-                </button>
-              ) : (
-                <Badge variant="outline" className="text-[10px]">
-                  OK
-                </Badge>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-xs text-muted-foreground">Sem tarefas.</p>
-      )}
-      <Link href="/tasks" className="text-xs text-primary hover:underline">
-        Abrir lista completa
-      </Link>
-    </div>
-  );
-}
-
 function LazyOrders({ contactId, dealId }: { contactId?: string; dealId?: string }) {
   const query = useQuery({
     queryKey: queryKeys.orders.list({ contactId, dealId }),
@@ -241,7 +127,11 @@ function LazyOrders({ contactId, dealId }: { contactId?: string; dealId?: string
   );
 }
 
-function LazyActivities({ contactId, dealId, conversationId }: {
+function LazyActivities({
+  contactId,
+  dealId,
+  conversationId,
+}: {
   contactId?: string;
   dealId?: string;
   conversationId: string;
@@ -271,7 +161,10 @@ function LazyActivities({ contactId, dealId, conversationId }: {
   );
 }
 
-function LazyOtherDeals({ contactId, currentDealId }: {
+function LazyOtherDeals({
+  contactId,
+  currentDealId,
+}: {
   contactId?: string;
   currentDealId?: string;
 }) {
@@ -302,15 +195,13 @@ function LazyOtherDeals({ contactId, currentDealId }: {
 }
 
 function ContextBody({ context }: { context: ConversationContext }) {
+  const [openTasksCount, setOpenTasksCount] = React.useState(context.counts.tasksCount);
   const contactId = context.contact?.id;
   const dealId = context.currentDeal?.id;
   const name = conversationContactDisplayName(context.contact);
   const primaryPhoneRaw = resolvePrimaryPhone(context.contact);
   const phoneDisplay = formatPrimaryPhoneForDisplay(context.contact);
-  const stageName =
-    context.stage?.name?.trim() ||
-    context.currentDeal?.stageName?.trim() ||
-    null;
+  const stageName = context.stage?.name?.trim() || context.currentDeal?.stageName?.trim() || null;
   const hasDeal = Boolean(context.currentDeal);
   const ownerName = context.owner?.name?.trim() || null;
   const leadCode = formatLeadCode(context.currentDeal?.leadSequence);
@@ -371,10 +262,7 @@ function ContextBody({ context }: { context: ConversationContext }) {
             ) : null}
           </div>
 
-          <p
-            className="text-xs text-muted-foreground"
-            data-testid="lead-context-owner"
-          >
+          <p className="text-xs text-muted-foreground" data-testid="lead-context-owner">
             Responsável: {ownerName || "Não atribuído"}
           </p>
         </div>
@@ -382,15 +270,9 @@ function ContextBody({ context }: { context: ConversationContext }) {
 
       <CollapsibleSection title="Negociação">
         {context.currentDeal ? (
-          <div
-            className="space-y-2 text-xs"
-            data-testid="lead-context-negotiation"
-          >
+          <div className="space-y-2 text-xs" data-testid="lead-context-negotiation">
             {leadCode ? (
-              <p
-                className="font-medium"
-                data-testid="lead-context-lead-code"
-              >
+              <p className="font-medium" data-testid="lead-context-lead-code">
                 {leadCode}
               </p>
             ) : null}
@@ -404,9 +286,7 @@ function ContextBody({ context }: { context: ConversationContext }) {
             </div>
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">
-            Sem negociação vinculada.
-          </p>
+          <p className="text-xs text-muted-foreground">Sem negociação vinculada.</p>
         )}
       </CollapsibleSection>
 
@@ -434,20 +314,16 @@ function ContextBody({ context }: { context: ConversationContext }) {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Tarefas" count={context.counts.tasksCount}>
-        {context.nextTask ? (
-          <p className="mb-2 text-xs text-muted-foreground">
-            Próxima: {context.nextTask.title}
-            {context.nextTask.dueAt
-              ? ` · ${formatDate(context.nextTask.dueAt, "dd/MM")}`
-              : ""}
-          </p>
-        ) : null}
-        <LazyTasks
-          contactId={context.contact?.id}
-          dealId={context.currentDeal?.id}
-          pipelineId={context.pipeline?.id ?? context.currentDeal?.pipelineId}
-          stageId={context.stage?.id ?? context.currentDeal?.stageId}
+      <CollapsibleSection title="Tarefas" count={openTasksCount}>
+        <LeadTasks
+          links={{
+            contactId: context.contact?.id,
+            dealId: context.currentDeal?.id,
+            pipelineId: context.pipeline?.id ?? context.currentDeal?.pipelineId,
+            stageId: context.stage?.id ?? context.currentDeal?.stageId,
+          }}
+          owner={context.owner}
+          onOpenCountChange={setOpenTasksCount}
         />
       </CollapsibleSection>
 
@@ -508,7 +384,12 @@ function LazyDealFiles({ dealId, count }: { dealId: string; count: number }) {
     <ul className="space-y-1 text-xs">
       {query.data.map((file) => (
         <li key={file.id}>
-          <a href={file.url} className="text-primary hover:underline" target="_blank" rel="noreferrer">
+          <a
+            href={file.url}
+            className="text-primary hover:underline"
+            target="_blank"
+            rel="noreferrer"
+          >
             {file.name}
           </a>
         </li>
@@ -542,10 +423,7 @@ export function LeadContextPanel({
         className,
       )}
     >
-      <div
-        className="border-b border-border px-4 py-3"
-        data-testid="lead-context-panel-header"
-      >
+      <div className="border-b border-border px-4 py-3" data-testid="lead-context-panel-header">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Contexto do lead
         </p>
@@ -562,9 +440,7 @@ export function LeadContextPanel({
             <Skeleton className="h-20 w-full" />
           </div>
         ) : contextQuery.error ? (
-          <p className="text-sm text-destructive">
-            {(contextQuery.error as Error).message}
-          </p>
+          <p className="text-sm text-destructive">{(contextQuery.error as Error).message}</p>
         ) : contextQuery.data ? (
           <ContextBody context={contextQuery.data} />
         ) : null}
