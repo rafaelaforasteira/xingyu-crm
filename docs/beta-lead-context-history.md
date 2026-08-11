@@ -7,3 +7,5 @@ O backend reutiliza `Activity`. Mutations de deal, nota, tarefa e arquivo persis
 O painel mostra cinco eventos recentes em ordem decrescente. O diálogo completo mantém a conversa e a URL, agrupa por Hoje/Ontem/data e pagina em blocos de 20. Actor é carregado na mesma query, com avatar/iniciais, tooltip e fallback Sistema. Datas usam o timezone padrão do CRM.
 
 Consultas usam a organização autenticada, validam o deal e evitam N+1. Usuários desativados continuam renderizáveis. Tipos desconhecidos têm fallback seguro. Eventos antigos não são sintetizados; archive/reactivate, remoção de tag e pedidos dependem de instrumentação futura de suas mutations reais.
+
+Movimentos em lote causados pela exclusão de uma etapa produzem, para cada Deal afetado, o mesmo evento de ciclo de vida `STAGE_CHANGED`, com ator e snapshots das etapas de origem e destino.

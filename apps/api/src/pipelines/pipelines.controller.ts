@@ -54,11 +54,7 @@ export class PipelinesController {
 
   @Get(":id/stages")
   @ApiOperation({ summary: "List stages for one pipeline" })
-  stages(
-    @OrganizationId() orgId: string,
-    @Param("id") id: string,
-    @Query() query: QueryStagesDto,
-  ) {
+  stages(@OrganizationId() orgId: string, @Param("id") id: string, @Query() query: QueryStagesDto) {
     return this.pipelinesService.getStages(orgId, id, query);
   }
 
@@ -125,15 +121,12 @@ export class PipelinesController {
 
   @Delete(":id")
   @ApiOperation({ summary: "Soft-delete an empty, non-default pipeline" })
-  remove(
-    @OrganizationId() orgId: string,
-    @DemoUser() user: DemoUserType,
-    @Param("id") id: string,
-  ) {
+  remove(@OrganizationId() orgId: string, @DemoUser() user: DemoUserType, @Param("id") id: string) {
     return this.pipelinesService.remove(orgId, id, user.id);
   }
 
   @Post(":id/stages/reorder")
+  @Roles(AuthRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Persist the complete active-stage order" })
   reorderStages(
@@ -158,6 +151,7 @@ export class PipelinesController {
   }
 
   @Patch(":id/stages/:stageId")
+  @Roles(AuthRole.ADMIN)
   @ApiOperation({ summary: "Update a stage" })
   updateStage(
     @OrganizationId() orgId: string,
@@ -170,6 +164,7 @@ export class PipelinesController {
   }
 
   @Delete(":id/stages/:stageId")
+  @Roles(AuthRole.ADMIN)
   @ApiOperation({
     summary: "Soft-delete a stage, moving active deals when targetStageId is supplied",
   })

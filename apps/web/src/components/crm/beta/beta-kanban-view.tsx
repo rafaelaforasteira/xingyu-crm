@@ -13,10 +13,7 @@ import {
   buildBetaConversationsHref,
   buildBetaKanbanHref,
 } from "@/lib/beta-config";
-import {
-  countBoardDeals,
-  filterPipelineBoard,
-} from "@/lib/operation-utils";
+import { countBoardDeals, filterPipelineBoard } from "@/lib/operation-utils";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
@@ -24,6 +21,7 @@ import { DealWorkspaceDrawer, DealWorkspacePage } from "@/components/crm/deal-wo
 import { useUiStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PipelineStageSettingsButton } from "@/components/crm/operation/pipeline-stage-settings-button";
 
 const KanbanBoard = dynamic(
   () =>
@@ -71,8 +69,7 @@ export function BetaKanbanView() {
   }, [data, searchQuery]);
 
   const hasSearchResults =
-    !searchQuery.trim() ||
-    (filteredBoard != null && countBoardDeals(filteredBoard) > 0);
+    !searchQuery.trim() || (filteredBoard != null && countBoardDeals(filteredBoard) > 0);
 
   const setDealParam = React.useCallback(
     (dealId: string | null) => {
@@ -136,6 +133,10 @@ export function BetaKanbanView() {
                 <Plus className="h-4 w-4" />
                 Criar card
               </Button>
+              <PipelineStageSettingsButton
+                pipelineId={pipelineId}
+                pipelineName={data?.name ?? "Pipeline"}
+              />
             </div>
           }
         />
@@ -161,11 +162,7 @@ export function BetaKanbanView() {
         </>
       ) : null}
       {data ? (
-        <CreateDealDialog
-          open={createDealOpen}
-          onOpenChange={setCreateDealOpen}
-          pipeline={data}
-        />
+        <CreateDealDialog open={createDealOpen} onOpenChange={setCreateDealOpen} pipeline={data} />
       ) : null}
       <div data-testid="beta-deal-drawer">
         <DealWorkspaceDrawer onClose={onCloseDrawer} />

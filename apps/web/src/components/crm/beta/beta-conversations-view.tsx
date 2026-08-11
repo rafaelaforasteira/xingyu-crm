@@ -14,6 +14,7 @@ import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { ConversationWorkspace } from "@/components/crm/conversation/conversation-workspace";
 import { resolveSelectedConversationId } from "@/components/crm/conversation/conversation-selection";
+import { PipelineStageSettingsButton } from "@/components/crm/operation/pipeline-stage-settings-button";
 
 function buildConversationsHrefPreserving(
   searchParams: URLSearchParams,
@@ -30,15 +31,10 @@ export function BetaConversationsView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pipelineId = BETA_PIPELINE_ID;
-  const conversationId = resolveSelectedConversationId(
-    searchParams.get("conversation"),
-  );
+  const conversationId = resolveSelectedConversationId(searchParams.get("conversation"));
   const searchQuery = searchParams.get("q") ?? "";
 
-  const scope = useMemo(
-    () => ({ type: "pipeline" as const, pipelineId }),
-    [pipelineId],
-  );
+  const scope = useMemo(() => ({ type: "pipeline" as const, pipelineId }), [pipelineId]);
 
   const { data, error } = useQuery({
     queryKey: queryKeys.pipelines.detail(pipelineId),
@@ -100,6 +96,10 @@ export function BetaConversationsView() {
                       conversationsHref={buildBetaConversationsHref(null, qOpt)}
                       kanbanLabel="Kanban"
                       dataTestIdPrefix="beta"
+                    />
+                    <PipelineStageSettingsButton
+                      pipelineId={pipelineId}
+                      pipelineName={data?.name ?? "Pipeline"}
                     />
                   </div>
                 }

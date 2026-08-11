@@ -53,9 +53,7 @@ export class PipelinesService {
       deletedAt: null,
       archived: query.archived ?? false,
       ...(query.favorite === undefined ? {} : { favorite: query.favorite }),
-      ...(query.search
-        ? { name: { contains: query.search.trim(), mode: "insensitive" } }
-        : {}),
+      ...(query.search ? { name: { contains: query.search.trim(), mode: "insensitive" } } : {}),
     };
 
     const [pipelines, total] = await Promise.all([
@@ -160,10 +158,7 @@ export class PipelinesService {
       : [];
 
     const unreadByPipeline = new Map(
-      unreadSums.map((entry) => [
-        entry.pipelineId,
-        entry._sum.unreadMessages ?? 0,
-      ]),
+      unreadSums.map((entry) => [entry.pipelineId, entry._sum.unreadMessages ?? 0]),
     );
 
     return pipelines.map((pipeline, index) => ({
@@ -313,9 +308,7 @@ export class PipelinesService {
         ...stage,
         deals: stage.deals.map((deal) => {
           const { conversation, tags, contact, company, ...dealRest } = deal;
-          const latest = conversation
-            ? latestByConversation.get(conversation.id) ?? null
-            : null;
+          const latest = conversation ? (latestByConversation.get(conversation.id) ?? null) : null;
           const summary = buildBoardConversationSummary(
             conversation
               ? {
@@ -343,9 +336,7 @@ export class PipelinesService {
             contact: contact
               ? {
                   ...contact,
-                  name: [contact.firstName, contact.lastName]
-                    .filter(Boolean)
-                    .join(" "),
+                  name: [contact.firstName, contact.lastName].filter(Boolean).join(" "),
                 }
               : null,
             company: company
@@ -361,18 +352,10 @@ export class PipelinesService {
     };
   }
 
-  async create(
-    organizationId: string,
-    dto: CreatePipelineDto,
-    userId: string,
-  ) {
+  async create(organizationId: string, dto: CreatePipelineDto, userId: string) {
     const name = this.normalizeName(dto.name);
     await this.ensurePipelineNameAvailable(organizationId, name);
-    await this.validateDefaults(
-      organizationId,
-      dto.defaultTeamId,
-      dto.defaultOwnerId,
-    );
+    await this.validateDefaults(organizationId, dto.defaultTeamId, dto.defaultOwnerId);
     const stages = this.prepareStages(dto.stages);
 
     return this.prisma.$transaction(async (tx) => {
@@ -418,20 +401,11 @@ export class PipelinesService {
     });
   }
 
-  async update(
-    organizationId: string,
-    id: string,
-    dto: UpdatePipelineDto,
-    userId: string,
-  ) {
+  async update(organizationId: string, id: string, dto: UpdatePipelineDto, userId: string) {
     const existing = await this.findOne(organizationId, id);
     const name = dto.name === undefined ? undefined : this.normalizeName(dto.name);
     if (name) await this.ensurePipelineNameAvailable(organizationId, name, id);
-    await this.validateDefaults(
-      organizationId,
-      dto.defaultTeamId,
-      dto.defaultOwnerId,
-    );
+    await this.validateDefaults(organizationId, dto.defaultTeamId, dto.defaultOwnerId);
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.isDefault) {
@@ -458,12 +432,8 @@ export class PipelinesService {
           ...(dto.favorite === undefined ? {} : { favorite: dto.favorite }),
           ...(dto.archived === undefined ? {} : { archived: dto.archived }),
           ...(dto.position === undefined ? {} : { position: dto.position }),
-          ...("defaultTeamId" in dto
-            ? { defaultTeamId: dto.defaultTeamId || null }
-            : {}),
-          ...("defaultOwnerId" in dto
-            ? { defaultOwnerId: dto.defaultOwnerId || null }
-            : {}),
+          ...("defaultTeamId" in dto ? { defaultTeamId: dto.defaultTeamId || null } : {}),
+          ...("defaultOwnerId" in dto ? { defaultOwnerId: dto.defaultOwnerId || null } : {}),
           updatedById: userId,
         },
       });
@@ -480,12 +450,7 @@ export class PipelinesService {
     });
   }
 
-  async duplicate(
-    organizationId: string,
-    id: string,
-    dto: DuplicatePipelineDto,
-    userId: string,
-  ) {
+  async duplicate(organizationId: string, id: string, dto: DuplicatePipelineDto, userId: string) {
     const source = await this.findOne(organizationId, id);
     const name = dto.name
       ? this.normalizeName(dto.name)
@@ -585,11 +550,7 @@ export class PipelinesService {
     });
   }
 
-  async getStages(
-    organizationId: string,
-    pipelineId: string,
-    query: QueryStagesDto,
-  ) {
+  async getStages(organizationId: string, pipelineId: string, query: QueryStagesDto) {
     await this.findOne(organizationId, pipelineId);
     return this.prisma.pipelineStage.findMany({
       where: {
@@ -603,14 +564,10 @@ export class PipelinesService {
     });
   }
 
-  async addStage(
-    organizationId: string,
-    pipelineId: string,
-    dto: CreateStageDto,
-    userId: string,
-  ) {
+  async addStage(organizationId: string, pipelineId: string, dto: CreateStageDto, userId: string) {
     await this.findOne(organizationId, pipelineId);
     const stage = this.normalizeStage(dto);
+    await this.ensureUniqueStageName(organizationId, pipelineId, stage.name);
 
     return this.prisma.$transaction(async (tx) => {
       if (stage.isInitial) {
@@ -653,16 +610,19 @@ export class PipelinesService {
   ) {
     await this.findOne(organizationId, pipelineId);
     const existing = await this.requireStage(organizationId, pipelineId, stageId);
+    if (dto.name !== undefined) {
+      await this.ensureUniqueStageName(
+        organizationId,
+        pipelineId,
+        this.normalizeName(dto.name),
+        stageId,
+      );
+    }
     const type = this.resolveStageType(dto, existing.type);
     const isInitial =
-      type === "OPEN" && dto.archived !== true
-        ? (dto.isInitial ?? existing.isInitial)
-        : false;
+      type === "OPEN" && dto.archived !== true ? (dto.isInitial ?? existing.isInitial) : false;
 
-    if (
-      existing.type === "OPEN" &&
-      (type !== "OPEN" || dto.archived === true)
-    ) {
+    if (existing.type === "OPEN" && (type !== "OPEN" || dto.archived === true)) {
       await this.ensureAnotherOpenStage(pipelineId, stageId);
     }
 
@@ -699,9 +659,7 @@ export class PipelinesService {
       const updated = await tx.pipelineStage.update({
         where: { id: stageId },
         data: {
-          ...(dto.name === undefined
-            ? {}
-            : { name: this.normalizeName(dto.name) }),
+          ...(dto.name === undefined ? {} : { name: this.normalizeName(dto.name) }),
           ...(dto.description === undefined
             ? {}
             : { description: this.optionalText(dto.description) }),
@@ -716,9 +674,7 @@ export class PipelinesService {
                 maxDaysInStage: dto.maxDaysInStage,
                 maxDurationMinutes: dto.maxDaysInStage * 1440,
               }),
-          ...(dto.probability === undefined
-            ? {}
-            : { probability: dto.probability }),
+          ...(dto.probability === undefined ? {} : { probability: dto.probability }),
           ...(dto.archived === undefined ? {} : { archived: dto.archived }),
           type,
           isInitial,
@@ -789,29 +745,27 @@ export class PipelinesService {
   ) {
     await this.findOne(organizationId, pipelineId);
     const stage = await this.requireStage(organizationId, pipelineId, stageId);
+    const activeStageCount = await this.prisma.pipelineStage.count({
+      where: { organizationId, pipelineId, ...activeStageWhere },
+    });
+    if (activeStageCount <= 1) {
+      throw new ConflictException("Pipeline must keep at least one active stage");
+    }
     if (stage.type === "OPEN") await this.ensureAnotherOpenStage(pipelineId, stageId);
 
     const deals = await this.prisma.deal.findMany({
       where: { organizationId, pipelineId, stageId, deletedAt: null },
       select: { id: true },
     });
-    let target:
-      | Awaited<ReturnType<PipelinesService["requireStage"]>>
-      | undefined;
+    let target: Awaited<ReturnType<PipelinesService["requireStage"]>> | undefined;
     if (deals.length) {
       if (!dto.targetStageId) {
-        throw new ConflictException(
-          "Stage has deals; select targetStageId before deleting it",
-        );
+        throw new ConflictException("Stage has deals; select targetStageId before deleting it");
       }
       if (dto.targetStageId === stageId) {
         throw new BadRequestException("Target stage must be different");
       }
-      target = await this.requireStage(
-        organizationId,
-        pipelineId,
-        dto.targetStageId,
-      );
+      target = await this.requireStage(organizationId, pipelineId, dto.targetStageId);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -822,12 +776,7 @@ export class PipelinesService {
           data: {
             stageId: target.id,
             enteredStageAt: movedAt,
-            status:
-              target.type === "WON"
-                ? "WON"
-                : target.type === "LOST"
-                  ? "LOST"
-                  : "OPEN",
+            status: target.type === "WON" ? "WON" : target.type === "LOST" ? "LOST" : "OPEN",
             closedAt: target.type === "OPEN" ? null : movedAt,
             updatedById: userId,
           },
@@ -850,6 +799,13 @@ export class PipelinesService {
             description: `Source stage ${stage.name} was removed`,
             dealId: deal.id,
             actorId: userId,
+            metadata: {
+              fromStageId: stage.id,
+              fromStageName: stage.name,
+              stageId: target!.id,
+              stageName: target!.name,
+              pipelineId,
+            },
           })),
         });
       }
@@ -863,6 +819,25 @@ export class PipelinesService {
         orderBy: { position: "asc" },
         select: { id: true },
       });
+      if (stage.isInitial) {
+        const replacement = await tx.pipelineStage.findFirst({
+          where: {
+            organizationId,
+            pipelineId,
+            ...activeStageWhere,
+            type: "OPEN",
+            id: { not: stageId },
+          },
+          orderBy: { position: "asc" },
+          select: { id: true },
+        });
+        if (replacement) {
+          await tx.pipelineStage.update({
+            where: { id: replacement.id },
+            data: { isInitial: true },
+          });
+        }
+      }
       await Promise.all(
         remaining.map((entry, position) =>
           tx.pipelineStage.update({
@@ -884,12 +859,7 @@ export class PipelinesService {
     });
   }
 
-  private async setArchived(
-    organizationId: string,
-    id: string,
-    archived: boolean,
-    userId: string,
-  ) {
+  private async setArchived(organizationId: string, id: string, archived: boolean, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const pipeline = await tx.pipeline.update({
         where: { id },
@@ -909,18 +879,17 @@ export class PipelinesService {
   }
 
   private prepareStages(input?: CreateStageDto[]) {
-    const source =
-      input?.length
-        ? input
-        : [
-            {
-              name: "Nova oportunidade",
-              color: "#A78BFA",
-              type: "OPEN" as const,
-              isInitial: true,
-              probability: 10,
-            },
-          ];
+    const source = input?.length
+      ? input
+      : [
+          {
+            name: "Nova oportunidade",
+            color: "#A78BFA",
+            type: "OPEN" as const,
+            isInitial: true,
+            probability: 10,
+          },
+        ];
     const stages = source.map((stage) => this.normalizeStage(stage));
     if (!stages.some((stage) => stage.type === "OPEN")) {
       throw new BadRequestException("Pipeline needs at least one open stage");
@@ -950,9 +919,7 @@ export class PipelinesService {
       isInitial: dto.isInitial ?? false,
       maxDurationMinutes:
         dto.maxDurationMinutes ??
-        (dto.maxDaysInStage === undefined
-          ? undefined
-          : dto.maxDaysInStage * 1440),
+        (dto.maxDaysInStage === undefined ? undefined : dto.maxDaysInStage * 1440),
       probability: dto.probability,
       archived: dto.archived ?? false,
       isWon: type === "WON",
@@ -982,11 +949,7 @@ export class PipelinesService {
     return fallback;
   }
 
-  private async requireStage(
-    organizationId: string,
-    pipelineId: string,
-    stageId: string,
-  ) {
+  private async requireStage(organizationId: string, pipelineId: string, stageId: string) {
     const stage = await this.prisma.pipelineStage.findFirst({
       where: {
         id: stageId,
@@ -998,6 +961,28 @@ export class PipelinesService {
     });
     if (!stage) throw new NotFoundException(`Stage ${stageId} not found`);
     return stage;
+  }
+
+  private async ensureUniqueStageName(
+    organizationId: string,
+    pipelineId: string,
+    name: string,
+    excludeId?: string,
+  ) {
+    const duplicate = await this.prisma.pipelineStage.findFirst({
+      where: {
+        organizationId,
+        pipelineId,
+        deletedAt: null,
+        archived: false,
+        name: { equals: name, mode: "insensitive" },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new ConflictException("A stage with this name already exists in the pipeline");
+    }
   }
 
   private async ensureAnotherOpenStage(pipelineId: string, excludedId: string) {

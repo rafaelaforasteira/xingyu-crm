@@ -5,16 +5,8 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Columns3,
-  Filter,
-  Loader2,
-  Menu,
-  Plus,
-  RefreshCw,
-  Search,
-} from "lucide-react";
-import { dealsApi, pipelineStagesApi, pipelinesApi } from "@/lib/api";
+import { Filter, Loader2, Menu, Plus, RefreshCw, Search, Settings } from "lucide-react";
+import { dealsApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Pipeline } from "@/lib/types";
 import {
@@ -41,7 +33,7 @@ import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { OperationEmptyState } from "./operation-empty-state";
 import { DealConversationPanel } from "./deal-conversation-panel";
 import { OperationConversationsView } from "./operation-conversations-view";
-import { AddStageDialog } from "./add-stage-dialog";
+import { ConfigurePipelineStagesDialog } from "./configure-pipeline-stages-dialog";
 
 const KanbanBoard = dynamic(
   () =>
@@ -79,8 +71,7 @@ export function OperationPage() {
   const dealParam = searchParams.get("deal");
   const conversationParam = searchParams.get("conversation");
   const search = searchParams.get("q") ?? "";
-  const rawFilter =
-    (searchParams.get("filter") as OperationFilter | null) ?? "all";
+  const rawFilter = (searchParams.get("filter") as OperationFilter | null) ?? "all";
   const view = parseOperationView(searchParams.get("view"));
   const filter = normalizeFilterForView(rawFilter, view);
 
@@ -88,8 +79,7 @@ export function OperationPage() {
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [addStageOpen, setAddStageOpen] = React.useState(false);
-  const [addingStage, setAddingStage] = React.useState(false);
+  const [stageSettingsOpen, setStageSettingsOpen] = React.useState(false);
   const invalidDealHandled = React.useRef<string | null>(null);
   const invalidConversationHandled = React.useRef<string | null>(null);
 
@@ -131,10 +121,7 @@ export function OperationPage() {
         stage.id === selectedDeal.stageId
           ? {
               ...stage,
-              deals: [
-                selectedDeal,
-                ...(stage.deals ?? []).filter((d) => d.id !== selectedDeal.id),
-              ],
+              deals: [selectedDeal, ...(stage.deals ?? []).filter((d) => d.id !== selectedDeal.id)],
             }
           : stage,
       ),
@@ -164,12 +151,8 @@ export function OperationPage() {
   // Normalize invalid view / incompatible filter in URL.
   React.useEffect(() => {
     const rawView = searchParams.get("view");
-    const needsViewFix =
-      rawView != null &&
-      rawView !== "kanban" &&
-      rawView !== "conversations";
-    const needsFilterFix =
-      view === "conversations" && rawFilter === "no-conversation";
+    const needsViewFix = rawView != null && rawView !== "kanban" && rawView !== "conversations";
+    const needsFilterFix = view === "conversations" && rawFilter === "no-conversation";
     if (!needsViewFix && !needsFilterFix) return;
     setParams((params) => {
       if (needsViewFix) params.set("view", "kanban");
@@ -226,9 +209,7 @@ export function OperationPage() {
           const openDealId = params.get("deal");
           const openDeal =
             (openDealId ? findDealInBoard(board, openDealId) : null) ??
-            (selectedDeal && (!openDealId || selectedDeal.id === openDealId)
-              ? selectedDeal
-              : null);
+            (selectedDeal && (!openDealId || selectedDeal.id === openDealId) ? selectedDeal : null);
           params.delete("deal");
           if (openDeal?.conversationId) {
             params.set("conversation", openDeal.conversationId);
@@ -266,9 +247,7 @@ export function OperationPage() {
     requestAnimationFrame(() => {
       if (!focusId) return;
       document
-        .querySelector<HTMLElement>(
-          `[data-testid="deal-card"][data-deal-id="${focusId}"]`,
-        )
+        .querySelector<HTMLElement>(`[data-testid="deal-card"][data-deal-id="${focusId}"]`)
         ?.focus();
     });
   }, [dealParam, setParams]);
@@ -291,14 +270,13 @@ export function OperationPage() {
     });
   }, [setParams]);
 
-  const refresh = async () => {
+  const refresh = async (notify = true) => {
     const tasks: Promise<unknown>[] = [
       pipelinesQuery.refetch(),
       boardQuery.refetch(),
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists }),
     ];
-    const activeConversation =
-      conversationParam || selectedDeal?.conversationId || null;
+    const activeConversation = conversationParam || selectedDeal?.conversationId || null;
     if (activeConversation) {
       tasks.push(
         queryClient.invalidateQueries({
@@ -310,7 +288,7 @@ export function OperationPage() {
       );
     }
     await Promise.all(tasks);
-    toast.success("Atualizado");
+    if (notify) toast.success("Atualizado");
   };
 
   const changeStage = async (deal: Deal, stageId: string) => {
@@ -331,39 +309,7 @@ export function OperationPage() {
       ]);
     } catch (error) {
       moveBoardDeal(queryClient, selectedPipeline.id, deal.id, previousStageId);
-      toast.error(
-        error instanceof Error ? error.message : "Não foi possível mover o negócio",
-      );
-    }
-  };
-
-  const createStage = async (data: { name: string; color: string }) => {
-    if (!selectedPipeline) return;
-    setAddingStage(true);
-    try {
-      await pipelineStagesApi.create(selectedPipeline.id, {
-        name: data.name,
-        color: data.color,
-        type: "OPEN",
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.pipelines.board(selectedPipeline.id),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.pipelines.detail(selectedPipeline.id),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.pipelines.stages(selectedPipeline.id),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.pipelines.list({ archived: false, pageSize: 100 }),
-        }),
-      ]);
-      toast.success("Coluna adicionada");
-      setAddStageOpen(false);
-    } finally {
-      setAddingStage(false);
+      toast.error(error instanceof Error ? error.message : "Não foi possível mover o negócio");
     }
   };
 
@@ -401,8 +347,7 @@ export function OperationPage() {
     ["awaiting", "Aguardando"],
     ["no-conversation", "Sem conversa"],
   ];
-  const filterButtons =
-    view === "conversations" ? conversationFilters : kanbanFilters;
+  const filterButtons = view === "conversations" ? conversationFilters : kanbanFilters;
 
   return (
     <div
@@ -500,19 +445,6 @@ export function OperationPage() {
           )}
         </Button>
 
-        {view === "kanban" && isAdmin ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            data-testid="operation-add-stage"
-            onClick={() => setAddStageOpen(true)}
-          >
-            <Columns3 className="mr-1 h-4 w-4" />
-            Adicionar coluna
-          </Button>
-        ) : null}
-
         {view === "kanban" ? (
           <Button
             type="button"
@@ -522,6 +454,21 @@ export function OperationPage() {
           >
             <Plus className="mr-1 h-4 w-4" />
             Novo lead
+          </Button>
+        ) : null}
+
+        {isAdmin ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="h-9 w-9 shrink-0 rounded-lg"
+            aria-label="Configurar esteira"
+            title="Configurar esteira"
+            data-testid="operation-configure-stages"
+            onClick={() => setStageSettingsOpen(true)}
+          >
+            <Settings className="h-4 w-4" />
           </Button>
         ) : null}
       </header>
@@ -573,9 +520,7 @@ export function OperationPage() {
                   deal={selectedDeal}
                   pipeline={board ?? selectedPipeline}
                   onClose={closePanel}
-                  onStageChange={(stageId) =>
-                    void changeStage(selectedDeal, stageId)
-                  }
+                  onStageChange={(stageId) => void changeStage(selectedDeal, stageId)}
                 />
               </aside>
             ) : null}
@@ -595,9 +540,7 @@ export function OperationPage() {
                   deal={selectedDeal}
                   pipeline={board ?? selectedPipeline}
                   onClose={closePanel}
-                  onStageChange={(stageId) =>
-                    void changeStage(selectedDeal, stageId)
-                  }
+                  onStageChange={(stageId) => void changeStage(selectedDeal, stageId)}
                 />
               </div>
             ) : null}
@@ -611,9 +554,7 @@ export function OperationPage() {
                   deal={selectedDeal}
                   pipeline={board ?? selectedPipeline}
                   onClose={closePanel}
-                  onStageChange={(stageId) =>
-                    void changeStage(selectedDeal, stageId)
-                  }
+                  onStageChange={(stageId) => void changeStage(selectedDeal, stageId)}
                   mobile
                 />
               </div>
@@ -629,11 +570,12 @@ export function OperationPage() {
       />
 
       {isAdmin ? (
-        <AddStageDialog
-          open={addStageOpen}
-          pending={addingStage}
-          onOpenChange={setAddStageOpen}
-          onSubmit={createStage}
+        <ConfigurePipelineStagesDialog
+          open={stageSettingsOpen}
+          pipelineId={selectedPipeline.id}
+          pipelineName={selectedPipeline.name}
+          onOpenChange={setStageSettingsOpen}
+          onChanged={() => refresh(false)}
         />
       ) : null}
     </div>
