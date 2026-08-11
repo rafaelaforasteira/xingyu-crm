@@ -322,6 +322,7 @@ model Organization {
   attributions               Attribution[]
   lifecycleActions           LifecycleAction[]
   taskStatusDefinitions      TaskStatusDefinition[]
+  leadFiles                  LeadFile[]
 }
 
 model Role {
@@ -406,6 +407,7 @@ model User {
   defaultPipelines           Pipeline[]                  @relation("PipelineDefaultOwner")
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultOwner")
   lifecycleActions           LifecycleAction[]           @relation("LifecycleActionActor")
+  savedLeadFiles             LeadFile[]                   @relation("LeadFileSavedBy")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -657,6 +659,7 @@ model Deal {
   notes           Note[]
   customValues    CustomFieldValue[]
   lifecycleAction LifecycleAction?
+  leadFiles       LeadFile[]
 
   @@unique([organizationId, leadSequence])
   @@index([organizationId])
@@ -1040,6 +1043,7 @@ model Conversation {
   deal             Deal?
   activities       Activity[]
   lifecycleActions LifecycleAction[]
+  leadFiles        LeadFile[]
 
   @@index([organizationId])
   @@index([contactId])
@@ -1070,6 +1074,7 @@ model Message {
   channel      Channel?            @relation(fields: [channelId], references: [id])
   sender       User?               @relation("MessageSender", fields: [senderId], references: [id])
   attachments  MessageAttachment[]
+  leadFiles    LeadFile[]
 
   @@index([conversationId])
   @@index([sentAt])
@@ -1088,8 +1093,39 @@ model MessageAttachment {
   createdAt DateTime @default(now())
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  leadFiles LeadFile[]
 
   @@index([messageId])
+}
+
+model LeadFile {
+  id             String    @id @default(cuid())
+  organizationId String
+  dealId         String
+  conversationId String?
+  messageId      String?
+  attachmentId   String?
+  savedById      String?
+  fileName       String
+  mimeType       String?
+  fileSize       Int?
+  url            String
+  kind           String
+  messageDirection MessageDirection?
+  messageCreatedAt DateTime?
+  savedAt        DateTime  @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  deal         Deal               @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  conversation Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  message      Message?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  attachment   MessageAttachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  savedBy      User?              @relation("LeadFileSavedBy", fields: [savedById], references: [id], onDelete: SetNull)
+
+  @@unique([dealId, attachmentId])
+  @@index([organizationId, dealId, savedAt])
+  @@index([messageId])
+  @@index([attachmentId])
 }
 
 model ProductCollection {

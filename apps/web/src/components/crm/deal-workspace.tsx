@@ -571,7 +571,7 @@ function DealWorkspaceBody({ dealId }: { dealId: string }) {
                 className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-accent"
               >
                 <Paperclip className="h-4 w-4 text-primary" />
-                <span className="text-sm">{f.name}</span>
+                <span className="text-sm">{f.fileName}</span>
               </a>
             ))
           )}

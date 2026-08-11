@@ -18,6 +18,7 @@ type PrismaMock = {
     create: MockMethod;
   };
   messageAttachment: { count: MockMethod };
+  leadFile: { count: MockMethod };
   note: { count: MockMethod };
   task: { count: MockMethod; findFirst: MockMethod };
   order: { count: MockMethod; findFirst: MockMethod };
@@ -47,6 +48,7 @@ function createPrismaMock(): PrismaMock {
       create: method(),
     },
     messageAttachment: { count: method() },
+    leadFile: { count: method() },
     note: { count: method() },
     task: { count: method(), findFirst: method() },
     order: { count: method(), findFirst: method() },
@@ -348,7 +350,7 @@ describe("ConversationsService", () => {
       prisma.task.count.mockResolvedValue(2);
       prisma.order.count.mockResolvedValue(1);
       prisma.activity.count.mockResolvedValue(5);
-      prisma.messageAttachment.count.mockResolvedValue(4);
+      prisma.leadFile.count.mockResolvedValue(4);
       prisma.task.findFirst.mockResolvedValue({
         id: "task-1",
         title: "Follow up",
@@ -421,7 +423,7 @@ describe("ConversationsService", () => {
       prisma.task.count.mockResolvedValue(0);
       prisma.order.count.mockResolvedValue(0);
       prisma.activity.count.mockResolvedValue(0);
-      prisma.messageAttachment.count.mockResolvedValue(0);
+      prisma.leadFile.count.mockResolvedValue(0);
       prisma.task.findFirst.mockResolvedValue(null);
       prisma.order.findFirst.mockResolvedValue(null);
       prisma.attribution.findFirst.mockResolvedValue({

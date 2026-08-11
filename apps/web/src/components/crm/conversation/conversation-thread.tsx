@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { Loader2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { ErrorBanner } from "@/components/crm/page-header";
 import { buildMessageTimeline } from "@/lib/inbox-utils";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,9 @@ import {
 } from "./conversation-thread-surface";
 import { MessageBubble } from "./message-bubble";
 import type { Conversation } from "@/lib/types";
+import type { LeadFile, Message, MessageAttachment } from "@/lib/types";
+import { dealsApi } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -69,6 +74,44 @@ export function ConversationThread({
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = React.useRef(true);
   const detailContactName = conversationContactDisplayName(detail?.contact);
+  const queryClient = useQueryClient();
+  const dealId = detail?.deal?.id;
+  const filesQuery = useQuery({
+    queryKey: queryKeys.deals.files(dealId ?? "none"),
+    queryFn: () => dealsApi.files(dealId!),
+    enabled: Boolean(dealId),
+  });
+  const filesByAttachment = React.useMemo(
+    () =>
+      new Map(
+        (filesQuery.data ?? [])
+          .filter((file): file is LeadFile & { attachmentId: string } => Boolean(file.attachmentId))
+          .map((file) => [file.attachmentId, file]),
+      ),
+    [filesQuery.data],
+  );
+  const saveFile = useMutation({
+    mutationFn: ({ message, attachment }: { message: Message; attachment: MessageAttachment }) =>
+      dealsApi.saveMessageFile(dealId!, { messageId: message.id, attachmentId: attachment.id }),
+    onSuccess: () => {
+      toast.success("Arquivo guardado.");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.deals.files(dealId!) });
+    },
+    onError: () => toast.error("Não foi possível guardar o arquivo."),
+  });
+  const removeFile = useMutation({
+    mutationFn: (file: LeadFile) => dealsApi.removeFile(dealId!, file.id),
+    onSuccess: () => {
+      toast.success("Arquivo removido dos Arquivos.");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.deals.files(dealId!) });
+    },
+    onError: () => toast.error("Não foi possível remover o arquivo."),
+  });
+  const pendingAttachmentId = saveFile.isPending
+    ? saveFile.variables?.attachment.id
+    : removeFile.isPending
+      ? removeFile.variables?.attachmentId
+      : null;
 
   React.useEffect(() => {
     stickToBottomRef.current = true;
@@ -105,11 +148,7 @@ export function ConversationThread({
       className={cn(
         "min-h-0 w-full flex-col",
         hideHeader ? "max-w-none" : "max-w-[860px] justify-self-center",
-        !conversationId
-          ? "hidden md:flex"
-          : visible
-            ? "flex"
-            : "hidden md:flex",
+        !conversationId ? "hidden md:flex" : visible ? "flex" : "hidden md:flex",
         className,
       )}
     >
@@ -130,19 +169,14 @@ export function ConversationThread({
             />
           ) : detailError ? (
             <div className="border-b border-border px-3 py-2">
-              <ErrorBanner
-                message={errorMessage(detailError, "Falha ao carregar a conversa.")}
-              />
+              <ErrorBanner message={errorMessage(detailError, "Falha ao carregar a conversa.")} />
               <Button variant="outline" size="sm" onClick={onRetryDetail}>
                 Tentar novamente
               </Button>
             </div>
           ) : null}
 
-          <div
-            className={CONVERSATION_THREAD_SHELL_CLASS}
-            data-testid="conversation-thread-shell"
-          >
+          <div className={CONVERSATION_THREAD_SHELL_CLASS} data-testid="conversation-thread-shell">
             <div
               className={CONVERSATION_THREAD_TEXTURE_CLASS}
               aria-hidden="true"
@@ -183,16 +217,9 @@ export function ConversationThread({
               ) : messagesQuery.error ? (
                 <div>
                   <ErrorBanner
-                    message={errorMessage(
-                      messagesQuery.error,
-                      "Falha ao carregar mensagens.",
-                    )}
+                    message={errorMessage(messagesQuery.error, "Falha ao carregar mensagens.")}
                   />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void messagesQuery.refetch()}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => void messagesQuery.refetch()}>
                     Tentar novamente
                   </Button>
                 </div>
@@ -219,11 +246,15 @@ export function ConversationThread({
                       key={item.message.id}
                       message={item.message}
                       inboundName={
-                        detailContactName === "Contato sem nome"
-                          ? "Cliente"
-                          : detailContactName
+                        detailContactName === "Contato sem nome" ? "Cliente" : detailContactName
                       }
                       mounted={mounted}
+                      filesByAttachment={filesByAttachment}
+                      pendingAttachmentId={pendingAttachmentId}
+                      onSaveAttachment={(message, attachment) =>
+                        saveFile.mutate({ message, attachment })
+                      }
+                      onRemoveFile={(file) => removeFile.mutate(file)}
                     />
                   ),
                 )
@@ -233,10 +264,7 @@ export function ConversationThread({
           </div>
 
           {!detailError && !hideComposer ? (
-            <ConversationComposer
-              conversationId={conversationId}
-              listQueryKey={listQueryKey}
-            />
+            <ConversationComposer conversationId={conversationId} listQueryKey={listQueryKey} />
           ) : null}
         </>
       )}

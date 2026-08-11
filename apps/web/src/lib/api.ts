@@ -13,6 +13,7 @@ import type {
   DashboardJourneySummaries,
   Deal,
   DealActionItem,
+  LeadFile,
   Message,
   MessageCursorPage,
   MessageQuery,
@@ -432,10 +433,12 @@ export const dealsApi = {
   move: (id: string, stageId: string) =>
     api.patch<Deal>(`/deals/${id}`, { stageId }),
   activities: (id: string) => api.get<Activity[]>(`/deals/${id}/activities`),
-  files: (id: string) =>
-    api.get<{ id: string; name: string; url: string; createdAt: string }[]>(
-      `/deals/${id}/files`,
-    ),
+  files: async (id: string) =>
+    (await api.get<{ data: LeadFile[]; total: number }>(`/deals/${id}/files`)).data,
+  saveMessageFile: (id: string, data: { messageId: string; attachmentId: string }) =>
+    api.post<LeadFile>(`/deals/${id}/files/from-message`, data),
+  removeFile: (dealId: string, id: string) =>
+    api.delete<{ removed: true }>(`/deals/${dealId}/files/${id}`),
 };
 
 export const conversationsApi = {

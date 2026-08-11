@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { activitiesApi, contactsApi, conversationsApi, dealsApi } from "@/lib/api";
+import { activitiesApi, contactsApi, conversationsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { ConversationContext } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ import { buildLeadTrackingFields } from "./lead-tracking-utils";
 import { LeadTasks } from "./lead-tasks";
 import { LeadOrders } from "./lead-orders";
 import { LeadNotes } from "./lead-notes";
+import { LeadFiles } from "./lead-files";
 
 function CollapsibleSection({
   title,
@@ -128,6 +129,7 @@ function ContextBody({ context }: { context: ConversationContext }) {
   const [openTasksCount, setOpenTasksCount] = React.useState(context.counts.tasksCount);
   const [ordersCount, setOrdersCount] = React.useState(context.counts.ordersCount);
   const [notesCount, setNotesCount] = React.useState(context.counts.notesCount);
+  const [filesCount, setFilesCount] = React.useState(context.counts.filesCount);
   const contactId = context.contact?.id;
   const dealId = context.currentDeal?.id;
   const name = conversationContactDisplayName(context.contact);
@@ -281,9 +283,9 @@ function ContextBody({ context }: { context: ConversationContext }) {
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Arquivos" count={context.counts.filesCount}>
+      <CollapsibleSection title="Arquivos" count={filesCount}>
         {dealId ? (
-          <LazyDealFiles dealId={dealId} count={context.counts.filesCount} />
+          <LeadFiles dealId={dealId} leadName={name} onCountChange={setFilesCount} />
         ) : (
           <p className="text-xs text-muted-foreground">
             {context.counts.filesCount
@@ -305,37 +307,6 @@ function ContextBody({ context }: { context: ConversationContext }) {
         <LazyOtherDeals contactId={contactId} currentDealId={dealId} />
       </CollapsibleSection>
     </div>
-  );
-}
-
-function LazyDealFiles({ dealId, count }: { dealId: string; count: number }) {
-  const query = useQuery({
-    queryKey: queryKeys.deals.files(dealId),
-    queryFn: () => dealsApi.files(dealId),
-  });
-  if (query.isLoading) return <Skeleton className="h-8 w-full" />;
-  if (!query.data?.length) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {count ? `${count} anexo(s) na conversa` : "Sem arquivos."}
-      </p>
-    );
-  }
-  return (
-    <ul className="space-y-1 text-xs">
-      {query.data.map((file) => (
-        <li key={file.id}>
-          <a
-            href={file.url}
-            className="text-primary hover:underline"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {file.name}
-          </a>
-        </li>
-      ))}
-    </ul>
   );
 }
 

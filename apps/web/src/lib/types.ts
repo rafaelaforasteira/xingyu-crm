@@ -556,6 +556,25 @@ export interface MessageAttachment {
   createdAt?: string;
 }
 
+export interface LeadFile {
+  id: string;
+  organizationId: string;
+  dealId: string;
+  conversationId?: string | null;
+  messageId?: string | null;
+  attachmentId?: string | null;
+  savedById?: string | null;
+  savedBy?: UserRef | null;
+  fileName: string;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  url: string;
+  kind: string;
+  messageDirection?: "INBOUND" | "OUTBOUND" | "INTERNAL" | null;
+  messageCreatedAt?: string | null;
+  savedAt: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;

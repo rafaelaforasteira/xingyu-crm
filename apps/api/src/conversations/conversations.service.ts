@@ -617,11 +617,9 @@ export class ConversationsService {
       this.prisma.task.count({ where: openTaskScope }),
       this.prisma.order.count({ where: orderScope }),
       this.prisma.activity.count({ where: { organizationId, ...entityScope } }),
-      this.prisma.messageAttachment.count({
-        where: {
-          message: { conversationId: id, ...notDeleted },
-        },
-      }),
+      dealId
+        ? this.prisma.leadFile.count({ where: { organizationId, dealId } })
+        : Promise.resolve(0),
       this.prisma.task.findFirst({
         where: {
           ...openTaskScope,
