@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { activitiesApi, contactsApi, conversationsApi, dealsApi, notesApi } from "@/lib/api";
+import { activitiesApi, contactsApi, conversationsApi, dealsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { ConversationContext } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import { conversationContactDisplayName, formatLeadCode } from "./conversation-l
 import { buildLeadTrackingFields } from "./lead-tracking-utils";
 import { LeadTasks } from "./lead-tasks";
 import { LeadOrders } from "./lead-orders";
+import { LeadNotes } from "./lead-notes";
 
 function CollapsibleSection({
   title,
@@ -53,38 +54,6 @@ function CollapsibleSection({
       </button>
       {open ? <div className="pb-3 pl-6 pr-1">{children}</div> : null}
     </div>
-  );
-}
-
-function LazyNotes({ contactId, dealId }: { contactId?: string; dealId?: string }) {
-  const query = useQuery({
-    queryKey: queryKeys.notes("conversation", `${contactId ?? ""}-${dealId ?? ""}`),
-    queryFn: () =>
-      notesApi.list({
-        contactId: contactId || undefined,
-        dealId: dealId || undefined,
-      }),
-    enabled: Boolean(contactId || dealId),
-  });
-  if (query.isLoading) return <Skeleton className="h-8 w-full" />;
-  if (!query.data?.length) {
-    return (
-      <Link
-        href={contactId ? `/contacts/${contactId}` : "#"}
-        className="text-xs text-primary hover:underline"
-      >
-        Abrir ficha
-      </Link>
-    );
-  }
-  return (
-    <ul className="space-y-2 text-xs text-muted-foreground">
-      {query.data.slice(0, 5).map((note) => (
-        <li key={note.id} className="rounded-md bg-muted/50 p-2">
-          {note.content ?? note.body}
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -158,6 +127,7 @@ function LazyOtherDeals({
 function ContextBody({ context }: { context: ConversationContext }) {
   const [openTasksCount, setOpenTasksCount] = React.useState(context.counts.tasksCount);
   const [ordersCount, setOrdersCount] = React.useState(context.counts.ordersCount);
+  const [notesCount, setNotesCount] = React.useState(context.counts.notesCount);
   const contactId = context.contact?.id;
   const dealId = context.currentDeal?.id;
   const name = conversationContactDisplayName(context.contact);
@@ -298,8 +268,17 @@ function ContextBody({ context }: { context: ConversationContext }) {
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Notas" count={context.counts.notesCount}>
-        <LazyNotes contactId={contactId} dealId={dealId} />
+      <CollapsibleSection title="Notas" count={notesCount}>
+        <LeadNotes
+          links={{
+            contactId,
+            dealId,
+            pipelineId: context.pipeline?.id ?? context.currentDeal?.pipelineId,
+            stageId: context.stage?.id ?? context.currentDeal?.stageId,
+          }}
+          owner={context.owner}
+          onCountChange={setNotesCount}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection title="Arquivos" count={context.counts.filesCount}>

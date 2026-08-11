@@ -17,7 +17,12 @@ import type { Task, TaskStatusDefinition, UserRef } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatLeadTaskDue, isTaskDone, sortLeadTasks } from "./lead-task-utils";
 
-type LeadLinks = { contactId?: string; dealId?: string; pipelineId?: string; stageId?: string };
+export type LeadLinks = {
+  contactId?: string;
+  dealId?: string;
+  pipelineId?: string;
+  stageId?: string;
+};
 
 function StatusButton({
   task,
@@ -143,7 +148,7 @@ function FullTaskRow(props: React.ComponentProps<typeof TaskRow>) {
   );
 }
 
-function CreateTaskDialog({
+export function CreateTaskDialog({
   open,
   onOpenChange,
   links,
@@ -151,6 +156,8 @@ function CreateTaskDialog({
   statuses,
   users,
   onCreated,
+  initialDescription = "",
+  sourceNoteId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -158,7 +165,9 @@ function CreateTaskDialog({
   owner?: UserRef | null;
   statuses: TaskStatusDefinition[];
   users: UserRef[];
-  onCreated: () => void;
+  onCreated: (task: Task) => void;
+  initialDescription?: string;
+  sourceNoteId?: string;
 }) {
   const defaultStatus = statuses.find((status) => status.category === "OPEN") ?? statuses[0];
   const [form, setForm] = React.useState({
@@ -174,13 +183,13 @@ function CreateTaskDialog({
     if (open)
       setForm({
         title: "",
-        description: "",
+        description: initialDescription,
         statusDefinitionId: defaultStatus?.id ?? "",
         assigneeId: owner?.id ?? "",
         date: "",
         time: "",
       });
-  }, [open, defaultStatus?.id, owner?.id]);
+  }, [open, defaultStatus?.id, owner?.id, initialDescription]);
   const create = useMutation({
     mutationFn: () => {
       const title = form.title.trim();
@@ -194,11 +203,12 @@ function CreateTaskDialog({
         statusDefinitionId: form.statusDefinitionId || undefined,
         assigneeId: form.assigneeId || undefined,
         dueAt,
+        sourceNoteId,
         ...links,
       });
     },
-    onSuccess: () => {
-      onCreated();
+    onSuccess: (task) => {
+      onCreated(task);
       onOpenChange(false);
     },
     onError: (value) =>
@@ -349,6 +359,7 @@ export function LeadTasks({
   );
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    void queryClient.invalidateQueries({ queryKey: ["notes"] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
   };
   const statusMutation = useMutation({

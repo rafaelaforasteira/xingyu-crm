@@ -348,6 +348,15 @@ export class TasksService {
     const pipelineId = dto.pipelineId ?? dealLinks.pipelineId;
     const stageId = dto.stageId ?? dealLinks.stageId;
     const contactId = dto.contactId ?? dealLinks.contactId;
+    if (dto.sourceNoteId) {
+      const sourceNote = await this.prisma.note.findFirst({
+        where: { id: dto.sourceNoteId, organizationId, deletedAt: null },
+        select: { dealId: true },
+      });
+      if (!sourceNote || sourceNote.dealId !== dto.dealId) {
+        throw new BadRequestException("Nota de origem inválida para esta negociação");
+      }
+    }
 
     const created = await this.prisma.task.create({
       data: {
@@ -365,6 +374,7 @@ export class TasksService {
         pipelineId,
         stageId,
         orderId: dto.orderId,
+        sourceNoteId: dto.sourceNoteId,
         dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
         createdById: userId,
       },

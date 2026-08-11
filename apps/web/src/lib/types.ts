@@ -582,6 +582,7 @@ export interface Note {
   isInternal?: boolean;
   authorId?: string | null;
   author?: UserRef | null;
+  generatedTasks?: Task[];
   createdAt: string;
 }
 
@@ -612,6 +613,7 @@ export interface Task {
   contact?: Contact | null;
   dealId?: string | null;
   deal?: Deal | null;
+  sourceNoteId?: string | null;
   pipelineId?: string | null;
   pipeline?: { id: string; name: string; color?: string | null } | null;
   stageId?: string | null;

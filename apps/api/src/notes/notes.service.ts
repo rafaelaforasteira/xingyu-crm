@@ -26,7 +26,14 @@ export class NotesService {
         skip,
         take,
         orderBy: { createdAt: "desc" },
-        include: { author: { select: { id: true, name: true } } },
+        include: {
+          author: { select: { id: true, name: true, avatarUrl: true } },
+          generatedTasks: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: "desc" },
+            include: { statusDefinition: true },
+          },
+        },
       }),
       this.prisma.note.count({ where }),
     ]);
@@ -36,7 +43,14 @@ export class NotesService {
   async findOne(organizationId: string, id: string) {
     const note = await this.prisma.note.findFirst({
       where: { id, organizationId, ...notDeleted },
-      include: { author: { select: { id: true, name: true } } },
+      include: {
+        author: { select: { id: true, name: true, avatarUrl: true } },
+        generatedTasks: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          include: { statusDefinition: true },
+        },
+      },
     });
     if (!note) throw new NotFoundException(`Note ${id} not found`);
     return note;
@@ -45,7 +59,14 @@ export class NotesService {
   async create(organizationId: string, dto: CreateNoteDto, userId: string) {
     return this.prisma.note.create({
       data: { ...dto, organizationId, authorId: userId },
-      include: { author: { select: { id: true, name: true } } },
+      include: {
+        author: { select: { id: true, name: true, avatarUrl: true } },
+        generatedTasks: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          include: { statusDefinition: true },
+        },
+      },
     });
   }
 

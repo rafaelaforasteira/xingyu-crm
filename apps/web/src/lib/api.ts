@@ -493,7 +493,10 @@ export const conversationsApi = {
 };
 
 export const notesApi = {
-  list: (query?: Record<string, QueryValue>) => api.get<Note[]>("/notes", query),
+  listPage: (query?: Record<string, QueryValue>) =>
+    api.get<PaginatedResponse<Note>>("/notes", query),
+  list: async (query?: Record<string, QueryValue>) =>
+    unwrapData(await api.get<Note[] | PaginatedResponse<Note>>("/notes", query)),
   create: (data: {
     content: string;
     contactId?: string;
@@ -657,4 +660,3 @@ export const activitiesApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<Activity[]>("/activities", query),
 };
-

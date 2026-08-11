@@ -16,3 +16,7 @@ O painel exibe até três tarefas abertas, ordenadas por vencimento com tarefas 
 ## Segurança e escopo
 
 O serviço valida organização para deal, responsável e tarefa antes de mutações. A listagem compacta e o diálogo completo compartilham a mesma query filtrada pelo lead, evitando N+1 e navegação para a área geral. Resumo, Negociação, Rastreamento, Pedidos, Notas, Arquivos, Histórico e Outras negociações não foram redesenhados.
+
+## Reutilização por notas
+
+O diálogo de criação foi exportado como componente compartilhado e passou a aceitar descrição inicial e `sourceNoteId` opcionais. A seção Notas usa esse mesmo fluxo, mantendo título vazio e todos os padrões de status, responsável e vencimento. Tarefas comuns continuam sem nota de origem e preservam o comportamento anterior.

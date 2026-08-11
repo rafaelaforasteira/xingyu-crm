@@ -83,6 +83,11 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   orderId?: string;
+
+  @ApiPropertyOptional({ description: "Source note that originated this task" })
+  @IsOptional()
+  @IsString()
+  sourceNoteId?: string;
 }
 
 export class UpdateTaskDto extends PartialType(CreateTaskDto) {}

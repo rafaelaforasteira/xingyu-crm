@@ -733,6 +733,7 @@ model Task {
   stageId            String?
   orderId            String?
   occurrenceId       String?
+  sourceNoteId       String?
   teamId             String?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
@@ -749,11 +750,13 @@ model Task {
   stage            PipelineStage?       @relation(fields: [stageId], references: [id], onDelete: SetNull)
   order            Order?               @relation(fields: [orderId], references: [id])
   occurrence       Occurrence?          @relation(fields: [occurrenceId], references: [id])
+  sourceNote       Note?                @relation(fields: [sourceNoteId], references: [id], onDelete: SetNull)
   team             Team?                @relation(fields: [teamId], references: [id])
   activities       Activity[]
 
   @@index([organizationId])
   @@index([assigneeId])
+  @@index([sourceNoteId])
   @@index([status])
   @@index([statusDefinitionId])
   @@index([dueAt])
@@ -846,10 +849,12 @@ model Note {
   deal         Deal?        @relation(fields: [dealId], references: [id])
   order        Order?       @relation(fields: [orderId], references: [id])
   occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
+  generatedTasks Task[]
 
   @@index([organizationId])
   @@index([contactId])
   @@index([dealId])
+  @@index([organizationId, dealId, createdAt])
 }
 
 model Tag {
