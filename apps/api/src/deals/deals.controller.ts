@@ -10,6 +10,8 @@ import {
   MoveStageDto,
   WinLoseDto,
   BulkMoveDealsDto,
+  CreateManualLeadDto,
+  LookupManualLeadDto,
 } from "./dto/deal.dto";
 
 @ApiTags("deals")
@@ -28,6 +30,22 @@ export class DealsController {
   @ApiOperation({ summary: "Kanban board data for pipeline" })
   kanban(@OrganizationId() orgId: string, @Param("pipelineId") pipelineId: string) {
     return this.dealsService.kanban(orgId, pipelineId);
+  }
+
+  @Get("manual-lead/lookup")
+  @ApiOperation({ summary: "Lookup identity for manual lead creation" })
+  lookupManualLead(@OrganizationId() orgId: string, @Query() query: LookupManualLeadDto) {
+    return this.dealsService.lookupManualLead(orgId, query);
+  }
+
+  @Post("manual-lead")
+  @ApiOperation({ summary: "Create a manual lead with its initial context" })
+  createManualLead(
+    @OrganizationId() orgId: string,
+    @DemoUser() user: DemoUserType,
+    @Body() dto: CreateManualLeadDto,
+  ) {
+    return this.dealsService.createManualLead(orgId, dto, user.id);
   }
 
   @Post("bulk/move")

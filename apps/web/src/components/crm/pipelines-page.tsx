@@ -33,7 +33,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { cn, formatCurrency } from "@/lib/utils";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
-import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
+import { ManualCreateLeadDialog } from "@/components/crm/manual-create-lead-dialog";
 import { DealWorkspaceDrawer } from "@/components/crm/deal-workspace";
 import { PipelineFormDialog } from "@/components/crm/pipeline-form-dialog";
 import { useUiStore } from "@/stores/ui";
@@ -565,9 +565,7 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
   const idleDaysRaw = searchParams.get("idleDays");
   const idleDays = idleDaysRaw ? Number(idleDaysRaw) : undefined;
   const idleDaysFilter =
-    idleDays != null && Number.isFinite(idleDays) && idleDays > 0
-      ? idleDays
-      : undefined;
+    idleDays != null && Number.isFinite(idleDays) && idleDays > 0 ? idleDays : undefined;
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.pipelines.board(pipelineId),
@@ -604,7 +602,7 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
               onClick={() => setCreateDealOpen(true)}
             >
               <Plus className="h-4 w-4" />
-              Criar card
+              Criar lead
             </Button>
           </div>
         }
@@ -633,7 +631,11 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
         />
       ) : null}
       {data ? (
-        <CreateDealDialog open={createDealOpen} onOpenChange={setCreateDealOpen} pipeline={data} />
+        <ManualCreateLeadDialog
+          open={createDealOpen}
+          onOpenChange={setCreateDealOpen}
+          pipeline={data}
+        />
       ) : null}
       <DealWorkspaceDrawer />
     </div>

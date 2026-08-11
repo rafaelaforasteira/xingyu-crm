@@ -11,12 +11,15 @@ import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
 import {
   BulkMoveDealsDto,
   CreateDealDto,
+  CreateManualLeadDto,
+  LookupManualLeadDto,
   MoveStageDto,
   QueryDealsDto,
   UpdateDealDto,
   WinLoseDto,
 } from "./dto/deal.dto";
-import { allocateLeadSequence } from "../common/lead-sequence";
+import { allocateLeadSequence, formatLeadCode } from "../common/lead-sequence";
+import { normalizePhone } from "../common/phone-normalization";
 import { toDealResponse } from "../common/mappers";
 
 type DbClient = Prisma.TransactionClient | PrismaService;
@@ -199,6 +202,228 @@ export class DealsService {
     });
   }
 
+  async lookupManualLead(organizationId: string, dto: LookupManualLeadDto) {
+    const phone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
+    const email = dto.email?.trim().toLowerCase() || null;
+    const contact = phone
+      ? await this.prisma.contact.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            OR: [{ phone }, { whatsapp: phone }],
+          },
+          include: {
+            deals: {
+              where: { deletedAt: null },
+              orderBy: { updatedAt: "desc" },
+              include: {
+                stage: { select: { id: true, name: true, type: true } },
+                pipeline: { select: { id: true, name: true } },
+                owner: { select: { id: true, name: true } },
+              },
+            },
+          },
+        })
+      : null;
+    const possibleEmailContact =
+      !contact && email
+        ? await this.prisma.contact.findFirst({
+            where: {
+              organizationId,
+              deletedAt: null,
+              email: { equals: email, mode: "insensitive" },
+            },
+            select: { id: true, firstName: true, lastName: true, email: true },
+          })
+        : null;
+    const activeDeal = contact?.deals.find(
+      (deal) => deal.pipelineId === dto.pipelineId && deal.status === "OPEN",
+    );
+    return {
+      phone,
+      contact: contact
+        ? {
+            ...contact,
+            name: [contact.firstName, contact.lastName].filter(Boolean).join(" "),
+          }
+        : null,
+      activeDeal: activeDeal ?? null,
+      possibleEmailContact,
+    };
+  }
+
+  async createManualLead(organizationId: string, dto: CreateManualLeadDto, userId: string) {
+    const phone = normalizePhone(dto.phone);
+    const contactName = dto.contactName.trim().replace(/\s+/g, " ");
+    if (!contactName) throw new BadRequestException("Informe o nome do contato");
+    const taskDueAt = dto.taskDueAt ? new Date(dto.taskDueAt) : null;
+    if (taskDueAt && Number.isNaN(taskDueAt.getTime())) {
+      throw new BadRequestException("Informe um prazo de tarefa válido");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.requireOrganizationUser(tx, organizationId, userId);
+      await this.requireActivePipeline(tx, organizationId, dto.pipelineId);
+      const stage = await this.requireActiveStage(tx, organizationId, dto.pipelineId, dto.stageId);
+      const ownerId = dto.ownerId ?? userId;
+      await this.validateOptionalRelations(tx, organizationId, { ownerId });
+
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:${dto.pipelineId}:${phone}`}))`;
+      let contact = await tx.contact.findFirst({
+        where: { organizationId, deletedAt: null, OR: [{ phone }, { whatsapp: phone }] },
+      });
+      if (!contact) {
+        const [firstName, ...lastName] = contactName.split(" ");
+        contact = await tx.contact.create({
+          data: {
+            organizationId,
+            firstName,
+            lastName: lastName.join(" ") || null,
+            phone,
+            whatsapp: phone,
+            email: dto.email?.trim().toLowerCase() || null,
+            ownerId,
+            createdById: userId,
+            updatedById: userId,
+            source: "manual",
+          },
+        });
+      }
+
+      const duplicate = await tx.deal.findFirst({
+        where: {
+          organizationId,
+          pipelineId: dto.pipelineId,
+          contactId: contact.id,
+          status: "OPEN",
+          deletedAt: null,
+        },
+        select: { id: true, leadSequence: true, stageId: true },
+      });
+      if (duplicate) {
+        throw new ConflictException({
+          message: "Este lead já existe nesta esteira",
+          code: "ACTIVE_LEAD_EXISTS",
+          deal: duplicate,
+        });
+      }
+
+      const now = new Date();
+      const leadSequence = await allocateLeadSequence(tx, organizationId);
+      const leadCode = formatLeadCode(leadSequence)!;
+      const contactDisplayName = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+      const created = await tx.deal.create({
+        data: {
+          organizationId,
+          pipelineId: dto.pipelineId,
+          stageId: stage.id,
+          contactId: contact.id,
+          ownerId,
+          name: `${leadCode} · ${contactDisplayName}`,
+          leadSequence,
+          value: dto.value,
+          source: dto.informedSource?.trim() || "manual",
+          createdById: userId,
+          updatedById: userId,
+          ...this.stageTransitionData(stage, now),
+        },
+        include: { stage: true, contact: true, owner: { select: { id: true, name: true } } },
+      });
+      await tx.dealStageHistory.create({
+        data: { dealId: created.id, stageId: stage.id, movedById: userId, movedAt: now },
+      });
+      await tx.activity.create({
+        data: {
+          organizationId,
+          type: "DEAL_CREATED",
+          title: "Lead criado",
+          dealId: created.id,
+          contactId: contact.id,
+          actorId: userId,
+          metadata: {
+            pipelineId: dto.pipelineId,
+            stageId: stage.id,
+            stageName: stage.name,
+            leadCode,
+          },
+        },
+      });
+      if (dto.informedSource?.trim()) {
+        await tx.attribution.create({
+          data: {
+            organizationId,
+            contactId: contact.id,
+            source: "manual",
+            medium: dto.informedSource.trim(),
+          },
+        });
+      }
+      if (dto.note?.trim()) {
+        const note = await tx.note.create({
+          data: {
+            organizationId,
+            content: dto.note.trim(),
+            authorId: userId,
+            contactId: contact.id,
+            dealId: created.id,
+          },
+        });
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: "NOTE_CREATED",
+            title: "Nota adicionada",
+            dealId: created.id,
+            contactId: contact.id,
+            actorId: userId,
+            metadata: { noteId: note.id },
+          },
+        });
+      }
+      if (dto.taskTitle?.trim()) {
+        const status = await tx.taskStatusDefinition.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            archived: false,
+            active: true,
+            category: "OPEN",
+          },
+          orderBy: { position: "asc" },
+        });
+        if (!status) throw new BadRequestException("Nenhum status de tarefa aberto configurado");
+        const task = await tx.task.create({
+          data: {
+            organizationId,
+            title: dto.taskTitle.trim(),
+            statusDefinitionId: status.id,
+            status: "PENDING",
+            type: "FOLLOW_UP",
+            assigneeId: ownerId,
+            createdById: userId,
+            contactId: contact.id,
+            dealId: created.id,
+            pipelineId: dto.pipelineId,
+            stageId: stage.id,
+            dueAt: taskDueAt,
+          },
+        });
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: "TASK_CREATED",
+            title: "Tarefa criada",
+            taskId: task.id,
+            dealId: created.id,
+            contactId: contact.id,
+            actorId: userId,
+          },
+        });
+      }
+      return created;
+    });
+  }
+
   async update(organizationId: string, id: string, dto: UpdateDealDto, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       const deal = await this.requireDeal(tx, organizationId, id);
@@ -241,7 +466,10 @@ export class DealsService {
       }
       if (dto.ownerId !== undefined && dto.ownerId !== deal.ownerId) {
         const users = await tx.user.findMany({
-          where: { id: { in: [deal.ownerId, dto.ownerId].filter(Boolean) as string[] }, organizationId },
+          where: {
+            id: { in: [deal.ownerId, dto.ownerId].filter(Boolean) as string[] },
+            organizationId,
+          },
           select: { id: true, name: true },
         });
         const names = new Map(users.map((user) => [user.id, user.name]));
@@ -255,9 +483,13 @@ export class DealsService {
             actorId: userId,
             metadata: {
               fromOwnerId: deal.ownerId,
-              fromOwnerName: deal.ownerId ? names.get(deal.ownerId) ?? "Usuário indisponível" : "Não atribuído",
+              fromOwnerName: deal.ownerId
+                ? (names.get(deal.ownerId) ?? "Usuário indisponível")
+                : "Não atribuído",
               toOwnerId: dto.ownerId,
-              toOwnerName: dto.ownerId ? names.get(dto.ownerId) ?? "Usuário indisponível" : "Não atribuído",
+              toOwnerName: dto.ownerId
+                ? (names.get(dto.ownerId) ?? "Usuário indisponível")
+                : "Não atribuído",
             },
           },
         });

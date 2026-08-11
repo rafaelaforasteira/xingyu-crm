@@ -16,7 +16,7 @@ import {
 import { countBoardDeals, filterPipelineBoard } from "@/lib/operation-utils";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
-import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
+import { ManualCreateLeadDialog } from "@/components/crm/manual-create-lead-dialog";
 import { DealWorkspaceDrawer, DealWorkspacePage } from "@/components/crm/deal-workspace";
 import { useUiStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
@@ -131,7 +131,7 @@ export function BetaKanbanView() {
                 onClick={() => setCreateDealOpen(true)}
               >
                 <Plus className="h-4 w-4" />
-                Criar card
+                Criar lead
               </Button>
               <PipelineStageSettingsButton
                 pipelineId={pipelineId}
@@ -162,7 +162,11 @@ export function BetaKanbanView() {
         </>
       ) : null}
       {data ? (
-        <CreateDealDialog open={createDealOpen} onOpenChange={setCreateDealOpen} pipeline={data} />
+        <ManualCreateLeadDialog
+          open={createDealOpen}
+          onOpenChange={setCreateDealOpen}
+          pipeline={data}
+        />
       ) : null}
       <div data-testid="beta-deal-drawer">
         <DealWorkspaceDrawer onClose={onCloseDrawer} />

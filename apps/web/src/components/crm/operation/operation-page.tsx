@@ -28,7 +28,7 @@ import { useUiStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
+import { ManualCreateLeadDialog } from "@/components/crm/manual-create-lead-dialog";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { OperationEmptyState } from "./operation-empty-state";
 import { DealConversationPanel } from "./deal-conversation-panel";
@@ -563,7 +563,7 @@ export function OperationPage() {
         )}
       </div>
 
-      <CreateDealDialog
+      <ManualCreateLeadDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         pipeline={(board ?? selectedPipeline) as Pipeline}

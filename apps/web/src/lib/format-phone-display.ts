@@ -9,6 +9,13 @@ function digitsOnly(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+export function normalizePhoneForLookup(value: string): string | null {
+  const digits = digitsOnly(value);
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`;
+  if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) return digits;
+  return digits.length >= 8 && digits.length <= 15 ? digits : null;
+}
+
 function hasPlusPrefix(value: string): boolean {
   return value.trim().startsWith("+");
 }
@@ -35,10 +42,7 @@ function formatBrazilLocal(local: string): string | null {
  * Conservative international display when not unambiguously Brazilian.
  * Preserves all digits; keeps leading + when present in the source.
  */
-function formatInternationalConservative(
-  raw: string,
-  digits: string,
-): string {
+function formatInternationalConservative(raw: string, digits: string): string {
   if (hasPlusPrefix(raw)) {
     return `+${digits}`;
   }
@@ -48,9 +52,7 @@ function formatInternationalConservative(
 /**
  * Formats a phone number for UI display only.
  */
-export function formatPhoneForDisplay(
-  value: string | null | undefined,
-): string {
+export function formatPhoneForDisplay(value: string | null | undefined): string {
   if (value == null) return FALLBACK_ABSENT;
   const raw = String(value).trim();
   if (!raw) return FALLBACK_ABSENT;
@@ -83,22 +85,31 @@ export function formatPhoneForDisplay(
  * Priority: contact.phone → contact.whatsapp.
  * Email is never used as a phone substitute.
  */
-export function resolvePrimaryPhone(contact: {
-  phone?: string | null;
-  whatsapp?: string | null;
-} | null | undefined): string | null {
+export function resolvePrimaryPhone(
+  contact:
+    | {
+        phone?: string | null;
+        whatsapp?: string | null;
+      }
+    | null
+    | undefined,
+): string | null {
   if (!contact) return null;
   const phone = typeof contact.phone === "string" ? contact.phone.trim() : "";
   if (phone) return phone;
-  const whatsapp =
-    typeof contact.whatsapp === "string" ? contact.whatsapp.trim() : "";
+  const whatsapp = typeof contact.whatsapp === "string" ? contact.whatsapp.trim() : "";
   if (whatsapp) return whatsapp;
   return null;
 }
 
-export function formatPrimaryPhoneForDisplay(contact: {
-  phone?: string | null;
-  whatsapp?: string | null;
-} | null | undefined): string {
+export function formatPrimaryPhoneForDisplay(
+  contact:
+    | {
+        phone?: string | null;
+        whatsapp?: string | null;
+      }
+    | null
+    | undefined,
+): string {
   return formatPhoneForDisplay(resolvePrimaryPhone(contact));
 }

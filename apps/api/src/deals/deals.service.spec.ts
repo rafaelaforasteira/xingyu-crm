@@ -1,4 +1,4 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { DealsService } from "./deals.service";
 
@@ -6,6 +6,7 @@ type MockMethod = jest.Mock<Promise<unknown>, unknown[]>;
 
 type TransactionMock = {
   $queryRaw: MockMethod;
+  $executeRaw: MockMethod;
   pipeline: { findFirst: MockMethod };
   pipelineStage: { findFirst: MockMethod; findUnique: MockMethod; findMany: MockMethod };
   deal: {
@@ -24,7 +25,11 @@ type TransactionMock = {
     createMany: MockMethod;
   };
   user: { findFirst: MockMethod; findMany: MockMethod };
-  contact: { findFirst: MockMethod };
+  contact: { findFirst: MockMethod; create: MockMethod };
+  attribution: { create: MockMethod };
+  note: { create: MockMethod };
+  task: { create: MockMethod };
+  taskStatusDefinition: { findFirst: MockMethod };
   company: { findFirst: MockMethod };
   team: { findFirst: MockMethod };
   conversation: { findFirst: MockMethod };
@@ -32,6 +37,7 @@ type TransactionMock = {
 
 type PrismaMock = {
   $transaction: jest.Mock<Promise<unknown>, [(transaction: TransactionMock) => Promise<unknown>]>;
+  contact: { findFirst: MockMethod };
 };
 
 const organizationId = "org-test";
@@ -45,6 +51,7 @@ function method(): MockMethod {
 function createTransactionMock(): TransactionMock {
   return {
     $queryRaw: method(),
+    $executeRaw: method(),
     pipeline: { findFirst: method() },
     pipelineStage: { findFirst: method(), findUnique: method(), findMany: method() },
     deal: {
@@ -63,7 +70,11 @@ function createTransactionMock(): TransactionMock {
       createMany: method(),
     },
     user: { findFirst: method(), findMany: method() },
-    contact: { findFirst: method() },
+    contact: { findFirst: method(), create: method() },
+    attribution: { create: method() },
+    note: { create: method() },
+    task: { create: method() },
+    taskStatusDefinition: { findFirst: method() },
     company: { findFirst: method() },
     team: { findFirst: method() },
     conversation: { findFirst: method() },
@@ -73,6 +84,7 @@ function createTransactionMock(): TransactionMock {
 function createPrismaMock(transaction: TransactionMock): PrismaMock {
   return {
     $transaction: jest.fn(async (callback) => callback(transaction)),
+    contact: { findFirst: method() },
   };
 }
 
@@ -234,5 +246,67 @@ describe("DealsService Kanban integrity", () => {
     );
     expect(transaction.dealStageHistory.create).toHaveBeenCalledTimes(1);
     expect(transaction.activity.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses a contact and blocks an active duplicate inside the transaction", async () => {
+    transaction.pipelineStage.findFirst.mockResolvedValue(stage("stage-open", "OPEN"));
+    transaction.contact.findFirst.mockResolvedValue({ id: "contact-test", firstName: "Maria" });
+    transaction.deal.findFirst.mockResolvedValue({
+      id: "existing",
+      leadSequence: 12,
+      stageId: "stage-open",
+    });
+
+    await expect(
+      service.createManualLead(
+        organizationId,
+        { phone: "(47) 98833-4464", contactName: "Maria Silva", pipelineId, stageId: "stage-open" },
+        userId,
+      ),
+    ).rejects.toThrow(ConflictException);
+
+    expect(transaction.contact.create).not.toHaveBeenCalled();
+    expect(transaction.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(transaction.deal.create).not.toHaveBeenCalled();
+  });
+
+  it("creates contact and deal with automatic identity in one transaction", async () => {
+    const target = stage("stage-open", "OPEN");
+    transaction.pipelineStage.findFirst.mockResolvedValue(target);
+    transaction.contact.findFirst.mockResolvedValue(null);
+    transaction.contact.create.mockResolvedValue({
+      id: "contact-new",
+      firstName: "Maria",
+      lastName: "Silva",
+    });
+    transaction.deal.findFirst.mockResolvedValue(null);
+    transaction.$queryRaw.mockResolvedValue([{ seq: 28 }]);
+    transaction.deal.create.mockResolvedValue({
+      id: "deal-new",
+      leadSequence: 28,
+      contactId: "contact-new",
+    });
+
+    await service.createManualLead(
+      organizationId,
+      { phone: "+55 47 98833-4464", contactName: "Maria Silva", pipelineId, stageId: target.id },
+      userId,
+    );
+
+    expect(transaction.contact.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ phone: "5547988334464" }),
+    });
+    expect(transaction.deal.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          name: "Lead #0028 · Maria Silva",
+          leadSequence: 28,
+          value: undefined,
+        }),
+      }),
+    );
+    expect(transaction.dealStageHistory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ dealId: "deal-new", stageId: target.id }),
+    });
   });
 });

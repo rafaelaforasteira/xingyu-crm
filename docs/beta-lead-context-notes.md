@@ -1,5 +1,7 @@
 # Notas no contexto do lead
 
+O fluxo [Criar lead](./beta-create-lead-flow.md) pode criar a primeira Note na mesma transação da negociação.
+
 ## Escopo
 
 A seção **Notas** do contexto do lead agora funciona como um histórico de anotações internas, vinculado exclusivamente à negociação atual. O editor inline aceita texto simples de até 5.000 caracteres, rejeita conteúdo vazio e preserva o texto digitado quando a API falha.

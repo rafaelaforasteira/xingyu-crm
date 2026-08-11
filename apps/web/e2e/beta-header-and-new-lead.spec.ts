@@ -2,11 +2,7 @@ import { expect, test } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const SCREENSHOT_DIR = path.join(
-  __dirname,
-  ".beta-screenshots",
-  "header-adjustment",
-);
+const SCREENSHOT_DIR = path.join(__dirname, ".beta-screenshots", "header-adjustment");
 
 test.describe("Beta header and new lead", () => {
   test.setTimeout(180_000);
@@ -14,7 +10,7 @@ test.describe("Beta header and new lead", () => {
   test("refines header search and creates a real lead", async ({ page }) => {
     await fs.promises.mkdir(SCREENSHOT_DIR, { recursive: true });
     const stamp = Date.now();
-    const leadName = `Lead Header Teste ${stamp}`;
+    const leadName = `Contato Header ${stamp}`;
 
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto("/operacao?view=kanban");
@@ -29,10 +25,7 @@ test.describe("Beta header and new lead", () => {
     await expect(page.getByTestId("beta-header-new")).toBeVisible();
 
     const search = page.getByLabel("Buscar contatos, deals e pedidos");
-    await expect(search).toHaveAttribute(
-      "placeholder",
-      "Buscar contatos, deals e pedidos…",
-    );
+    await expect(search).toHaveAttribute("placeholder", "Buscar contatos, deals e pedidos…");
     await expect(page.locator("kbd")).toHaveCount(0);
     await expect(page.getByText("⌘K")).toHaveCount(0);
     await expect(page.getByText("⌘ K")).toHaveCount(0);
@@ -65,10 +58,10 @@ test.describe("Beta header and new lead", () => {
 
     await page.getByRole("menuitem", { name: "Novo lead" }).click();
     await expect(page.getByTestId("create-lead-form")).toBeVisible();
-    await expect(page.getByText("Novo lead").first()).toBeVisible();
-    await expect(
-      page.getByTestId("create-lead-form").locator("#create-lead-pipeline"),
-    ).toHaveCount(0);
+    await expect(page.getByText("Criar lead").first()).toBeVisible();
+    await expect(page.getByTestId("create-lead-form").locator("#create-lead-pipeline")).toHaveCount(
+      0,
+    );
     await expect(
       page.getByTestId("create-lead-form").getByRole("combobox", { name: /pipeline/i }),
     ).toHaveCount(0);
@@ -77,13 +70,13 @@ test.describe("Beta header and new lead", () => {
       fullPage: false,
     });
 
-    await page.getByLabel("Nome do lead").fill(leadName);
-    await page.getByLabel("Nome do contato (opcional)").fill("Contato Header");
-    await page.getByLabel("Telefone / WhatsApp").fill(`3499${String(stamp).slice(-6)}`);
-    await page.getByLabel("Valor").fill("150");
-    await page.getByRole("button", { name: "Salvar" }).click();
+    await page.getByLabel("Telefone *").fill(`3499${String(stamp).slice(-6)}`);
+    await expect(page.getByText(/Nenhum contato encontrado/)).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel("Nome *").fill(leadName);
+    await page.getByLabel("Valor estimado").fill("150");
+    await page.getByTestId("create-lead-form").getByRole("button", { name: "Criar lead" }).click();
 
-    await expect(page.getByText("Lead criado com sucesso.")).toBeVisible({
+    await expect(page.getByText(/Lead #\d+ criado com sucesso/)).toBeVisible({
       timeout: 20_000,
     });
     await expect(page).toHaveURL(new RegExp(`deal=`), { timeout: 15_000 });
@@ -130,8 +123,8 @@ test.describe("Beta header and new lead", () => {
     await expect(page.getByTestId("beta-kanban")).toBeVisible({
       timeout: 30_000,
     });
-    await expect(
-      page.getByTestId("deal-card").filter({ hasText: leadName }).first(),
-    ).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("deal-card").filter({ hasText: leadName }).first()).toBeVisible({
+      timeout: 20_000,
+    });
   });
 });

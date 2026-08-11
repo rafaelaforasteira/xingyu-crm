@@ -1,5 +1,7 @@
 # Gerenciamento de etapas do pipeline
 
+O fluxo [Criar lead](./beta-create-lead-flow.md) consome dinamicamente estas etapas e respeita `isInitial`.
+
 ## Objetivo
 
 A tela de Operação permite que administradores configurem as etapas do pipeline atualmente selecionado. O recurso é genérico: recebe o `pipelineId` real e consulta suas etapas, sem depender do nome do pipeline, de uma quantidade fixa de colunas ou de nomes predefinidos.
