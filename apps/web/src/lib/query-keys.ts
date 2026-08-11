@@ -32,6 +32,7 @@ export const queryKeys = {
   deals: {
     detail: (id: string) => ["deals", id] as const,
     activities: (id: string) => ["deals", id, "activities"] as const,
+    history: (id: string) => ["deals", id, "history"] as const,
     files: (id: string) => ["deals", id, "files"] as const,
   },
   conversations: {

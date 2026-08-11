@@ -190,6 +190,7 @@ export class DealsService {
           metadata: {
             pipelineId: dto.pipelineId,
             stageId: stage.id,
+            stageName: stage.name,
           },
         },
       });
@@ -238,6 +239,29 @@ export class DealsService {
       if (stageChanged) {
         await this.recordStageChange(tx, organizationId, deal, stage, userId, now);
       }
+      if (dto.ownerId !== undefined && dto.ownerId !== deal.ownerId) {
+        const users = await tx.user.findMany({
+          where: { id: { in: [deal.ownerId, dto.ownerId].filter(Boolean) as string[] }, organizationId },
+          select: { id: true, name: true },
+        });
+        const names = new Map(users.map((user) => [user.id, user.name]));
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: ActivityType.OWNER_CHANGED,
+            title: "Deal owner changed",
+            dealId: deal.id,
+            contactId: deal.contactId,
+            actorId: userId,
+            metadata: {
+              fromOwnerId: deal.ownerId,
+              fromOwnerName: deal.ownerId ? names.get(deal.ownerId) ?? "Usuário indisponível" : "Não atribuído",
+              toOwnerId: dto.ownerId,
+              toOwnerName: dto.ownerId ? names.get(dto.ownerId) ?? "Usuário indisponível" : "Não atribuído",
+            },
+          },
+        });
+      }
       return updated;
     });
   }
@@ -259,6 +283,9 @@ export class DealsService {
       await this.requireOrganizationUser(tx, organizationId, userId);
       await this.requireActivePipeline(tx, organizationId, deal.pipelineId);
       const stage = await this.requireActiveStage(tx, organizationId, deal.pipelineId, dto.stageId);
+      if (stage.id === deal.stageId) {
+        return tx.deal.findUniqueOrThrow({ where: { id: deal.id }, include: { stage: true } });
+      }
       const now = new Date();
 
       const updated = await tx.deal.update({
@@ -332,6 +359,11 @@ export class DealsService {
         throw new BadRequestException("All deals must belong to the target stage pipeline");
       }
 
+      const previousStages = await tx.pipelineStage.findMany({
+        where: { id: { in: [...new Set(deals.map((deal) => deal.stageId))] } },
+        select: { id: true, name: true },
+      });
+      const previousStageNames = new Map(previousStages.map((item) => [item.id, item.name]));
       const now = new Date();
       const result = await tx.deal.updateMany({
         where: {
@@ -370,7 +402,9 @@ export class DealsService {
           actorId: userId,
           metadata: {
             fromStageId: deal.stageId,
+            fromStageName: previousStageNames.get(deal.stageId) ?? "Etapa anterior",
             stageId: stage.id,
+            stageName: stage.name,
             pipelineId: stage.pipelineId,
           },
         })),
@@ -718,6 +752,10 @@ export class DealsService {
     userId: string,
     movedAt: Date,
   ) {
+    const previousStage = await tx.pipelineStage.findUnique({
+      where: { id: deal.stageId },
+      select: { name: true },
+    });
     await tx.dealStageHistory.create({
       data: {
         dealId: deal.id,
@@ -738,7 +776,9 @@ export class DealsService {
         actorId: userId,
         metadata: {
           fromStageId: deal.stageId,
+          fromStageName: previousStage?.name ?? "Etapa anterior",
           stageId: stage.id,
+          stageName: stage.name,
           pipelineId: stage.pipelineId,
         },
       },

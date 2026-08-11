@@ -67,9 +67,14 @@ export class LeadFilesService {
       throw new BadRequestException("Tipo de anexo não elegível para Arquivos");
     }
 
-    return this.prisma.leadFile.upsert({
-      where: { dealId_attachmentId: { dealId, attachmentId: attachment.id } },
-      create: {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.leadFile.findUnique({
+        where: { dealId_attachmentId: { dealId, attachmentId: attachment.id } },
+        include: LEAD_FILE_INCLUDE,
+      });
+      if (existing) return existing;
+      const leadFile = await tx.leadFile.create({
+        data: {
         organizationId,
         dealId,
         conversationId: attachment.message.conversationId,
@@ -83,19 +88,45 @@ export class LeadFilesService {
         kind: attachment.kind,
         messageDirection: attachment.message.direction,
         messageCreatedAt: attachment.message.sentAt,
-      },
-      update: {},
-      include: LEAD_FILE_INCLUDE,
+        },
+        include: LEAD_FILE_INCLUDE,
+      });
+      await tx.activity.create({
+        data: {
+          organizationId,
+          dealId,
+          contactId: null,
+          conversationId: attachment.message.conversationId,
+          actorId: userId,
+          type: "FILE_SAVED",
+          title: "File saved",
+          metadata: { leadFileId: leadFile.id, attachmentId: attachment.id },
+        },
+      });
+      return leadFile;
     });
   }
 
-  async remove(organizationId: string, dealId: string, id: string) {
+  async remove(organizationId: string, dealId: string, id: string, userId: string) {
     const leadFile = await this.prisma.leadFile.findFirst({
       where: { id, organizationId, dealId },
-      select: { id: true },
+      select: { id: true, conversationId: true, attachmentId: true },
     });
     if (!leadFile) throw new NotFoundException("Arquivo salvo não encontrado");
-    await this.prisma.leadFile.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.leadFile.delete({ where: { id } });
+      await tx.activity.create({
+        data: {
+          organizationId,
+          dealId,
+          conversationId: leadFile.conversationId,
+          actorId: userId,
+          type: "FILE_REMOVED",
+          title: "File removed",
+          metadata: { leadFileId: id, attachmentId: leadFile.attachmentId },
+        },
+      });
+    });
     return { removed: true };
   }
 

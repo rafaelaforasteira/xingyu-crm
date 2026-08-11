@@ -19,6 +19,13 @@ export class ActivitiesService {
       ...(query.orderId ? { orderId: query.orderId } : {}),
       ...(query.type ? { type: query.type } : {}),
     };
+    if (query.dealId) {
+      const deal = await this.prisma.deal.findFirst({
+        where: { id: query.dealId, organizationId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!deal) throw new NotFoundException(`Deal ${query.dealId} not found`);
+    }
     const [data, total] = await Promise.all([
       this.prisma.activity.findMany({
         where,
@@ -26,7 +33,7 @@ export class ActivitiesService {
         take,
         orderBy: { createdAt: "desc" },
         include: {
-          actor: { select: { id: true, name: true } },
+          actor: { select: { id: true, name: true, avatarUrl: true, status: true } },
           contact: { select: { id: true, firstName: true, lastName: true } },
           deal: { select: { id: true, name: true } },
         },
@@ -37,7 +44,36 @@ export class ActivitiesService {
   }
 
   async timeline(organizationId: string, query: QueryActivitiesDto) {
-    return this.findAll(organizationId, { ...query, pageSize: query.pageSize ?? 50 });
+    const result = await this.findAll(organizationId, { ...query, pageSize: query.pageSize ?? 20 });
+    const allowedMetadata = new Set([
+      "fromStageId",
+      "fromStageName",
+      "stageId",
+      "stageName",
+      "fromOwnerId",
+      "fromOwnerName",
+      "toOwnerId",
+      "toOwnerName",
+      "pipelineId",
+      "noteId",
+      "leadFileId",
+      "attachmentId",
+    ]);
+    return {
+      ...result,
+      data: result.data.map((activity) => ({
+        id: activity.id,
+        type: activity.type,
+        createdAt: activity.createdAt,
+        actor: activity.actor,
+        metadata:
+          activity.metadata && typeof activity.metadata === "object" && !Array.isArray(activity.metadata)
+            ? Object.fromEntries(
+                Object.entries(activity.metadata).filter(([key]) => allowedMetadata.has(key)),
+              )
+            : null,
+      })),
+    };
   }
 
   async findOne(organizationId: string, id: string) {

@@ -23,3 +23,5 @@ As datas são ordenadas, calculam-se os intervalos consecutivos e aplica-se a m�
 ## Performance e limitações
 
 A lista, o histórico e o KPI compartilham uma query React Query com relações carregadas em lote, evitando N+1. A consulta atual carrega no máximo 100 pedidos; clientes acima desse volume exigirão paginação do diálogo e um endpoint agregado de KPI. Registros legados não recebem snapshots inventados e podem exibir “não registrado”.
+
+O Histórico geral do lead apresenta eventos de pedido apenas quando uma mutation real registrar `ORDER_CREATED`; não sintetiza compras retroativamente.

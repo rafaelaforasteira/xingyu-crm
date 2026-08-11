@@ -261,6 +261,9 @@ enum ActivityType {
   DEAL_CREATED
   TASK_CREATED
   TASK_COMPLETED
+  TASK_REOPENED
+  FILE_SAVED
+  FILE_REMOVED
   ORDER_CREATED
   PAYMENT_APPROVED
   ORDER_SHIPPED
@@ -800,6 +803,7 @@ model Activity {
   @@index([organizationId])
   @@index([contactId])
   @@index([dealId])
+  @@index([organizationId, dealId, createdAt(sort: Desc)], map: "Activity_deal_timeline_idx")
   @@index([orderId])
   @@index([createdAt])
   @@index([type])

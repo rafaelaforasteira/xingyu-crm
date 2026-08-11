@@ -103,10 +103,11 @@ export class TasksController {
   @ApiOperation({ summary: "Update task" })
   update(
     @OrganizationId() orgId: string,
+    @DemoUser() user: DemoUserType,
     @Param("id") id: string,
     @Body() dto: UpdateTaskDto,
   ) {
-    return this.tasksService.update(orgId, id, dto);
+    return this.tasksService.update(orgId, id, dto, user.id);
   }
 
   @Delete(":id")
@@ -127,8 +128,12 @@ export class TasksController {
 
   @Post(":id/reopen")
   @ApiOperation({ summary: "Reopen task" })
-  reopen(@OrganizationId() orgId: string, @Param("id") id: string) {
-    return this.tasksService.reopen(orgId, id);
+  reopen(
+    @OrganizationId() orgId: string,
+    @DemoUser() user: DemoUserType,
+    @Param("id") id: string,
+  ) {
+    return this.tasksService.reopen(orgId, id, user.id);
   }
 
   @Post(":id/reschedule")

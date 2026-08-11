@@ -7,7 +7,7 @@ type MockMethod = jest.Mock<Promise<unknown>, unknown[]>;
 type TransactionMock = {
   $queryRaw: MockMethod;
   pipeline: { findFirst: MockMethod };
-  pipelineStage: { findFirst: MockMethod };
+  pipelineStage: { findFirst: MockMethod; findUnique: MockMethod; findMany: MockMethod };
   deal: {
     create: MockMethod;
     findFirst: MockMethod;
@@ -23,7 +23,7 @@ type TransactionMock = {
     create: MockMethod;
     createMany: MockMethod;
   };
-  user: { findFirst: MockMethod };
+  user: { findFirst: MockMethod; findMany: MockMethod };
   contact: { findFirst: MockMethod };
   company: { findFirst: MockMethod };
   team: { findFirst: MockMethod };
@@ -46,7 +46,7 @@ function createTransactionMock(): TransactionMock {
   return {
     $queryRaw: method(),
     pipeline: { findFirst: method() },
-    pipelineStage: { findFirst: method() },
+    pipelineStage: { findFirst: method(), findUnique: method(), findMany: method() },
     deal: {
       create: method(),
       findFirst: method(),
@@ -62,7 +62,7 @@ function createTransactionMock(): TransactionMock {
       create: method(),
       createMany: method(),
     },
-    user: { findFirst: method() },
+    user: { findFirst: method(), findMany: method() },
     contact: { findFirst: method() },
     company: { findFirst: method() },
     team: { findFirst: method() },
@@ -124,6 +124,7 @@ describe("DealsService Kanban integrity", () => {
 
     transaction.user.findFirst.mockResolvedValue({ id: userId });
     transaction.pipeline.findFirst.mockResolvedValue({ id: pipelineId });
+    transaction.pipelineStage.findUnique.mockResolvedValue({ name: "Stage OPEN" });
     transaction.dealStageHistory.create.mockResolvedValue({});
     transaction.activity.create.mockResolvedValue({});
     transaction.$queryRaw.mockResolvedValue([{ seq: 1 }]);

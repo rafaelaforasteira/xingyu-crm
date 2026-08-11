@@ -4,14 +4,13 @@ import * as React from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { activitiesApi, contactsApi, conversationsApi } from "@/lib/api";
+import { contactsApi, conversationsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { ConversationContext } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatPrimaryPhoneForDisplay, resolvePrimaryPhone } from "@/lib/format-phone-display";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConversationChannelBadge } from "./conversation-channel-badge";
 import { conversationContactDisplayName, formatLeadCode } from "./conversation-list-utils";
@@ -20,6 +19,7 @@ import { LeadTasks } from "./lead-tasks";
 import { LeadOrders } from "./lead-orders";
 import { LeadNotes } from "./lead-notes";
 import { LeadFiles } from "./lead-files";
+import { LeadHistory } from "./lead-history";
 
 function CollapsibleSection({
   title,
@@ -55,40 +55,6 @@ function CollapsibleSection({
       </button>
       {open ? <div className="pb-3 pl-6 pr-1">{children}</div> : null}
     </div>
-  );
-}
-
-function LazyActivities({
-  contactId,
-  dealId,
-  conversationId,
-}: {
-  contactId?: string;
-  dealId?: string;
-  conversationId: string;
-}) {
-  const query = useQuery({
-    queryKey: ["activities", "conversation", conversationId],
-    queryFn: () =>
-      activitiesApi.list({
-        contactId: contactId || undefined,
-        dealId: dealId || undefined,
-      }),
-    enabled: Boolean(contactId || dealId),
-  });
-  if (query.isLoading) return <Skeleton className="h-8 w-full" />;
-  if (!query.data?.length) {
-    return <p className="text-xs text-muted-foreground">Sem histórico recente.</p>;
-  }
-  return (
-    <ul className="space-y-2 text-xs text-muted-foreground">
-      {query.data.slice(0, 8).map((activity) => (
-        <li key={activity.id}>
-          <p className="font-medium text-foreground">{activity.title}</p>
-          <ClientRelativeTime value={activity.createdAt} />
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -295,12 +261,12 @@ function ContextBody({ context }: { context: ConversationContext }) {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Histórico" count={context.counts.activitiesCount}>
-        <LazyActivities
-          contactId={contactId}
-          dealId={dealId}
-          conversationId={context.conversation.id}
-        />
+      <CollapsibleSection title="Histórico">
+        {dealId ? (
+          <LeadHistory dealId={dealId} leadName={name} />
+        ) : (
+          <p className="text-xs text-muted-foreground">Nenhum acontecimento registrado.</p>
+        )}
       </CollapsibleSection>
 
       <CollapsibleSection title="Outras negociações">

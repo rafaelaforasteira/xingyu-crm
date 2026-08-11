@@ -30,14 +30,14 @@ function buildNegotiationLines(options: {
 }
 
 describe("Lead context negotiation contracts", () => {
-  it("omits numeric badge only on Negociação while other sections keep counts", () => {
+  it("omits numeric badges on Negociação and Histórico while operational sections keep counts", () => {
     const sections: SectionHeader[] = [
       { title: "Negociação" },
       { title: "Tarefas", count: 2 },
       { title: "Pedidos", count: 0 },
       { title: "Notas", count: 0 },
       { title: "Arquivos", count: 0 },
-      { title: "Histórico", count: 2 },
+      { title: "Histórico" },
     ];
 
     const negociacao = sections.find((s) => s.title === "Negociação")!;
@@ -53,9 +53,8 @@ describe("Lead context negotiation contracts", () => {
     );
     expect(sections.find((s) => s.title === "Pedidos")!.count).toBe(0);
     expect(sectionShowsCountBadge(sections.find((s) => s.title === "Histórico")!)).toBe(
-      true,
+      false,
     );
-    expect(sections.find((s) => s.title === "Histórico")!.count).toBe(2);
   });
 
   it("does not render Deal.title in negotiation lines", () => {

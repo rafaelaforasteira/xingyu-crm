@@ -779,13 +779,13 @@ export interface OrderEvent {
 export interface Activity {
   id: string;
   type: string;
-  title: string;
+  title?: string;
   description?: string | null;
   entityType?: string;
   entityId?: string;
   actor?: UserRef | null;
   createdAt: string;
-  meta?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface Occurrence {

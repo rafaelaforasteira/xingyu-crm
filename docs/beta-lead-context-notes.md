@@ -18,3 +18,5 @@ A ação **Criar tarefa a partir da nota** reutiliza o mesmo `CreateTaskDialog` 
 - Conteúdo é renderizado como texto React, sem interpretação de HTML.
 - A migration `20260811020000_add_note_task_link` adiciona a chave estrangeira opcional e índices para vínculo e histórico por negociação.
 - Nenhuma nota é enviada ao WhatsApp ou exposta em mensagens externas.
+
+A criação da nota gera “Adicionou uma nota” no Histórico do deal; `Note.content` nunca é duplicado no evento.

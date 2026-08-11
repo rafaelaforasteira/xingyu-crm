@@ -45,12 +45,15 @@ describe("LeadFilesService", () => {
       deal: { findFirst: jest.fn().mockResolvedValue({ id: "deal-1" }) },
       messageAttachment: { findFirst: jest.fn().mockResolvedValue(foundAttachment) },
       leadFile: {
-        upsert: jest.fn().mockResolvedValue({ id: "lead-file-1" }),
-        findFirst: jest.fn().mockResolvedValue({ id: "lead-file-1" }),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: "lead-file-1" }),
+        findFirst: jest.fn().mockResolvedValue({ id: "lead-file-1", conversationId: "conversation-1", attachmentId: "attachment-1" }),
         delete: jest.fn().mockResolvedValue({ id: "lead-file-1" }),
       },
+      activity: { create: jest.fn().mockResolvedValue({ id: "activity-1" }) },
       message: { delete: jest.fn() },
     };
+    Object.assign(prisma, { $transaction: jest.fn(async (callback) => callback(prisma)) });
     return { prisma, service: new LeadFilesService(prisma as never) };
   }
 
@@ -62,10 +65,9 @@ describe("LeadFilesService", () => {
       { messageId: "message-1", attachmentId: "attachment-1" },
       "user-1",
     );
-    expect(prisma.leadFile.upsert).toHaveBeenCalledWith(
+    expect(prisma.leadFile.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { dealId_attachmentId: { dealId: "deal-1", attachmentId: "attachment-1" } },
-        create: expect.objectContaining({
+        data: expect.objectContaining({
           organizationId: "org-1",
           dealId: "deal-1",
           messageId: "message-1",
@@ -90,7 +92,7 @@ describe("LeadFilesService", () => {
 
   it("removes only the curated reference", async () => {
     const { prisma, service } = setup();
-    await expect(service.remove("org-1", "deal-1", "lead-file-1")).resolves.toEqual({
+    await expect(service.remove("org-1", "deal-1", "lead-file-1", "user-1")).resolves.toEqual({
       removed: true,
     });
     expect(prisma.leadFile.delete).toHaveBeenCalledWith({ where: { id: "lead-file-1" } });

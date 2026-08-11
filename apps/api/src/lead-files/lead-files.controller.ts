@@ -32,9 +32,10 @@ export class LeadFilesController {
   @ApiOperation({ summary: "Remove only the curated lead file reference" })
   remove(
     @OrganizationId() orgId: string,
+    @DemoUser() user: DemoUserType,
     @Param("dealId") dealId: string,
     @Param("id") id: string,
   ) {
-    return this.leadFilesService.remove(orgId, dealId, id);
+    return this.leadFilesService.remove(orgId, dealId, id, user.id);
   }
 }

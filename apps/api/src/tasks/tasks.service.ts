@@ -358,8 +358,9 @@ export class TasksService {
       }
     }
 
-    const created = await this.prisma.task.create({
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.task.create({
+        data: {
         organizationId,
         title: dto.title,
         description: dto.description,
@@ -378,26 +379,27 @@ export class TasksService {
         dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
         createdById: userId,
       },
-      include: TASK_INCLUDE,
-    });
+        include: TASK_INCLUDE,
+      });
 
-    await this.prisma.activity.create({
-      data: {
+      if (created.dealId) await tx.activity.create({
+        data: {
         organizationId,
         type: "TASK_CREATED",
-        title: `Tarefa criada: ${created.title}`,
+        title: "Task created",
         taskId: created.id,
         contactId: created.contactId,
         dealId: created.dealId,
         actorId: userId,
-      },
-    });
+        },
+      });
 
-    return mapTask(created);
+      return mapTask(created);
+    });
   }
 
-  async update(organizationId: string, id: string, dto: UpdateTaskDto) {
-    await this.findOne(organizationId, id);
+  async update(organizationId: string, id: string, dto: UpdateTaskDto, userId: string) {
+    const previous = await this.findOne(organizationId, id);
     if (dto.assigneeId !== undefined) {
       await this.validateAssignee(organizationId, dto.assigneeId);
     }
@@ -412,7 +414,8 @@ export class TasksService {
 
     const dealLinks = dto.dealId ? await this.resolveDealLinks(organizationId, dto.dealId) : null;
 
-    const updated = await this.prisma.task.update({
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.task.update({
       where: { id },
       data: {
         ...(dto.title ? { title: dto.title } : {}),
@@ -446,8 +449,24 @@ export class TasksService {
             : {}),
       },
       include: TASK_INCLUDE,
+      });
+      const wasDone = previous.status === "COMPLETED";
+      const isDone = updated.status === "COMPLETED";
+      if (updated.dealId && wasDone !== isDone) {
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: isDone ? "TASK_COMPLETED" : "TASK_REOPENED",
+            title: isDone ? "Task completed" : "Task reopened",
+            taskId: id,
+            contactId: updated.contactId,
+            dealId: updated.dealId,
+            actorId: userId,
+          },
+        });
+      }
+      return mapTask(updated);
     });
-    return mapTask(updated);
   }
 
   async remove(organizationId: string, id: string) {
@@ -456,7 +475,8 @@ export class TasksService {
   }
 
   async complete(organizationId: string, id: string, userId: string) {
-    await this.findOne(organizationId, id);
+    const current = await this.findOne(organizationId, id);
+    if (current.status === "COMPLETED") return current;
     await this.ensureDefaultStatuses(organizationId);
     const done = await this.prisma.taskStatusDefinition.findFirst({
       where: {
@@ -467,31 +487,34 @@ export class TasksService {
       },
       orderBy: { position: "asc" },
     });
-    const task = await this.prisma.task.update({
-      where: { id },
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.update({
+        where: { id },
+        data: {
         status: "COMPLETED",
         statusDefinitionId: done?.id,
         completedAt: new Date(),
       },
-      include: TASK_INCLUDE,
-    });
-    await this.prisma.activity.create({
-      data: {
+        include: TASK_INCLUDE,
+      });
+      if (task.dealId) await tx.activity.create({
+        data: {
         organizationId,
         type: "TASK_COMPLETED",
-        title: `Task completed: ${task.title}`,
+        title: "Task completed",
         taskId: id,
         contactId: task.contactId,
         dealId: task.dealId,
         actorId: userId,
-      },
+        },
+      });
+      return mapTask(task);
     });
-    return mapTask(task);
   }
 
-  async reopen(organizationId: string, id: string) {
-    await this.findOne(organizationId, id);
+  async reopen(organizationId: string, id: string, userId: string) {
+    const current = await this.findOne(organizationId, id);
+    if (current.status !== "COMPLETED") return current;
     await this.ensureDefaultStatuses(organizationId);
     const open = await this.prisma.taskStatusDefinition.findFirst({
       where: {
@@ -502,16 +525,29 @@ export class TasksService {
       },
       orderBy: { position: "asc" },
     });
-    const task = await this.prisma.task.update({
-      where: { id },
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.update({
+        where: { id },
+        data: {
         status: "PENDING",
         statusDefinitionId: open?.id,
         completedAt: null,
       },
-      include: TASK_INCLUDE,
+        include: TASK_INCLUDE,
+      });
+      if (task.dealId) await tx.activity.create({
+        data: {
+          organizationId,
+          type: "TASK_REOPENED",
+          title: "Task reopened",
+          taskId: id,
+          contactId: task.contactId,
+          dealId: task.dealId,
+          actorId: userId,
+        },
+      });
+      return mapTask(task);
     });
-    return mapTask(task);
   }
 
   async reschedule(organizationId: string, id: string, dto: RescheduleTaskDto) {

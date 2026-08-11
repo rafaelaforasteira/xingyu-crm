@@ -21,3 +21,5 @@ A seção mostra até três arquivos, em `savedAt DESC`, com ícone, nome trunca
 ## Segurança e evolução
 
 O frontend envia apenas `messageId` e `attachmentId`; o backend resolve URL e metadados, verifica organização, deal, conversa, tipo e MIME. Filenames são texto React. O storage local retorna rota relativa da aplicação, não path do filesystem. Upload manual, categorias, tags, OCR, IA e link de foco para a mensagem original ficam para versões futuras.
+
+Guardar e remover um arquivo também gera um evento estrutural no Histórico, sem copiar nome ou conteúdo para a timeline.

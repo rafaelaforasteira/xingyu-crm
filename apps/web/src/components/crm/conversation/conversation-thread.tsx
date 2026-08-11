@@ -96,6 +96,7 @@ export function ConversationThread({
     onSuccess: () => {
       toast.success("Arquivo guardado.");
       void queryClient.invalidateQueries({ queryKey: queryKeys.deals.files(dealId!) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.deals.history(dealId!) });
     },
     onError: () => toast.error("Não foi possível guardar o arquivo."),
   });
@@ -104,6 +105,7 @@ export function ConversationThread({
     onSuccess: () => {
       toast.success("Arquivo removido dos Arquivos.");
       void queryClient.invalidateQueries({ queryKey: queryKeys.deals.files(dealId!) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.deals.history(dealId!) });
     },
     onError: () => toast.error("Não foi possível remover o arquivo."),
   });

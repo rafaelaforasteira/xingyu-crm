@@ -20,3 +20,5 @@ O serviço valida organização para deal, responsável e tarefa antes de mutaç
 ## Reutilização por notas
 
 O diálogo de criação foi exportado como componente compartilhado e passou a aceitar descrição inicial e `sourceNoteId` opcionais. A seção Notas usa esse mesmo fluxo, mantendo título vazio e todos os padrões de status, responsável e vencimento. Tarefas comuns continuam sem nota de origem e preservam o comportamento anterior.
+
+Criar, concluir e reabrir uma tarefa vinculada ao deal gera eventos estruturais no Histórico, sem copiar título ou descrição.

@@ -327,6 +327,7 @@ export function OperationPage() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.conversations.lists,
         }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.deals.history(deal.id) }),
       ]);
     } catch (error) {
       moveBoardDeal(queryClient, selectedPipeline.id, deal.id, previousStageId);

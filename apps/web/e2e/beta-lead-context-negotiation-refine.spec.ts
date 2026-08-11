@@ -118,7 +118,8 @@ test.describe("Lead context negotiation refine", () => {
     const pedidos = panel.getByRole("button", { name: /Pedidos/i });
     await expect(pedidos).toContainText(/\d/);
     const historico = panel.getByRole("button", { name: /Histórico/i });
-    await expect(historico).toContainText(/\d/);
+    await expect(historico).toHaveText(/Histórico/);
+    await expect(historico).not.toContainText(/\d/);
     await expect(
       panel.getByRole("button", { name: /Outras negociações/i }),
     ).toBeVisible();

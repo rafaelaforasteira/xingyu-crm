@@ -661,5 +661,7 @@ export const settingsApi = {
 
 export const activitiesApi = {
   list: (query?: Record<string, QueryValue>) =>
-    api.get<Activity[]>("/activities", query),
+    api.get<PaginatedResponse<Activity>>("/activities", query),
+  history: (dealId: string, page = 1, pageSize = 20) =>
+    api.get<PaginatedResponse<Activity>>("/activities/timeline", { dealId, page, pageSize }),
 };

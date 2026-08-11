@@ -160,6 +160,7 @@ export function LeadNotes({
       setContent("");
       setError("");
       void queryClient.invalidateQueries({ queryKey: queryKeys.notes("deal", links.dealId!) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.deals.history(links.dealId!) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
     },
     onError: (value) =>
@@ -169,6 +170,7 @@ export function LeadNotes({
     void queryClient.invalidateQueries({ queryKey: ["notes"] });
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+    if (links.dealId) void queryClient.invalidateQueries({ queryKey: queryKeys.deals.history(links.dealId) });
   };
 
   if (!links.dealId) {

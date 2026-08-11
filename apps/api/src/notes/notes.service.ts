@@ -57,16 +57,32 @@ export class NotesService {
   }
 
   async create(organizationId: string, dto: CreateNoteDto, userId: string) {
-    return this.prisma.note.create({
-      data: { ...dto, organizationId, authorId: userId },
-      include: {
-        author: { select: { id: true, name: true, avatarUrl: true } },
-        generatedTasks: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: "desc" },
-          include: { statusDefinition: true },
+    return this.prisma.$transaction(async (tx) => {
+      const note = await tx.note.create({
+        data: { ...dto, organizationId, authorId: userId },
+        include: {
+          author: { select: { id: true, name: true, avatarUrl: true } },
+          generatedTasks: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: "desc" },
+            include: { statusDefinition: true },
+          },
         },
-      },
+      });
+      if (note.dealId) {
+        await tx.activity.create({
+          data: {
+            organizationId,
+            dealId: note.dealId,
+            contactId: note.contactId,
+            actorId: userId,
+            type: "NOTE_CREATED",
+            title: "Note added",
+            metadata: { noteId: note.id },
+          },
+        });
+      }
+      return note;
     });
   }
 
