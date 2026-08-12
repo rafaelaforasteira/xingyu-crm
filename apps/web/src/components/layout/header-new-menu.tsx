@@ -1,13 +1,16 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { ChevronDown, Plus, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateLeadDialog } from "@/components/crm/create-lead-dialog";
+import { extractPipelineIdFromPath } from "@/lib/nav-utils";
 
 export function HeaderNewMenu({ className }: { className?: string }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const pipelineId = extractPipelineIdFromPath(usePathname());
 
   return (
     <div className={className}>
@@ -56,7 +59,7 @@ export function HeaderNewMenu({ className }: { className?: string }) {
           </>
         ) : null}
       </div>
-      <CreateLeadDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateLeadDialog open={createOpen} onOpenChange={setCreateOpen} pipelineId={pipelineId} />
     </div>
   );
 }

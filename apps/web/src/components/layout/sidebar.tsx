@@ -7,8 +7,6 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, LogOut, X, type LucideIcon } from "lucide-react";
 import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
-import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
-import { BETA_SINGLE_PIPELINE_MODE } from "@/lib/beta-config";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
 import { formatPipelineNavLabel, resolvePipelineIcon } from "@/lib/pipeline-icons";
@@ -140,6 +138,11 @@ function PipelinesNavSection({
         >
           <Icon className="h-4 w-4 shrink-0" />
           <span className="truncate">{item.label}</span>
+          {navigation.data ? (
+            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+              {navigation.data.length}
+            </span>
+          ) : null}
         </Link>
         <button
           type="button"
@@ -329,8 +332,7 @@ export function Sidebar() {
     return undefined;
   };
 
-  const homeHref =
-    BETA_SINGLE_PIPELINE_MODE || CORE_OPERATION_MODE ? "/operacao" : "/dashboard";
+  const homeHref = "/pipelines";
 
   const content = (
     <aside
@@ -352,7 +354,7 @@ export function Sidebar() {
           {!collapsed ? (
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold tracking-tight text-white">{APP_NAME}</p>
-              <p className="truncate text-[11px] text-sidebar-muted">Operação comercial</p>
+              <p className="truncate text-[11px] text-sidebar-muted">Gestão comercial</p>
             </div>
           ) : null}
         </Link>

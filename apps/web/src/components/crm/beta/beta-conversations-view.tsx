@@ -5,11 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import {
-  BETA_PIPELINE_ID,
-  buildBetaConversationsHref,
-  buildBetaKanbanHref,
-} from "@/lib/beta-config";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
 import { ConversationWorkspace } from "@/components/crm/conversation/conversation-workspace";
@@ -17,6 +12,7 @@ import { resolveSelectedConversationId } from "@/components/crm/conversation/con
 import { PipelineStageSettingsButton } from "@/components/crm/operation/pipeline-stage-settings-button";
 
 function buildConversationsHrefPreserving(
+  basePath: string,
   searchParams: URLSearchParams,
   conversationId?: string | null,
 ): string {
@@ -24,13 +20,13 @@ function buildConversationsHrefPreserving(
   params.set("view", "conversations");
   if (conversationId) params.set("conversation", conversationId);
   else params.delete("conversation");
-  return `/operacao?${params.toString()}`;
+  return `${basePath}?${params.toString()}`;
 }
 
-export function BetaConversationsView() {
+export function BetaConversationsView({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pipelineId = BETA_PIPELINE_ID;
+  const basePath = `/pipelines/${pipelineId}`;
   const conversationId = resolveSelectedConversationId(searchParams.get("conversation"));
   const searchQuery = searchParams.get("q") ?? "";
 
@@ -45,12 +41,12 @@ export function BetaConversationsView() {
   const qOpt = searchQuery.trim() ? { q: searchQuery } : undefined;
 
   const getConversationHref = useCallback(
-    (id: string) => buildConversationsHrefPreserving(searchParams, id),
-    [searchParams],
+    (id: string) => buildConversationsHrefPreserving(basePath, searchParams, id),
+    [basePath, searchParams],
   );
   const clearHref = useMemo(
-    () => buildConversationsHrefPreserving(searchParams, null),
-    [searchParams],
+    () => buildConversationsHrefPreserving(basePath, searchParams, null),
+    [basePath, searchParams],
   );
 
   const onExternalSearchChange = useCallback(
@@ -60,9 +56,9 @@ export function BetaConversationsView() {
       const trimmed = search.trim();
       if (trimmed) params.set("q", trimmed);
       else params.delete("q");
-      router.replace(`/operacao?${params.toString()}`, { scroll: false });
+      router.replace(`${basePath}?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [basePath, router, searchParams],
   );
 
   return (
@@ -70,13 +66,13 @@ export function BetaConversationsView() {
       <ConversationWorkspace
         scope={scope}
         conversationId={conversationId}
-        basePath="/operacao"
+        basePath={basePath}
         getConversationHref={getConversationHref}
         clearHref={clearHref}
         externalSearch={searchQuery}
         onExternalSearchChange={onExternalSearchChange}
         onSelectConversation={(id) => {
-          router.replace(buildConversationsHrefPreserving(searchParams, id), {
+          router.replace(buildConversationsHrefPreserving(basePath, searchParams, id), {
             scroll: false,
           });
         }}
@@ -92,8 +88,8 @@ export function BetaConversationsView() {
                     <PipelineViewSwitcher
                       pipelineId={pipelineId}
                       active="conversations"
-                      kanbanHref={buildBetaKanbanHref(null, qOpt)}
-                      conversationsHref={buildBetaConversationsHref(null, qOpt)}
+                      kanbanHref={`${basePath}?view=kanban${qOpt?.q ? `&q=${encodeURIComponent(qOpt.q)}` : ""}`}
+                      conversationsHref={`${basePath}?view=conversations${qOpt?.q ? `&q=${encodeURIComponent(qOpt.q)}` : ""}`}
                       kanbanLabel="Kanban"
                       dataTestIdPrefix="beta"
                     />

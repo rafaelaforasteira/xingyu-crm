@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { BETA_PIPELINE_ID } from "@/lib/beta-config";
 import { pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { Dialog } from "@/components/ui/dialog";
@@ -10,16 +9,16 @@ import { ManualCreateLeadDialog } from "@/components/crm/manual-create-lead-dial
 export function CreateLeadDialog({
   open,
   onOpenChange,
-  pipelineId = BETA_PIPELINE_ID,
+  pipelineId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  pipelineId?: string;
+  pipelineId?: string | null;
 }) {
   const board = useQuery({
-    queryKey: queryKeys.pipelines.board(pipelineId),
-    queryFn: () => pipelinesApi.board(pipelineId),
-    enabled: open,
+    queryKey: queryKeys.pipelines.board(pipelineId ?? "unselected"),
+    queryFn: () => pipelinesApi.board(pipelineId!),
+    enabled: open && Boolean(pipelineId),
     retry: false,
   });
   if (board.data)
@@ -32,7 +31,11 @@ export function CreateLeadDialog({
       description="Carregando pipeline…"
     >
       <p className="text-sm text-muted-foreground">
-        {board.error ? (board.error as Error).message : "Carregando etapas…"}
+        {!pipelineId
+          ? "Abra um pipeline para criar o lead na esteira correta."
+          : board.error
+            ? (board.error as Error).message
+            : "Carregando etapas…"}
       </p>
     </Dialog>
   );

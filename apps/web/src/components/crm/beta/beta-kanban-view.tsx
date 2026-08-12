@@ -8,11 +8,6 @@ import { Plus } from "lucide-react";
 import { pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal } from "@/lib/types";
-import {
-  BETA_PIPELINE_ID,
-  buildBetaConversationsHref,
-  buildBetaKanbanHref,
-} from "@/lib/beta-config";
 import { countBoardDeals, filterPipelineBoard } from "@/lib/operation-utils";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
@@ -45,10 +40,10 @@ function useIsMobile() {
   return mobile;
 }
 
-export function BetaKanbanView() {
+export function BetaKanbanView({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pipelineId = BETA_PIPELINE_ID;
+  const basePath = `/pipelines/${pipelineId}`;
   const dealParam = searchParams.get("deal");
   const searchQuery = searchParams.get("q") ?? "";
   const openDealDrawer = useUiStore((state) => state.openDealDrawer);
@@ -79,9 +74,9 @@ export function BetaKanbanView() {
       params.delete("conversation");
       if (dealId) params.set("deal", dealId);
       else params.delete("deal");
-      router.replace(`/operacao?${params.toString()}`, { scroll: false });
+      router.replace(`${basePath}?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [basePath, router, searchParams],
   );
 
   React.useEffect(() => {
@@ -120,8 +115,8 @@ export function BetaKanbanView() {
               <PipelineViewSwitcher
                 pipelineId={pipelineId}
                 active="kanban"
-                kanbanHref={buildBetaKanbanHref(null, qOpt)}
-                conversationsHref={buildBetaConversationsHref(null, qOpt)}
+                kanbanHref={`${basePath}?view=kanban${qOpt?.q ? `&q=${encodeURIComponent(qOpt.q)}` : ""}`}
+                conversationsHref={`${basePath}?view=conversations${qOpt?.q ? `&q=${encodeURIComponent(qOpt.q)}` : ""}`}
                 kanbanLabel="Kanban"
                 dataTestIdPrefix="beta"
               />
