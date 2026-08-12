@@ -138,11 +138,6 @@ function PipelinesNavSection({
         >
           <Icon className="h-4 w-4 shrink-0" />
           <span className="truncate">{item.label}</span>
-          {navigation.data ? (
-            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-              {navigation.data.length}
-            </span>
-          ) : null}
         </Link>
         <button
           type="button"

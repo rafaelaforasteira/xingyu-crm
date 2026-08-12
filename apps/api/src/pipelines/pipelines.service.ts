@@ -133,7 +133,7 @@ export class PipelinesService {
         deletedAt: null,
         archived: false,
       },
-      orderBy: [{ favorite: "desc" }, { position: "asc" }],
+      orderBy: [{ position: "asc" }, { name: "asc" }, { id: "asc" }],
       select: {
         id: true,
         name: true,
