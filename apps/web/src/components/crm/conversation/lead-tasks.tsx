@@ -42,15 +42,24 @@ function StatusButton({
       open={open}
       onOpenChange={setOpen}
       align="start"
-      contentClassName="w-52 rounded-lg"
+      side="bottom"
+      sideOffset={6}
+      collisionPadding={8}
+      contentWidth={180}
+      contentClassName="rounded-lg"
       aria-label={`Status de ${task.title}`}
       trigger={
         <button
           type="button"
-          className="flex h-5 w-5 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-7 w-7 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Alterar status de ${task.title}`}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           disabled={pending}
-          onClick={() => setOpen(true)}
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpen((value) => !value);
+          }}
         >
           {pending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -62,12 +71,17 @@ function StatusButton({
         </button>
       }
     >
-      <div className="p-1.5">
+      <div className="max-h-60 overflow-y-auto p-1.5">
         {statuses.map((status) => (
           <button
             key={status.id}
             type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+            className={cn(
+              "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+              status.id === current?.id && "bg-muted font-medium",
+            )}
+            aria-current={status.id === current?.id ? "true" : undefined}
+            autoFocus={status.id === current?.id}
             onClick={() => {
               onChange(status);
               setOpen(false);
@@ -78,7 +92,9 @@ function StatusButton({
             ) : (
               <Circle className="h-3.5 w-3.5" style={{ color: status.color }} />
             )}
-            <span>{status.name}</span>
+            <span className="min-w-0 truncate" title={status.name}>
+              {status.name}
+            </span>
           </button>
         ))}
       </div>
@@ -101,7 +117,7 @@ function TaskRow({
   const assigneeName = task.assignee?.name?.trim() || "Sem responsável";
   return (
     <div
-      className="grid min-w-0 grid-cols-[20px_minmax(0,1fr)_24px_auto] items-center gap-2 py-1"
+      className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)_24px_auto] items-center gap-2 py-1"
       data-testid="lead-task-row"
     >
       <StatusButton
