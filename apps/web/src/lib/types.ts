@@ -531,6 +531,7 @@ export interface ConversationContext {
   team: Team | null;
   channel: ConversationChannelSummary | null;
   tags: Tag[];
+  tagSources?: { contactTagIds: string[]; dealTagIds: string[] };
   nextTask:
     | (Pick<Task, "id" | "title" | "dueAt" | "status" | "priority"> & {
         assignee?: UserRef | null;

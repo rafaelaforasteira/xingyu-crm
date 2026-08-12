@@ -21,7 +21,7 @@ test.describe("Lead context task manager", () => {
     const toggle = panel.getByRole("button", { name: /Tarefas/i });
     await expect(toggle).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, "tasks-closed.png") });
-    await toggle.click();
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     const manager = panel.getByTestId("lead-tasks-manager");
     await expect(manager).toBeVisible();
     await expect(manager.getByText(/Próxima:/)).toHaveCount(0);

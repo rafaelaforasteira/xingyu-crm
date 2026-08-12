@@ -19,7 +19,7 @@ test.describe("Lead order history context", () => {
     const toggle = panel.getByRole("button", { name: /Pedidos/i });
     await expect(toggle).toBeVisible();
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, "orders-closed-1920.png") });
-    await toggle.click();
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     const history = panel.getByTestId("lead-orders-history");
     if (await history.count()) {
       await expect(history.getByText("Abrir pedidos")).toHaveCount(0);

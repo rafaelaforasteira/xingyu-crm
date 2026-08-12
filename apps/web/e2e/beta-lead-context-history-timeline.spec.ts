@@ -17,21 +17,26 @@ test.describe("Lead activity history timeline", () => {
     await expect(historyToggle).toBeVisible();
     await expect(historyToggle.locator("span").filter({ hasText: /^\d+$/ })).toHaveCount(0);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, "history-closed-no-count-1920.png") });
+    if ((await historyToggle.getAttribute("aria-expanded")) === "true") await historyToggle.click();
 
     const stageTrigger = page.getByTestId("pipeline-stage-selector");
     const originalStage = (await stageTrigger.innerText()).trim();
     await stageTrigger.click();
     const options = page.getByTestId("pipeline-stage-options").locator("button");
     let target = "";
-    for (let index = 0; index < await options.count(); index += 1) {
+    for (let index = 0; index < (await options.count()); index += 1) {
       const value = (await options.nth(index).innerText()).trim();
-      if (value && value !== originalStage) { target = value; await options.nth(index).click(); break; }
+      if (value && value !== originalStage) {
+        target = value;
+        await options.nth(index).click();
+        break;
+      }
     }
     expect(target).toBeTruthy();
     await expect(stageTrigger).toContainText(target);
 
     const notesToggle = panel.getByRole("button", { name: /^Notas \d+$/ });
-    await notesToggle.click();
+    if ((await notesToggle.getAttribute("aria-expanded")) !== "true") await notesToggle.click();
     const marker = `Nota privada E2E ${Date.now()}`;
     await panel.getByLabel("Nova anotação interna").fill(marker);
     await panel.getByRole("button", { name: "Anotar" }).click();
@@ -55,12 +60,17 @@ test.describe("Lead activity history timeline", () => {
     await expect(page).toHaveURL(/conversation=conv-operacao-demo/);
 
     await page.reload();
-    await panel.getByRole("button", { name: "Histórico", exact: true }).click();
+    const reloadedHistory = panel.getByRole("button", { name: "Histórico", exact: true });
+    if ((await reloadedHistory.getAttribute("aria-expanded")) !== "true")
+      await reloadedHistory.click();
     await expect(panel.getByText("Adicionou uma nota").first()).toBeVisible({ timeout: 30_000 });
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, "history-1366.png") });
 
     await stageTrigger.click();
-    await page.getByTestId("pipeline-stage-options").locator("button", { hasText: originalStage }).click();
+    await page
+      .getByTestId("pipeline-stage-options")
+      .locator("button", { hasText: originalStage })
+      .click();
   });
 });

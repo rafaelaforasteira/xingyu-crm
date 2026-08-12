@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
@@ -89,7 +85,10 @@ export class ContactsService {
   }
 
   async create(organizationId: string, dto: CreateContactDto, userId: string) {
-    const { tagIds, notes, ...data } = dto as CreateContactDto & { notes?: string; tagIds?: string[] };
+    const { tagIds, notes, ...data } = dto as CreateContactDto & {
+      notes?: string;
+      tagIds?: string[];
+    };
     const created = await this.prisma.contact.create({
       data: {
         ...data,
@@ -98,9 +97,7 @@ export class ContactsService {
         ownerId: data.ownerId ?? userId,
         type: data.type as never,
         status: data.status as never,
-        ...(tagIds?.length
-          ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } }
-          : {}),
+        ...(tagIds?.length ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } } : {}),
       } as never,
       include: {
         tags: { include: { tag: true } },
@@ -113,7 +110,10 @@ export class ContactsService {
 
   async update(organizationId: string, id: string, dto: UpdateContactDto) {
     await this.requireContact(organizationId, id);
-    const { tagIds, notes, ...data } = dto as UpdateContactDto & { notes?: string; tagIds?: string[] };
+    const { tagIds, notes, ...data } = dto as UpdateContactDto & {
+      notes?: string;
+      tagIds?: string[];
+    };
     const updated = await this.prisma.contact.update({
       where: { id },
       data: {
@@ -158,21 +158,28 @@ export class ContactsService {
 
   async bulkTags(organizationId: string, dto: BulkTagsDto) {
     const mode = dto.mode ?? "add";
+    const uniqueTagIds = [...new Set(dto.tagIds)];
+    const validTags = await this.prisma.tag.count({
+      where: { id: { in: uniqueTagIds }, organizationId, ...notDeleted },
+    });
+    if (validTags !== uniqueTagIds.length) {
+      throw new BadRequestException("One or more tagIds are invalid");
+    }
     for (const contactId of dto.contactIds) {
       await this.requireContact(organizationId, contactId);
       if (mode === "set") {
         await this.prisma.contactTag.deleteMany({ where: { contactId } });
         await this.prisma.contactTag.createMany({
-          data: dto.tagIds.map((tagId) => ({ contactId, tagId })),
+          data: uniqueTagIds.map((tagId) => ({ contactId, tagId })),
           skipDuplicates: true,
         });
       } else if (mode === "remove") {
         await this.prisma.contactTag.deleteMany({
-          where: { contactId, tagId: { in: dto.tagIds } },
+          where: { contactId, tagId: { in: uniqueTagIds } },
         });
       } else {
         await this.prisma.contactTag.createMany({
-          data: dto.tagIds.map((tagId) => ({ contactId, tagId })),
+          data: uniqueTagIds.map((tagId) => ({ contactId, tagId })),
           skipDuplicates: true,
         });
       }

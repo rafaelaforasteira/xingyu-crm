@@ -498,6 +498,45 @@ export class DealsService {
     });
   }
 
+  async addTag(organizationId: string, id: string, tagId: string, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const deal = await this.requireDeal(tx, organizationId, id);
+      const tag = await tx.tag.findFirst({ where: { id: tagId, organizationId, ...notDeleted } });
+      if (!tag) throw new NotFoundException(`Tag ${tagId} not found`);
+      const result = await tx.dealTag.createMany({
+        data: [{ dealId: id, tagId }],
+        skipDuplicates: true,
+      });
+      if (result.count) {
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: ActivityType.TAG_ADDED,
+            title: `Tag adicionada: ${tag.name}`,
+            dealId: id,
+            contactId: deal.contactId,
+            actorId: userId,
+            metadata: { tagId, tagName: tag.name },
+          },
+        });
+      }
+      return { updated: result.count > 0, tag };
+    });
+  }
+
+  async removeTag(organizationId: string, id: string, tagId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.requireDeal(tx, organizationId, id);
+      const tag = await tx.tag.findFirst({
+        where: { id: tagId, organizationId, ...notDeleted },
+        select: { id: true },
+      });
+      if (!tag) throw new NotFoundException(`Tag ${tagId} not found`);
+      const result = await tx.dealTag.deleteMany({ where: { dealId: id, tagId } });
+      return { updated: result.count > 0 };
+    });
+  }
+
   async remove(organizationId: string, id: string, userId?: string) {
     await this.findOne(organizationId, id);
     return this.prisma.deal.update({

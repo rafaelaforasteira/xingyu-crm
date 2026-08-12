@@ -85,6 +85,25 @@ export class DealsController {
     return this.dealsService.update(orgId, id, dto, user.id);
   }
 
+  @Post(":id/tags/:tagId")
+  addTag(
+    @OrganizationId() orgId: string,
+    @DemoUser() user: DemoUserType,
+    @Param("id") id: string,
+    @Param("tagId") tagId: string,
+  ) {
+    return this.dealsService.addTag(orgId, id, tagId, user.id);
+  }
+
+  @Delete(":id/tags/:tagId")
+  removeTag(
+    @OrganizationId() orgId: string,
+    @Param("id") id: string,
+    @Param("tagId") tagId: string,
+  ) {
+    return this.dealsService.removeTag(orgId, id, tagId);
+  }
+
   @Delete(":id")
   @ApiOperation({ summary: "Soft-delete deal" })
   remove(@OrganizationId() orgId: string, @DemoUser() user: DemoUserType, @Param("id") id: string) {

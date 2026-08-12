@@ -35,7 +35,7 @@ test.describe("Curated lead files from messages", () => {
     const panel = page.getByTestId("lead-context-panel");
     const filesToggle = panel.getByRole("button", { name: /Arquivos/i });
     await expect(filesToggle).toBeVisible({ timeout: 30_000 });
-    await filesToggle.click();
+    if ((await filesToggle.getAttribute("aria-expanded")) !== "true") await filesToggle.click();
     const section = panel.getByTestId("lead-files-section");
     await expect(section.getByText("Nenhum arquivo salvo.")).toBeVisible();
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, "files-zero-1920.png") });

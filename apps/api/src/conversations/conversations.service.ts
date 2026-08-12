@@ -726,6 +726,10 @@ export class ConversationsService {
       team: deal?.team ?? contact?.team ?? null,
       channel: toChannelSummary(channel),
       tags: mergeConversationTags(contact, deal),
+      tagSources: {
+        contactTagIds: contact?.tags.map((item) => item.tagId) ?? [],
+        dealTagIds: deal?.tags.map((item) => item.tagId) ?? [],
+      },
       nextTask,
       lastOrder,
       tracking: {

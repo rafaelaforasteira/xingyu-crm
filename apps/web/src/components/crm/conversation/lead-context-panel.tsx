@@ -2,16 +2,18 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { contactsApi, conversationsApi } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronDown, ChevronRight, Plus, X } from "lucide-react";
+import { toast } from "sonner";
+import { contactsApi, conversationsApi, dealsApi, settingsApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import type { ConversationContext } from "@/lib/types";
+import type { ConversationContext, Tag } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatPrimaryPhoneForDisplay, resolvePrimaryPhone } from "@/lib/format-phone-display";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover } from "@/components/ui/popover";
 import { ConversationChannelBadge } from "./conversation-channel-badge";
 import { conversationContactDisplayName, formatLeadCode } from "./conversation-list-utils";
 import { buildLeadTrackingFields } from "./lead-tracking-utils";
@@ -20,25 +22,35 @@ import { LeadOrders } from "./lead-orders";
 import { LeadNotes } from "./lead-notes";
 import { LeadFiles } from "./lead-files";
 import { LeadHistory } from "./lead-history";
+import {
+  ALL_SECTIONS_OPEN,
+  mergeStoredSectionState,
+  toggleContextSection,
+  type ContextSectionId,
+  type ContextSectionsState,
+} from "./lead-context-sections";
 
 function CollapsibleSection({
+  sectionId,
   title,
   count,
-  defaultOpen = false,
+  open,
+  onToggle,
   children,
 }: {
+  sectionId: ContextSectionId;
   title: string;
   count?: number;
-  defaultOpen?: boolean;
+  open: boolean;
+  onToggle: (sectionId: ContextSectionId) => void;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(defaultOpen);
   return (
-    <div className="border-b border-border/60 last:border-0">
+    <section className="border-b border-border/60 last:border-0" data-context-section={sectionId}>
       <button
         type="button"
         className="flex w-full items-center gap-2 px-1 py-2.5 text-left text-sm font-medium hover:text-foreground"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => onToggle(sectionId)}
         aria-expanded={open}
       >
         {open ? (
@@ -54,9 +66,11 @@ function CollapsibleSection({
         ) : null}
       </button>
       {open ? <div className="pb-3 pl-6 pr-1">{children}</div> : null}
-    </div>
+    </section>
   );
 }
+
+const SECTIONS_STORAGE_KEY = "leadContextSectionsState";
 
 function LazyOtherDeals({
   contactId,
@@ -91,7 +105,228 @@ function LazyOtherDeals({
   );
 }
 
-function ContextBody({ context }: { context: ConversationContext }) {
+function LeadTrackingTags({ context }: { context: ConversationContext }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const [newName, setNewName] = React.useState("");
+  const contactId = context.contact?.id;
+  const dealId = context.currentDeal?.id;
+  const contextKey = queryKeys.conversations.context(context.conversation.id);
+  const tagsQuery = useQuery({
+    queryKey: [...queryKeys.settings, "tags"],
+    queryFn: settingsApi.tags,
+    staleTime: 300_000,
+  });
+  const syncCaches = () => {
+    void queryClient.invalidateQueries({ queryKey: contextKey });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.lists });
+  };
+  const tagMutation = useMutation({
+    mutationFn: async ({ tag, mode }: { tag: Tag; mode: "add" | "remove" }) => {
+      if (!contactId && !dealId)
+        throw new Error("Este lead nÃ£o possui entidade para classificar.");
+      if (mode === "add") {
+        if (dealId) return dealsApi.addTag(dealId, tag.id);
+        return contactsApi.updateTags(contactId!, [tag.id], "add");
+      }
+      const operations: Promise<unknown>[] = [];
+      if (dealId && context.tagSources?.dealTagIds.includes(tag.id))
+        operations.push(dealsApi.removeTag(dealId, tag.id));
+      if (contactId && context.tagSources?.contactTagIds.includes(tag.id))
+        operations.push(contactsApi.updateTags(contactId, [tag.id], "remove"));
+      return Promise.all(operations);
+    },
+    onMutate: async ({ tag, mode }) => {
+      await queryClient.cancelQueries({ queryKey: contextKey });
+      const previous = queryClient.getQueryData<ConversationContext>(contextKey);
+      queryClient.setQueryData<ConversationContext>(contextKey, (current) =>
+        current
+          ? {
+              ...current,
+              tags:
+                mode === "add"
+                  ? current.tags.some((item) => item.id === tag.id)
+                    ? current.tags
+                    : [...current.tags, tag]
+                  : current.tags.filter((item) => item.id !== tag.id),
+              tagSources: {
+                contactTagIds:
+                  mode === "remove"
+                    ? (current.tagSources?.contactTagIds ?? []).filter((id) => id !== tag.id)
+                    : (current.tagSources?.contactTagIds ?? []),
+                dealTagIds:
+                  mode === "add" && dealId
+                    ? [...new Set([...(current.tagSources?.dealTagIds ?? []), tag.id])]
+                    : mode === "remove"
+                      ? (current.tagSources?.dealTagIds ?? []).filter((id) => id !== tag.id)
+                      : (current.tagSources?.dealTagIds ?? []),
+              },
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (error: Error, _variables, rollback) => {
+      queryClient.setQueryData(contextKey, rollback?.previous);
+      toast.error(error.message || "NÃ£o foi possÃ­vel atualizar a tag");
+    },
+    onSettled: syncCaches,
+  });
+  const createMutation = useMutation({
+    mutationFn: async (name: string) => {
+      if (!contactId && !dealId)
+        throw new Error("Este lead nÃ£o possui entidade para classificar.");
+      const tag = await settingsApi.createTag({ name: name.trim() });
+      if (dealId) await dealsApi.addTag(dealId, tag.id);
+      else await contactsApi.updateTags(contactId!, [tag.id], "add");
+      return tag;
+    },
+    onSuccess: (tag) => {
+      queryClient.setQueryData<ConversationContext>(contextKey, (current) =>
+        current && !current.tags.some((item) => item.id === tag.id)
+          ? {
+              ...current,
+              tags: [...current.tags, tag],
+              tagSources: {
+                contactTagIds: !dealId
+                  ? [...new Set([...(current.tagSources?.contactTagIds ?? []), tag.id])]
+                  : (current.tagSources?.contactTagIds ?? []),
+                dealTagIds: dealId
+                  ? [...new Set([...(current.tagSources?.dealTagIds ?? []), tag.id])]
+                  : (current.tagSources?.dealTagIds ?? []),
+              },
+            }
+          : current,
+      );
+      setNewName("");
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.settings, "tags"] });
+      syncCaches();
+      toast.success("Tag criada e adicionada");
+    },
+    onError: (error: Error) => toast.error(error.message || "NÃ£o foi possÃ­vel criar a tag"),
+  });
+  const selectedIds = new Set(context.tags.map((tag) => tag.id));
+  const available = (tagsQuery.data ?? []).filter((tag) =>
+    tag.name.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")),
+  );
+  return (
+    <div className="mt-3 border-t border-border/50 pt-3" data-testid="lead-context-tags-block">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[11px] font-medium text-muted-foreground">Tags</p>
+        <Popover
+          open={open}
+          onOpenChange={setOpen}
+          aria-label="Gerenciar tags do lead"
+          contentClassName="w-72 rounded-xl"
+          trigger={
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setOpen((value) => !value)}
+              aria-label="Adicionar tag"
+            >
+              <Plus className="h-3.5 w-3.5" /> Adicionar tag
+            </button>
+          }
+        >
+          <div className="p-3">
+            <p className="mb-2 text-sm font-semibold">Tags</p>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar tag..."
+              className="mb-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Buscar tag"
+            />
+            <div className="max-h-52 space-y-1 overflow-y-auto">
+              {available.map((tag) => {
+                const selected = selectedIds.has(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+                    onClick={() => tagMutation.mutate({ tag, mode: selected ? "remove" : "add" })}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: tag.color || "hsl(var(--primary))" }}
+                    />
+                    <span className="min-w-0 flex-1 truncate" title={tag.name}>
+                      {tag.name}
+                    </span>
+                    {selected ? (
+                      <Check className="h-4 w-4 text-primary" aria-label="Selecionada" />
+                    ) : null}
+                  </button>
+                );
+              })}
+              {!available.length ? (
+                <p className="px-2 py-2 text-xs text-muted-foreground">Nenhuma tag encontrada.</p>
+              ) : null}
+            </div>
+            <div className="mt-3 border-t border-border pt-3">
+              <p className="mb-1.5 text-xs font-medium">Criar nova tag</p>
+              <div className="flex gap-2">
+                <input
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  placeholder="Nome da tag"
+                  aria-label="Nome da nova tag"
+                  maxLength={80}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                />
+                <button
+                  type="button"
+                  className="h-9 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  disabled={!newName.trim() || createMutation.isPending}
+                  onClick={() => createMutation.mutate(newName)}
+                >
+                  Criar
+                </button>
+              </div>
+            </div>
+          </div>
+        </Popover>
+      </div>
+      {context.tags.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {context.tags.map((tag) => (
+            <span
+              key={tag.id}
+              className="group inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-border bg-muted/60 px-2 text-[10px] text-foreground"
+              title={tag.name}
+            >
+              <span className="max-w-[10rem] truncate">{tag.name}</span>
+              <button
+                type="button"
+                className="-mr-1 rounded-sm opacity-40 hover:opacity-100 focus:opacity-100"
+                onClick={() => tagMutation.mutate({ tag, mode: "remove" })}
+                aria-label={`Remover tag ${tag.name}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Nenhuma tag adicionada.</p>
+      )}
+    </div>
+  );
+}
+
+function ContextBody({
+  context,
+  sections,
+  onToggle,
+}: {
+  context: ConversationContext;
+  sections: ContextSectionsState;
+  onToggle: (id: ContextSectionId) => void;
+}) {
   const [openTasksCount, setOpenTasksCount] = React.useState(context.counts.tasksCount);
   const [ordersCount, setOrdersCount] = React.useState(context.counts.ordersCount);
   const [notesCount, setNotesCount] = React.useState(context.counts.notesCount);
@@ -109,7 +344,12 @@ function ContextBody({ context }: { context: ConversationContext }) {
 
   return (
     <div className="space-y-1">
-      <CollapsibleSection title="Resumo" defaultOpen>
+      <CollapsibleSection
+        sectionId="summary"
+        title="Resumo"
+        open={sections.summary}
+        onToggle={onToggle}
+      >
         <div className="space-y-2 text-sm" data-testid="lead-context-summary">
           <div className="flex items-center gap-2">
             <Avatar name={name} />
@@ -168,7 +408,12 @@ function ContextBody({ context }: { context: ConversationContext }) {
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Negociação">
+      <CollapsibleSection
+        sectionId="negotiation"
+        title="Negociação"
+        open={sections.negotiation}
+        onToggle={onToggle}
+      >
         {context.currentDeal ? (
           <div className="space-y-2 text-xs" data-testid="lead-context-negotiation">
             {leadCode ? (
@@ -190,7 +435,12 @@ function ContextBody({ context }: { context: ConversationContext }) {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Rastreamento">
+      <CollapsibleSection
+        sectionId="tracking"
+        title="Rastreamento"
+        open={sections.tracking}
+        onToggle={onToggle}
+      >
         <div className="space-y-2.5" data-testid="lead-context-tracking">
           {buildLeadTrackingFields({
             channel: context.channel,
@@ -211,10 +461,17 @@ function ContextBody({ context }: { context: ConversationContext }) {
               </p>
             </div>
           ))}
+          <LeadTrackingTags context={context} />
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Tarefas" count={openTasksCount}>
+      <CollapsibleSection
+        sectionId="tasks"
+        title="Tarefas"
+        count={openTasksCount}
+        open={sections.tasks}
+        onToggle={onToggle}
+      >
         <LeadTasks
           links={{
             contactId: context.contact?.id,
@@ -227,7 +484,13 @@ function ContextBody({ context }: { context: ConversationContext }) {
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Pedidos" count={ordersCount}>
+      <CollapsibleSection
+        sectionId="orders"
+        title="Pedidos"
+        count={ordersCount}
+        open={sections.orders}
+        onToggle={onToggle}
+      >
         <LeadOrders
           contactId={contactId}
           contactName={name}
@@ -236,7 +499,13 @@ function ContextBody({ context }: { context: ConversationContext }) {
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Notas" count={notesCount}>
+      <CollapsibleSection
+        sectionId="notes"
+        title="Notas"
+        count={notesCount}
+        open={sections.notes}
+        onToggle={onToggle}
+      >
         <LeadNotes
           links={{
             contactId,
@@ -249,7 +518,13 @@ function ContextBody({ context }: { context: ConversationContext }) {
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Arquivos" count={filesCount}>
+      <CollapsibleSection
+        sectionId="files"
+        title="Arquivos"
+        count={filesCount}
+        open={sections.files}
+        onToggle={onToggle}
+      >
         {dealId ? (
           <LeadFiles dealId={dealId} leadName={name} onCountChange={setFilesCount} />
         ) : (
@@ -261,7 +536,12 @@ function ContextBody({ context }: { context: ConversationContext }) {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Histórico">
+      <CollapsibleSection
+        sectionId="history"
+        title="Histórico"
+        open={sections.history}
+        onToggle={onToggle}
+      >
         {dealId ? (
           <LeadHistory dealId={dealId} leadName={name} />
         ) : (
@@ -269,7 +549,12 @@ function ContextBody({ context }: { context: ConversationContext }) {
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection title="Outras negociações">
+      <CollapsibleSection
+        sectionId="otherDeals"
+        title="Outras negociações"
+        open={sections.otherDeals}
+        onToggle={onToggle}
+      >
         <LazyOtherDeals contactId={contactId} currentDealId={dealId} />
       </CollapsibleSection>
     </div>
@@ -285,6 +570,37 @@ export function LeadContextPanel({
   visible: boolean;
   className?: string;
 }) {
+  const [sections, setSections] = React.useState<ContextSectionsState>(ALL_SECTIONS_OPEN);
+  const [sectionsReady, setSectionsReady] = React.useState(false);
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    try {
+      const stored = window.sessionStorage.getItem(SECTIONS_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<ContextSectionsState>;
+        setSections(mergeStoredSectionState(parsed));
+      }
+    } catch {
+      // Invalid session data falls back to the product default: every section open.
+    } finally {
+      setSectionsReady(true);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!sectionsReady) return;
+    window.sessionStorage.setItem(SECTIONS_STORAGE_KEY, JSON.stringify(sections));
+  }, [sections, sectionsReady]);
+
+  React.useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [conversationId]);
+
+  const toggleSection = React.useCallback((sectionId: ContextSectionId) => {
+    setSections((current) => toggleContextSection(current, sectionId));
+  }, []);
+
   const contextQuery = useQuery({
     queryKey: queryKeys.conversations.context(conversationId ?? ""),
     queryFn: () => conversationsApi.context(conversationId!),
@@ -296,17 +612,24 @@ export function LeadContextPanel({
     <aside
       data-testid="lead-context-panel"
       className={cn(
-        "min-h-0 flex-col overflow-hidden border-border bg-card",
+        "h-full min-h-0 flex-col overflow-hidden border-border bg-card",
         visible ? "flex" : "hidden lg:flex",
         className,
       )}
     >
-      <div className="border-b border-border px-4 py-3" data-testid="lead-context-panel-header">
+      <div
+        className="shrink-0 border-b border-border bg-card px-4 py-3"
+        data-testid="lead-context-panel-header"
+      >
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Contexto do lead
         </p>
       </div>
-      <div className="scrollbar-thin flex-1 overflow-y-auto p-4">
+      <div
+        ref={scrollRef}
+        className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable]"
+        data-testid="lead-context-scroll"
+      >
         {!conversationId ? (
           <p className="text-sm text-muted-foreground">
             Selecione uma conversa para ver o contexto.
@@ -320,7 +643,7 @@ export function LeadContextPanel({
         ) : contextQuery.error ? (
           <p className="text-sm text-destructive">{(contextQuery.error as Error).message}</p>
         ) : contextQuery.data ? (
-          <ContextBody context={contextQuery.data} />
+          <ContextBody context={contextQuery.data} sections={sections} onToggle={toggleSection} />
         ) : null}
       </div>
     </aside>

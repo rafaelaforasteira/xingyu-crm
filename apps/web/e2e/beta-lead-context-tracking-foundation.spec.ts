@@ -11,9 +11,7 @@ const SCREENSHOT_DIR = path.join(
 test.describe("Lead context tracking foundation", () => {
   test.setTimeout(240_000);
 
-  test("replaces Canal with Rastreamento and shows known tracking fields", async ({
-    page,
-  }) => {
+  test("replaces Canal with Rastreamento and shows known tracking fields", async ({ page }) => {
     await fs.promises.mkdir(SCREENSHOT_DIR, { recursive: true });
     await page.setViewportSize({ width: 1920, height: 1080 });
 
@@ -35,7 +33,7 @@ test.describe("Lead context tracking foundation", () => {
     await expect(panel.getByRole("button", { name: /^Canal$/ })).toHaveCount(0);
     const trackingBtn = panel.getByRole("button", { name: /^Rastreamento$/ });
     await expect(trackingBtn).toBeVisible();
-    await expect(trackingBtn).toHaveAttribute("aria-expanded", "false");
+    await expect(trackingBtn).toHaveAttribute("aria-expanded", "true");
     const closedText = ((await trackingBtn.innerText()) ?? "").trim();
     expect(closedText).toMatch(/^Rastreamento$/);
     expect(closedText).not.toMatch(/\d/);
@@ -45,22 +43,14 @@ test.describe("Lead context tracking foundation", () => {
       fullPage: false,
     });
 
-    await trackingBtn.click();
-    await expect(trackingBtn).toHaveAttribute("aria-expanded", "true");
     const tracking = panel.getByTestId("lead-context-tracking");
     await expect(tracking).toBeVisible();
 
-    await expect(tracking.getByTestId("lead-tracking-origin")).toContainText(
-      /WhatsApp/i,
-    );
-    await expect(tracking.getByTestId("lead-tracking-entry")).toHaveText(
-      "Mensagem recebida",
-    );
+    await expect(tracking.getByTestId("lead-tracking-origin")).toContainText(/WhatsApp/i);
+    await expect(tracking.getByTestId("lead-tracking-entry")).toHaveText("Mensagem recebida");
     await expect(tracking.getByTestId("lead-tracking-first-contact")).toBeVisible();
     await expect(tracking.getByTestId("lead-tracking-created-at")).toBeVisible();
-    await expect(tracking.getByTestId("lead-tracking-utm-empty")).toHaveText(
-      "Não identificada",
-    );
+    await expect(tracking.getByTestId("lead-tracking-utm-empty")).toHaveText("Não identificada");
     await expect(tracking.getByText(/organic/i)).toHaveCount(0);
     await expect(tracking.getByTestId("lead-tracking-utm-source")).toHaveCount(0);
 
@@ -99,15 +89,9 @@ test.describe("Lead context tracking foundation", () => {
         await openBtn.click();
       }
       const carolineTracking = panel.getByTestId("lead-context-tracking");
-      await expect(
-        carolineTracking.getByTestId("lead-tracking-utm-source"),
-      ).toContainText(/meta/i);
-      await expect(
-        carolineTracking.getByTestId("lead-tracking-utm-medium"),
-      ).toBeVisible();
-      await expect(
-        carolineTracking.getByTestId("lead-tracking-utm-campaign"),
-      ).toBeVisible();
+      await expect(carolineTracking.getByTestId("lead-tracking-utm-source")).toContainText(/meta/i);
+      await expect(carolineTracking.getByTestId("lead-tracking-utm-medium")).toBeVisible();
+      await expect(carolineTracking.getByTestId("lead-tracking-utm-campaign")).toBeVisible();
       await page.screenshot({
         path: path.join(SCREENSHOT_DIR, "tracking-with-utm.png"),
         fullPage: false,

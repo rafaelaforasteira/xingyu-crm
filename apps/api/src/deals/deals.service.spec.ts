@@ -24,6 +24,8 @@ type TransactionMock = {
     create: MockMethod;
     createMany: MockMethod;
   };
+  tag: { findFirst: MockMethod };
+  dealTag: { createMany: MockMethod; deleteMany: MockMethod };
   user: { findFirst: MockMethod; findMany: MockMethod };
   contact: { findFirst: MockMethod; create: MockMethod };
   attribution: { create: MockMethod };
@@ -69,6 +71,8 @@ function createTransactionMock(): TransactionMock {
       create: method(),
       createMany: method(),
     },
+    tag: { findFirst: method() },
+    dealTag: { createMany: method(), deleteMany: method() },
     user: { findFirst: method(), findMany: method() },
     contact: { findFirst: method(), create: method() },
     attribution: { create: method() },
@@ -165,6 +169,34 @@ describe("DealsService Kanban integrity", () => {
     expect(transaction.deal.create).not.toHaveBeenCalled();
     expect(transaction.dealStageHistory.create).not.toHaveBeenCalled();
     expect(transaction.activity.create).not.toHaveBeenCalled();
+  });
+
+  it("adds an organization-scoped tag idempotently and records history", async () => {
+    transaction.deal.findFirst.mockResolvedValue(deal());
+    transaction.tag.findFirst.mockResolvedValue({ id: "tag-1", name: "VIP" });
+    transaction.dealTag.createMany.mockResolvedValue({ count: 1 });
+
+    await service.addTag(organizationId, "deal-test", "tag-1", userId);
+
+    expect(transaction.tag.findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({ id: "tag-1", organizationId }),
+    });
+    expect(transaction.dealTag.createMany).toHaveBeenCalledWith({
+      data: [{ dealId: "deal-test", tagId: "tag-1" }],
+      skipDuplicates: true,
+    });
+    expect(transaction.activity.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ type: "TAG_ADDED", dealId: "deal-test", actorId: userId }),
+    });
+  });
+
+  it("rejects a tag outside the deal organization", async () => {
+    transaction.deal.findFirst.mockResolvedValue(deal());
+    transaction.tag.findFirst.mockResolvedValue(null);
+    await expect(
+      service.addTag(organizationId, "deal-test", "foreign-tag", userId),
+    ).rejects.toThrow("Tag foreign-tag not found");
+    expect(transaction.dealTag.createMany).not.toHaveBeenCalled();
   });
 
   it("moves the deal, history, and activity through one transaction", async () => {

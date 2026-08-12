@@ -23,7 +23,7 @@ test.describe("Lead notes and task link", () => {
     const toggle = panel.getByRole("button", { name: /Notas/i });
     await expect(toggle).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, "notes-closed.png") });
-    await toggle.click();
+    if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
 
     const history = panel.getByTestId("lead-notes-history");
     await expect(history).toBeVisible();

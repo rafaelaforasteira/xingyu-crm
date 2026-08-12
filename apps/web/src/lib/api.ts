@@ -269,6 +269,12 @@ export const contactsApi = {
   deals: (id: string) => api.get<Deal[]>(`/contacts/${id}/deals`),
   orders: (id: string) => api.get<Order[]>(`/contacts/${id}/orders`),
   tasks: (id: string) => api.get<Task[]>(`/contacts/${id}/tasks`),
+  updateTags: (contactId: string, tagIds: string[], mode: "add" | "remove" | "set") =>
+    api.post<{ updated: number }>("/contacts/bulk/tags", {
+      contactIds: [contactId],
+      tagIds,
+      mode,
+    }),
 };
 
 export const companiesApi = {
@@ -426,6 +432,8 @@ export const dealsApi = {
     taskDueAt?: string;
   }) => api.post<Deal>("/deals/manual-lead", data),
   update: (id: string, data: Partial<Deal>) => api.patch<Deal>(`/deals/${id}`, data),
+  addTag: (id: string, tagId: string) => api.post(`/deals/${id}/tags/${tagId}`),
+  removeTag: (id: string, tagId: string) => api.delete(`/deals/${id}/tags/${tagId}`),
   move: (id: string, stageId: string) => api.patch<Deal>(`/deals/${id}`, { stageId }),
   activities: (id: string) => api.get<Activity[]>(`/deals/${id}/activities`),
   files: async (id: string) =>
@@ -634,6 +642,7 @@ export const settingsApi = {
     });
     return Array.isArray(response) ? response : response.data;
   },
+  createTag: (data: { name: string; color?: string }) => api.post<Tag>("/settings/tags", data),
   update: (data: Partial<SettingsOverview>) => api.patch("/settings", data),
 };
 
