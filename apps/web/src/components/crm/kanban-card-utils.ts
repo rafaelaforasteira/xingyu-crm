@@ -1,5 +1,14 @@
 import type { Deal, Tag } from "@/lib/types";
 
+export type PriorityTone = "neutral" | "blue" | "amber" | "red";
+
+export function priorityTone(priority?: Deal["priority"] | null): PriorityTone {
+  if (priority === "LOW") return "blue";
+  if (priority === "MEDIUM") return "amber";
+  if (priority === "HIGH" || priority === "URGENT") return "red";
+  return "neutral";
+}
+
 export type TaskAttention = "none" | "future" | "today" | "overdue";
 
 export function taskAttention(summary?: Deal["taskSummary"]): TaskAttention {
@@ -10,9 +19,9 @@ export function taskAttention(summary?: Deal["taskSummary"]): TaskAttention {
 }
 
 export function taskTooltip(summary?: Deal["taskSummary"]): string {
-  if (!summary?.open) return "Nenhuma tarefa aberta";
+  if (!summary?.open) return "Nenhuma tarefa pendente";
   const parts = [
-    `${summary.open} tarefa${summary.open === 1 ? "" : "s"} aberta${summary.open === 1 ? "" : "s"}`,
+    `${summary.open} tarefa${summary.open === 1 ? "" : "s"} pendente${summary.open === 1 ? "" : "s"}`,
   ];
   if (summary.overdue) parts.push(`${summary.overdue} atrasada${summary.overdue === 1 ? "" : "s"}`);
   if (summary.today) parts.push(`${summary.today} para hoje`);

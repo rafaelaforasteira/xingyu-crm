@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskAttention, taskTooltip, visibleCardChips } from "./kanban-card-utils";
+import { priorityTone, taskAttention, taskTooltip, visibleCardChips } from "./kanban-card-utils";
 
 describe("kanban card summaries", () => {
   it("prioritizes overdue and today task attention", () => {
@@ -8,6 +8,14 @@ describe("kanban card summaries", () => {
     expect(taskAttention({ open: 1, today: 0, overdue: 0 })).toBe("future");
     expect(taskAttention({ open: 0, today: 0, overdue: 0 })).toBe("none");
     expect(taskTooltip({ open: 3, today: 1, overdue: 1 })).toContain("1 atrasada");
+  });
+
+  it("maps empty and persisted priority levels to operational colors", () => {
+    expect(priorityTone()).toBe("neutral");
+    expect(priorityTone("LOW")).toBe("blue");
+    expect(priorityTone("MEDIUM")).toBe("amber");
+    expect(priorityTone("HIGH")).toBe("red");
+    expect(priorityTone("URGENT")).toBe("red");
   });
 
   it("puts channel first, deduplicates tags and reports overflow", () => {

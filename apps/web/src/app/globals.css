@@ -24,13 +24,13 @@
   }
 }
 
-.task-bell-attention {
+.task-bell-icon-attention {
   animation: task-bell-wiggle 10s ease-in-out infinite;
   transform-origin: 50% 20%;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .task-bell-attention {
+  .task-bell-icon-attention {
     animation: none;
   }
 }
