@@ -138,10 +138,41 @@ function OperationalDealSummary({
     deal.channel?.type === "WHATSAPP"
       ? deal.channel.displayName || deal.channel.name || "WhatsApp"
       : deal.channel?.displayName || deal.channel?.name || null;
+  const pointerDown = React.useRef<{ x: number; y: number } | null>(null);
+
+  if (deal.accessLevel === "SUMMARY") {
+    return (
+      <article
+        data-testid="deal-card"
+        data-deal-id={deal.id}
+        data-access-level="summary"
+        role="button"
+        tabIndex={0}
+        className="cursor-default rounded-xl border border-border/70 bg-card p-3 shadow-soft"
+        onClick={() => onOpen(deal)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onOpen(deal);
+        }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Lead #{String(deal.leadSequence ?? "—").padStart(4, "0")}
+            </p>
+            <p className="mt-1 truncate text-sm font-semibold">{deal.name}</p>
+          </div>
+          <Avatar name={deal.owner?.name ?? "?"} src={deal.owner?.avatarUrl} size="sm" />
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+          <span className="truncate">Responsável: {deal.owner?.name ?? "Não atribuído"}</span>
+          <Badge variant="outline">Somente resumo</Badge>
+        </div>
+      </article>
+    );
+  }
   const tasks = taskAttention(deal.taskSummary);
   const priorityState = priorityTone(deal.priority);
   const chips = visibleCardChips(channel, deal.tags);
-  const pointerDown = React.useRef<{ x: number; y: number } | null>(null);
   const ownerLabel = deal.owner?.name ?? "Sem respons\u00e1vel";
   const visibleMembers = members.filter((member) =>
     member.name.toLocaleLowerCase("pt-BR").includes(memberSearch.trim().toLocaleLowerCase("pt-BR")),
@@ -672,6 +703,7 @@ function SortableDealCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: deal.id,
     data: { type: "deal", deal },
+    disabled: deal.canMove === false,
   });
 
   const style = {
@@ -680,7 +712,17 @@ function SortableDealCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...(deal.canMove === false ? {} : attributes)}
+      {...(deal.canMove === false ? {} : listeners)}
+      title={
+        deal.accessLevel === "SUMMARY"
+          ? `Lead atribuído a ${deal.owner?.name ?? "outra pessoa"}`
+          : undefined
+      }
+    >
       <DealCard
         deal={deal}
         dragging={isDragging}
@@ -992,6 +1034,12 @@ export function KanbanBoard({
 
   const handleOpen = (deal: Deal) => {
     if (Date.now() < suppressOpenUntil.current) return;
+    if (deal.canOpen === false) {
+      toast.info(
+        `Este lead está atribuído a ${deal.owner?.name ?? "outra pessoa"}. Você pode acompanhar sua posição, mas não possui acesso aos dados.`,
+      );
+      return;
+    }
     if (onOpenDeal) onOpenDeal(deal);
     else openDealDrawer(deal.id);
   };

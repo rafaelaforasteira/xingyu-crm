@@ -381,10 +381,11 @@ export class ConversationsService {
     return { AND: [where, cursorFilter] };
   }
 
-  async findAll(organizationId: string, query: QueryConversationsDto, allowedPipelineIds?: string[] | null) {
+  async findAll(organizationId: string, query: QueryConversationsDto, allowedPipelineIds?: string[] | null, accessWhere?: Prisma.ConversationWhereInput) {
     const pageSize = query.pageSize ?? 20;
     let where = this.buildListWhere(organizationId, query);
     if (allowedPipelineIds) where = { AND: [where, { OR: [{ deal: { is: null } }, { deal: { pipelineId: { in: allowedPipelineIds } } }] }] };
+    if (accessWhere && Object.keys(accessWhere).length) where = { AND: [where, accessWhere] };
 
     const replyStatus = query.replyStatus ?? (query.awaitingReply ? ("mine" as const) : undefined);
     if (replyStatus === "mine" || replyStatus === "customer") {

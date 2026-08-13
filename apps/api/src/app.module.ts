@@ -35,6 +35,7 @@ import { NotesModule } from "./notes/notes.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { LeadFilesModule } from "./lead-files/lead-files.module";
+import { UsersModule } from "./users/users.module";
 import path from "node:path";
 
 const rootEnvFile = path.resolve(__dirname, "../../../.env");
@@ -80,6 +81,7 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
     NotesModule,
     IntegrationsModule,
     LeadFilesModule,
+    UsersModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

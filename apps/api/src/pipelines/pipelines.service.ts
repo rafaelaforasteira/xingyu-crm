@@ -217,7 +217,7 @@ export class PipelinesService {
     };
   }
 
-  async board(organizationId: string, id: string) {
+  async board(organizationId: string, id: string, user?: { id: string; role: string }) {
     const pipeline = await this.prisma.pipeline.findFirst({
       where: { id, organizationId, deletedAt: null },
       include: {
@@ -327,6 +327,7 @@ export class PipelinesService {
       stages: pipeline.stages.map((stage) => ({
         ...stage,
         deals: stage.deals.map((deal) => {
+          const fullAccess = !user || user.role === "ADMIN" || deal.ownerId === user.id;
           const { conversation, tags, contact, company, ...dealRest } = deal;
           const latest = conversation ? (latestByConversation.get(conversation.id) ?? null) : null;
           const summary = buildBoardConversationSummary(
@@ -343,8 +344,29 @@ export class PipelinesService {
             latest,
           );
 
+          if (!fullAccess) return {
+            id: deal.id,
+            name: deal.name,
+            leadSequence: deal.leadSequence,
+            pipelineId: deal.pipelineId,
+            stageId: deal.stageId,
+            ownerId: deal.ownerId,
+            owner: deal.owner,
+            value: Number(deal.value),
+            status: deal.status,
+            accessLevel: "SUMMARY" as const,
+            canOpen: false,
+            canMove: false,
+            canEdit: false,
+            canChangeResponsible: false,
+          };
           return {
             ...dealRest,
+            accessLevel: "FULL" as const,
+            canOpen: true,
+            canMove: true,
+            canEdit: true,
+            canChangeResponsible: user?.role === "ADMIN",
             value: Number(deal.value),
             unreadCount: summary.conversationUnreadCount,
             conversationId: summary.conversationId ?? deal.conversationId,

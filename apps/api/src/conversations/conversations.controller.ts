@@ -37,7 +37,7 @@ export class ConversationsController {
   @Get()
   @ApiOperation({ summary: "List conversations (light inbox payload)" })
   async findAll(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryConversationsDto) {
-    return this.conversationsService.findAll(orgId, query, await this.access.accessiblePipelineIds(user));
+    return this.conversationsService.findAll(orgId, query, await this.access.accessiblePipelineIds(user), await this.access.conversationWhere(user));
   }
 
   @Get(":id/context")

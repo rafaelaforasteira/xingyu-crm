@@ -20,6 +20,18 @@ export interface UserRef {
   status?: string;
 }
 
+export interface ManagedUser extends Omit<UserRef, "team"> {
+  email: string;
+  phone?: string | null;
+  authRole: "ADMIN" | "MANAGER" | "CONSULTANT";
+  status: "ACTIVE" | "INVITED" | "INACTIVE";
+  lastLoginAt?: string | null;
+  team?: { id: string; name: string } | null;
+  activeSessions: number;
+  directPipelineIds: string[];
+  channelOwnerships?: Array<{ id: string; name: string; type: string; status: string }>;
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -364,6 +376,11 @@ export interface Deal {
   status?: string;
   createdAt: string;
   updatedAt?: string;
+  accessLevel?: "FULL" | "SUMMARY";
+  canOpen?: boolean;
+  canMove?: boolean;
+  canEdit?: boolean;
+  canChangeResponsible?: boolean;
 }
 
 export interface ConversationChannelSummary {

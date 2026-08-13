@@ -48,6 +48,7 @@ import type {
   TaskStatusDefinition,
   Team,
   UserRef,
+  ManagedUser,
 } from "./types";
 import { normalizeMessages, unwrapMessageCursorPage } from "./inbox-utils";
 import { normalizeReactivationResponse } from "./reactivation-utils";
@@ -648,6 +649,18 @@ export const settingsApi = {
   },
   createTag: (data: { name: string; color?: string }) => api.post<Tag>("/settings/tags", data),
   update: (data: Partial<SettingsOverview>) => api.patch("/settings", data),
+};
+
+export const usersApi = {
+  list: (query?: { page?: number; pageSize?: number; search?: string; status?: string }) => api.get<PaginatedResponse<ManagedUser>>("/users", query),
+  invite: (data: { name: string; email: string; phone?: string; role: "ADMIN" | "MANAGER" | "CONSULTANT"; teamId?: string }) => api.post<{ user: ManagedUser; inviteUrl: string; expiresAt: string }>("/users/invite", data),
+  resendInvite: (id: string) => api.post<{ inviteUrl: string; expiresAt: string }>(`/users/${id}/resend-invite`),
+  update: (id: string, data: Partial<{ name: string; phone: string; role: "ADMIN" | "MANAGER" | "CONSULTANT"; teamId: string | null }>) => api.patch<ManagedUser>(`/users/${id}`, data),
+  deactivate: (id: string) => api.post(`/users/${id}/deactivate`),
+  reactivate: (id: string) => api.post(`/users/${id}/reactivate`),
+  revokeSessions: (id: string) => api.post<{ revoked: number }>(`/users/${id}/revoke-sessions`),
+  inspectInvite: (token: string) => api.get<{ name: string; email: string; expiresAt: string }>(`/users/invites/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string, data: { password: string; confirmPassword: string }) => api.post<{ ok: true }>(`/users/invites/${encodeURIComponent(token)}/accept`, data),
 };
 
 export const activitiesApi = {

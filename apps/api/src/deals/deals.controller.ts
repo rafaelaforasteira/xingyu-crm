@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ForbiddenException } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiHeader } from "@nestjs/swagger";
 import { DealsService } from "./deals.service";
 import { OrganizationId } from "../common/decorators/organization.decorator";
@@ -26,14 +26,14 @@ export class DealsController {
   @Get()
   @ApiOperation({ summary: "List deals" })
   async findAll(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryDealsDto) {
-    return this.dealsService.findAll(orgId, query, await this.access.accessiblePipelineIds(user));
+    return this.dealsService.findAll(orgId, query, await this.access.accessiblePipelineIds(user), user.role === "ADMIN" ? undefined : user.id);
   }
 
   @Get("kanban/:pipelineId")
   @ApiOperation({ summary: "Kanban board data for pipeline" })
   async kanban(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("pipelineId") pipelineId: string) {
     await this.access.assertAccess(user, pipelineId);
-    return this.dealsService.kanban(orgId, pipelineId);
+    return this.dealsService.kanban(orgId, pipelineId, user);
   }
 
   @Get("manual-lead/lookup")
@@ -52,6 +52,7 @@ export class DealsController {
     @CurrentUser() authUser: AuthenticatedUser,
   ) {
     await this.access.assertAccess(authUser, dto.pipelineId);
+    if (authUser.role !== "ADMIN" && dto.ownerId && dto.ownerId !== authUser.id) throw new ForbiddenException("Somente administradores podem atribuir leads a outra pessoa.");
     await this.access.assertEligibleUser(authUser, dto.pipelineId, dto.ownerId ?? authUser.id);
     return this.dealsService.createManualLead(orgId, dto, user.id);
   }
@@ -99,6 +100,7 @@ export class DealsController {
   ) {
     await this.access.assertDealAccess(authUser, id);
     if (dto.ownerId !== undefined) {
+      if (authUser.role !== "ADMIN") throw new ForbiddenException("Somente administradores podem transferir responsáveis.");
       const deal = await this.dealsService.findOne(orgId, id);
       await this.access.assertEligibleUser(authUser, deal.pipelineId, dto.ownerId);
     }

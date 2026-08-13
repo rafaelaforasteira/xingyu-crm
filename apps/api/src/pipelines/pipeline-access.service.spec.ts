@@ -35,30 +35,80 @@ describe("PipelineAccessService security boundary", () => {
     const prisma = prismaMock();
     prisma.$queryRaw.mockResolvedValue([{ id: "pipeline-a" }]);
     const service = new PipelineAccessService(prisma);
-    await expect(service.assertAccess(user, "pipeline-b")).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.assertAccess(user, "pipeline-b")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it.each([
     ["deal", "assertDealAccess", { pipelineId: "pipeline-b" }],
-    ["conversation", "assertConversationAccess", { deal: { pipelineId: "pipeline-b" } }],
+    [
+      "conversation",
+      "assertConversationAccess",
+      {
+        channel: {
+          accessMode: "PIPELINE",
+          ownerUserId: null,
+          pipelineConnections: [{ pipelineId: "pipeline-b" }],
+        },
+        deal: { pipelineId: "pipeline-b", ownerId: "user-b" },
+      },
+    ],
     ["task", "assertTaskAccess", { pipelineId: null, deal: { pipelineId: "pipeline-b" } }],
     ["note", "assertNoteAccess", { deal: { pipelineId: "pipeline-b" } }],
-    ["activity", "assertActivityAccess", { deal: { pipelineId: "pipeline-b" }, task: null, order: null }],
+    [
+      "activity",
+      "assertActivityAccess",
+      { deal: { pipelineId: "pipeline-b" }, task: null, order: null },
+    ],
     ["order", "assertOrderAccess", { deal: { pipelineId: "pipeline-b" } }],
   ])("blocks %s IDOR by delegating to pipeline access", async (model, method, row) => {
     const prisma = prismaMock();
     prisma[model].findFirst.mockResolvedValue(row);
     prisma.$queryRaw.mockResolvedValue([{ id: "pipeline-a" }]);
     const service = new PipelineAccessService(prisma);
-    await expect((service as any)[method](user, "resource-b")).rejects.toBeInstanceOf(ForbiddenException);
+    await expect((service as any)[method](user, "resource-b")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it("keeps a legitimate conversation without a Deal organization-scoped", async () => {
     const prisma = prismaMock();
     prisma.conversation.findFirst.mockResolvedValue({ deal: null });
     const service = new PipelineAccessService(prisma);
-    await expect(service.assertConversationAccess(user, "conversation-free")).resolves.toBeUndefined();
+    await expect(
+      service.assertConversationAccess(user, "conversation-free"),
+    ).resolves.toBeUndefined();
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it("allows only the owner of a personal channel", async () => {
+    const prisma = prismaMock();
+    prisma.conversation.findFirst.mockResolvedValue({
+      channel: { accessMode: "PERSONAL", ownerUserId: "user-b", pipelineConnections: [] },
+      deal: null,
+    });
+    const service = new PipelineAccessService(prisma);
+    await expect(
+      service.assertConversationAccess(user, "conversation-personal"),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    prisma.conversation.findFirst.mockResolvedValue({
+      channel: { accessMode: "PERSONAL", ownerUserId: user.id, pipelineConnections: [] },
+      deal: null,
+    });
+    await expect(
+      service.assertConversationAccess(user, "conversation-personal"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("denies full deal access to a non-admin who is not the owner", async () => {
+    const prisma = prismaMock();
+    prisma.deal.findFirst.mockResolvedValue({ pipelineId: "pipeline-a", ownerId: "user-b" });
+    prisma.$queryRaw.mockResolvedValue([{ id: "pipeline-a" }]);
+    const service = new PipelineAccessService(prisma);
+    await expect(service.assertDealAccess(user, "deal-b")).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it("keeps a task without Deal or Pipeline organization-scoped", async () => {

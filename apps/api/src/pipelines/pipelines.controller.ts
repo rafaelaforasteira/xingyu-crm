@@ -53,7 +53,7 @@ export class PipelinesController {
   @ApiOperation({ summary: "Kanban board for one pipeline" })
   async board(@OrganizationId() orgId: string, @Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
     await this.access.assertAccess(user, id);
-    return this.pipelinesService.board(orgId, id);
+    return this.pipelinesService.board(orgId, id, user);
   }
 
   @Get(":id/stages")

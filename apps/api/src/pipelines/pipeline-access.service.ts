@@ -30,11 +30,43 @@ export class PipelineAccessService {
   }
 
   async assertDealAccess(user: AuthenticatedUser, dealId: string) {
-    return this.assertResourceAccess(user, "deal", dealId);
+    const deal = await this.prisma.deal.findFirst({ where: { id: dealId, organizationId: user.organizationId, deletedAt: null }, select: { pipelineId: true, ownerId: true } });
+    if (!deal) throw new NotFoundException("Lead não encontrado.");
+    await this.assertAccess(user, deal.pipelineId);
+    if (user.role !== "ADMIN" && deal.ownerId !== user.id) throw new ForbiddenException("Este lead está atribuído a outra pessoa.");
   }
 
   async assertConversationAccess(user: AuthenticatedUser, conversationId: string) {
-    return this.assertResourceAccess(user, "conversation", conversationId);
+    if (user.role === "ADMIN") return;
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, organizationId: user.organizationId, deletedAt: null },
+      select: { channel: { select: { accessMode: true, ownerUserId: true, pipelineConnections: { where: { deletedAt: null, active: true }, select: { pipelineId: true } } } }, deal: { select: { pipelineId: true, ownerId: true } } },
+    });
+    if (!conversation) throw new NotFoundException("Conversa não encontrada.");
+    const channel = conversation.channel;
+    if (channel?.accessMode === "PERSONAL") {
+      if (channel.ownerUserId !== user.id) throw new ForbiddenException("Sem acesso a esta conversa.");
+      return;
+    }
+    if (channel?.accessMode === "PIPELINE") {
+      const accessible = await this.accessiblePipelineIds(user);
+      if (accessible !== null && !channel.pipelineConnections.some((connection) => accessible.includes(connection.pipelineId))) throw new ForbiddenException("Sem acesso a esta conversa.");
+      return;
+    }
+    if (conversation.deal?.ownerId && conversation.deal.ownerId !== user.id) throw new ForbiddenException("Sem acesso a esta conversa.");
+  }
+
+  async conversationWhere(user: AuthenticatedUser) {
+    if (user.role === "ADMIN") return {};
+    const pipelineIds = await this.accessiblePipelineIds(user);
+    return {
+      OR: [
+        { channel: { accessMode: "PERSONAL" as const, ownerUserId: user.id } },
+        { channel: { accessMode: "PIPELINE" as const, pipelineConnections: { some: { active: true, deletedAt: null, ...(pipelineIds ? { pipelineId: { in: pipelineIds } } : {}) } } } },
+        { channel: { accessMode: "ORGANIZATION" as const }, deal: { ownerId: user.id } },
+        { channelId: null, deal: { ownerId: user.id } },
+      ],
+    };
   }
 
   async conversationPipelineId(user: AuthenticatedUser, conversationId: string) {
@@ -85,9 +117,10 @@ export class PipelineAccessService {
     const pipeline = await this.prisma.pipeline.findFirst({ where: { id: pipelineId, organizationId: user.organizationId, deletedAt: null }, select: { accessMode: true } });
     if (!pipeline) throw new NotFoundException("Pipeline nÃ£o encontrado.");
     return this.prisma.user.findMany({
-      where: pipeline.accessMode === "ORGANIZATION" ? { organizationId: user.organizationId, deletedAt: null } : {
+      where: pipeline.accessMode === "ORGANIZATION" ? { organizationId: user.organizationId, deletedAt: null, status: "ACTIVE" } : {
         organizationId: user.organizationId,
         deletedAt: null,
+        status: "ACTIVE",
         OR: [
           { authRole: "ADMIN" },
           { pipelineAccesses: { some: { pipelineId } } },

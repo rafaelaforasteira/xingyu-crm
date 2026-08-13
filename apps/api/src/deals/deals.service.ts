@@ -70,7 +70,7 @@ const dealMutationSelect = {
 export class DealsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: QueryDealsDto, allowedPipelineIds?: string[] | null) {
+  async findAll(organizationId: string, query: QueryDealsDto, allowedPipelineIds?: string[] | null, ownerId?: string) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
@@ -87,6 +87,7 @@ export class DealsService {
       organizationId,
       ...notDeleted,
       ...(allowedPipelineIds ? { pipelineId: { in: allowedPipelineIds } } : {}),
+      ...(ownerId ? { ownerId } : {}),
       ...(query.pipelineId ? { pipelineId: query.pipelineId } : {}),
       ...(query.stageId ? { stageId: query.stageId } : {}),
       ...(query.ownerId ? { ownerId: query.ownerId } : {}),
@@ -690,7 +691,7 @@ export class DealsService {
    * Legacy endpoint kept for compatibility. Its payload intentionally mirrors
    * GET /pipelines/:id/board so clients do not need two Kanban contracts.
    */
-  async kanban(organizationId: string, pipelineId: string) {
+  async kanban(organizationId: string, pipelineId: string, user?: { id: string; role: string }) {
     const pipeline = await this.prisma.pipeline.findFirst({
       where: { id: pipelineId, organizationId, ...notDeleted },
       include: {
@@ -733,7 +734,11 @@ export class DealsService {
       stages: pipeline.stages.map((stage) => ({
         ...stage,
         position: stage.position,
-        deals: stage.deals.map((deal) => toDealResponse(deal)),
+        deals: stage.deals.map((deal) => {
+          const fullAccess = !user || user.role === "ADMIN" || deal.ownerId === user.id;
+          if (!fullAccess) return { id: deal.id, name: deal.name, leadSequence: deal.leadSequence, pipelineId: deal.pipelineId, stageId: deal.stageId, ownerId: deal.ownerId, owner: deal.owner, value: Number(deal.value), status: deal.status, accessLevel: "SUMMARY", canOpen: false, canMove: false, canEdit: false, canChangeResponsible: false };
+          return { ...toDealResponse(deal), accessLevel: "FULL", canOpen: true, canMove: true, canEdit: true, canChangeResponsible: user?.role === "ADMIN" };
+        }),
       })),
     };
   }

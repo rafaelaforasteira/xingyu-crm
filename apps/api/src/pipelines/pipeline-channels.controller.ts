@@ -24,6 +24,7 @@ import {
   ConnectPipelineChannelDto,
   SimulatePipelineLeadDto,
   UpdatePipelineChannelDto,
+  UpdateChannelOwnershipDto,
 } from "./dto/pipeline-channel.dto";
 import { PipelineChannelsService } from "./pipeline-channels.service";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -38,20 +39,31 @@ import { Roles } from "../auth/decorators/roles.decorator";
 @Controller("pipelines/:pipelineId/channels")
 @Roles(AuthRole.ADMIN)
 export class PipelineChannelsController {
-  constructor(private readonly service: PipelineChannelsService, private readonly access: PipelineAccessService) {}
+  constructor(
+    private readonly service: PipelineChannelsService,
+    private readonly access: PipelineAccessService,
+  ) {}
 
   @Get("available")
   @ApiOperation({
     summary: "List existing integration accounts available to a pipeline",
   })
-  async available(@OrganizationId() organizationId: string, @CurrentUser() authUser: AuthenticatedUser, @Param("pipelineId") pipelineId: string) {
+  async available(
+    @OrganizationId() organizationId: string,
+    @CurrentUser() authUser: AuthenticatedUser,
+    @Param("pipelineId") pipelineId: string,
+  ) {
     await this.access.assertAccess(authUser, pipelineId);
     return this.service.available(organizationId, pipelineId);
   }
 
   @Get()
   @ApiOperation({ summary: "List channel routes configured for a pipeline" })
-  async list(@OrganizationId() organizationId: string, @CurrentUser() authUser: AuthenticatedUser, @Param("pipelineId") pipelineId: string) {
+  async list(
+    @OrganizationId() organizationId: string,
+    @CurrentUser() authUser: AuthenticatedUser,
+    @Param("pipelineId") pipelineId: string,
+  ) {
     await this.access.assertAccess(authUser, pipelineId);
     return this.service.list(organizationId, pipelineId);
   }
@@ -100,6 +112,20 @@ export class PipelineChannelsController {
   ) {
     await this.access.assertAccess(authUser, pipelineId);
     return this.service.pause(organizationId, pipelineId, connectionId, user.id);
+  }
+
+  @Patch(":connectionId/ownership")
+  @ApiOperation({ summary: "Configure organization, pipeline, or personal channel ownership" })
+  async updateOwnership(
+    @OrganizationId() organizationId: string,
+    @DemoUser() user: DemoUserType,
+    @Param("pipelineId") pipelineId: string,
+    @Param("connectionId") connectionId: string,
+    @Body() dto: UpdateChannelOwnershipDto,
+    @CurrentUser() authUser: AuthenticatedUser,
+  ) {
+    await this.access.assertAccess(authUser, pipelineId);
+    return this.service.updateOwnership(organizationId, pipelineId, connectionId, dto, user.id);
   }
 
   @Patch(":connectionId/resume")

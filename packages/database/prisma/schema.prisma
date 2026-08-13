@@ -19,6 +19,12 @@ enum AuthRole {
   CONSULTANT
 }
 
+enum ChannelAccessMode {
+  ORGANIZATION
+  PIPELINE
+  PERSONAL
+}
+
 enum ContactStatus {
   LEAD
   QUALIFIED
@@ -333,6 +339,7 @@ model Organization {
   lifecycleActions           LifecycleAction[]
   taskStatusDefinitions      TaskStatusDefinition[]
   leadFiles                  LeadFile[]
+  userInvites               UserInvite[]
 }
 
 model Role {
@@ -420,6 +427,9 @@ model User {
   lifecycleActions           LifecycleAction[]           @relation("LifecycleActionActor")
   savedLeadFiles             LeadFile[]                   @relation("LeadFileSavedBy")
   pipelineAccesses           PipelineUserAccess[]
+  channelOwnerships          Channel[]                    @relation("ChannelOwner")
+  invites                    UserInvite[]                 @relation("InvitedUser")
+  createdInvites             UserInvite[]                 @relation("InviteCreator")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -427,6 +437,26 @@ model User {
   @@index([status])
   @@index([email])
   @@index([authRole])
+}
+
+model UserInvite {
+  id              String    @id @default(cuid())
+  organizationId  String
+  userId          String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  usedAt          DateTime?
+  revokedAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("InvitedUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("InviteCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, userId])
+  @@index([userId, usedAt, revokedAt])
+  @@index([expiresAt])
 }
 
 model UserSession {
@@ -1014,16 +1044,20 @@ model Channel {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   deletedAt         DateTime?
+  accessMode        ChannelAccessMode @default(ORGANIZATION)
+  ownerUserId       String?
 
   organization        Organization                @relation(fields: [organizationId], references: [id])
   conversations       Conversation[]
   messages            Message[]
   pipelineConnections PipelineChannelConnection[]
+  owner               User?                       @relation("ChannelOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([type])
   @@index([organizationId, status, deletedAt])
   @@index([organizationId, provider, externalAccountId])
+  @@index([organizationId, accessMode, ownerUserId])
 }
 
 /// Routes one existing Channel integration account into one pipeline. Channel
