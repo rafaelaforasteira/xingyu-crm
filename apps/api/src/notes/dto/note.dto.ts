@@ -1,11 +1,14 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
-import { IsOptional, IsString, MaxLength } from "class-validator";
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator";
+import { Transform } from "class-transformer";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export class CreateNoteDto {
   @ApiProperty({ description: "Note content" })
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
-  @MaxLength(10000)
+  @IsNotEmpty()
+  @MaxLength(5000)
   content!: string;
 
   @ApiPropertyOptional()

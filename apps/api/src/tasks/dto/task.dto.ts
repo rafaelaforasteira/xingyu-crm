@@ -6,13 +6,16 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  MinLength,
 } from "class-validator";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export class CreateTaskDto {
   @ApiProperty()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
+  @MinLength(1)
   @MaxLength(200)
   title!: string;
 
@@ -80,11 +83,25 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   orderId?: string;
+
+  @ApiPropertyOptional({ description: "Source note that originated this task" })
+  @IsOptional()
+  @IsString()
+  sourceNoteId?: string;
 }
 
 export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
 
 export class QueryTasksDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ enum: ["mine", "team", "all"] })
+  @IsOptional()
+  @IsString()
+  scope?: "mine" | "team" | "all";
+
+  @ApiPropertyOptional({ enum: ["open", "completed"] })
+  @IsOptional()
+  @IsString()
+  state?: "open" | "completed";
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -130,10 +147,15 @@ export class QueryTasksDto extends PaginationQueryDto {
   @IsString()
   priority?: string;
 
-  @ApiPropertyOptional({ description: "today | week" })
+  @ApiPropertyOptional({ description: "overdue | today | upcoming | no-date | week" })
   @IsOptional()
   @IsString()
   due?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  override search?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

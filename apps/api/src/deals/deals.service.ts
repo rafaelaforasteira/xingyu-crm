@@ -11,12 +11,15 @@ import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
 import {
   BulkMoveDealsDto,
   CreateDealDto,
+  CreateManualLeadDto,
+  LookupManualLeadDto,
   MoveStageDto,
   QueryDealsDto,
   UpdateDealDto,
   WinLoseDto,
 } from "./dto/deal.dto";
-import { allocateLeadSequence } from "../common/lead-sequence";
+import { allocateLeadSequence, formatLeadCode } from "../common/lead-sequence";
+import { normalizePhone } from "../common/phone-normalization";
 import { toDealResponse } from "../common/mappers";
 
 type DbClient = Prisma.TransactionClient | PrismaService;
@@ -67,7 +70,7 @@ const dealMutationSelect = {
 export class DealsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: QueryDealsDto) {
+  async findAll(organizationId: string, query: QueryDealsDto, allowedPipelineIds?: string[] | null, ownerId?: string) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
@@ -83,6 +86,8 @@ export class DealsService {
     const where: Prisma.DealWhereInput = {
       organizationId,
       ...notDeleted,
+      ...(allowedPipelineIds ? { pipelineId: { in: allowedPipelineIds } } : {}),
+      ...(ownerId ? { ownerId } : {}),
       ...(query.pipelineId ? { pipelineId: query.pipelineId } : {}),
       ...(query.stageId ? { stageId: query.stageId } : {}),
       ...(query.ownerId ? { ownerId: query.ownerId } : {}),
@@ -190,10 +195,233 @@ export class DealsService {
           metadata: {
             pipelineId: dto.pipelineId,
             stageId: stage.id,
+            stageName: stage.name,
           },
         },
       });
 
+      return created;
+    });
+  }
+
+  async lookupManualLead(organizationId: string, dto: LookupManualLeadDto, allowedPipelineIds?: string[] | null) {
+    const phone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
+    const email = dto.email?.trim().toLowerCase() || null;
+    const contact = phone
+      ? await this.prisma.contact.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            OR: [{ phone }, { whatsapp: phone }],
+          },
+          include: {
+            deals: {
+              where: { deletedAt: null, ...(allowedPipelineIds ? { pipelineId: { in: allowedPipelineIds } } : {}) },
+              orderBy: { updatedAt: "desc" },
+              include: {
+                stage: { select: { id: true, name: true, type: true } },
+                pipeline: { select: { id: true, name: true } },
+                owner: { select: { id: true, name: true } },
+              },
+            },
+          },
+        })
+      : null;
+    const possibleEmailContact =
+      !contact && email
+        ? await this.prisma.contact.findFirst({
+            where: {
+              organizationId,
+              deletedAt: null,
+              email: { equals: email, mode: "insensitive" },
+            },
+            select: { id: true, firstName: true, lastName: true, email: true },
+          })
+        : null;
+    const activeDeal = contact?.deals.find(
+      (deal) => deal.pipelineId === dto.pipelineId && deal.status === "OPEN",
+    );
+    return {
+      phone,
+      contact: contact
+        ? {
+            ...contact,
+            name: [contact.firstName, contact.lastName].filter(Boolean).join(" "),
+          }
+        : null,
+      activeDeal: activeDeal ?? null,
+      possibleEmailContact,
+    };
+  }
+
+  async createManualLead(organizationId: string, dto: CreateManualLeadDto, userId: string) {
+    const phone = normalizePhone(dto.phone);
+    const contactName = dto.contactName.trim().replace(/\s+/g, " ");
+    if (!contactName) throw new BadRequestException("Informe o nome do contato");
+    const taskDueAt = dto.taskDueAt ? new Date(dto.taskDueAt) : null;
+    if (taskDueAt && Number.isNaN(taskDueAt.getTime())) {
+      throw new BadRequestException("Informe um prazo de tarefa válido");
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await this.requireOrganizationUser(tx, organizationId, userId);
+      await this.requireActivePipeline(tx, organizationId, dto.pipelineId);
+      const stage = await this.requireActiveStage(tx, organizationId, dto.pipelineId, dto.stageId);
+      const ownerId = dto.ownerId ?? userId;
+      await this.validateOptionalRelations(tx, organizationId, { ownerId });
+
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${organizationId}:${dto.pipelineId}:${phone}`}))`;
+      let contact = await tx.contact.findFirst({
+        where: { organizationId, deletedAt: null, OR: [{ phone }, { whatsapp: phone }] },
+      });
+      if (!contact) {
+        const [firstName, ...lastName] = contactName.split(" ");
+        contact = await tx.contact.create({
+          data: {
+            organizationId,
+            firstName,
+            lastName: lastName.join(" ") || null,
+            phone,
+            whatsapp: phone,
+            email: dto.email?.trim().toLowerCase() || null,
+            ownerId,
+            createdById: userId,
+            updatedById: userId,
+            source: "manual",
+          },
+        });
+      }
+
+      const duplicate = await tx.deal.findFirst({
+        where: {
+          organizationId,
+          pipelineId: dto.pipelineId,
+          contactId: contact.id,
+          status: "OPEN",
+          deletedAt: null,
+        },
+        select: { id: true, leadSequence: true, stageId: true },
+      });
+      if (duplicate) {
+        throw new ConflictException({
+          message: "Este lead já existe nesta esteira",
+          code: "ACTIVE_LEAD_EXISTS",
+          deal: duplicate,
+        });
+      }
+
+      const now = new Date();
+      const leadSequence = await allocateLeadSequence(tx, organizationId);
+      const leadCode = formatLeadCode(leadSequence)!;
+      const contactDisplayName = [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+      const created = await tx.deal.create({
+        data: {
+          organizationId,
+          pipelineId: dto.pipelineId,
+          stageId: stage.id,
+          contactId: contact.id,
+          ownerId,
+          name: `${leadCode} · ${contactDisplayName}`,
+          leadSequence,
+          value: dto.value,
+          source: dto.informedSource?.trim() || "manual",
+          createdById: userId,
+          updatedById: userId,
+          ...this.stageTransitionData(stage, now),
+        },
+        include: { stage: true, contact: true, owner: { select: { id: true, name: true } } },
+      });
+      await tx.dealStageHistory.create({
+        data: { dealId: created.id, stageId: stage.id, movedById: userId, movedAt: now },
+      });
+      await tx.activity.create({
+        data: {
+          organizationId,
+          type: "DEAL_CREATED",
+          title: "Lead criado",
+          dealId: created.id,
+          contactId: contact.id,
+          actorId: userId,
+          metadata: {
+            pipelineId: dto.pipelineId,
+            stageId: stage.id,
+            stageName: stage.name,
+            leadCode,
+          },
+        },
+      });
+      if (dto.informedSource?.trim()) {
+        await tx.attribution.create({
+          data: {
+            organizationId,
+            contactId: contact.id,
+            source: "manual",
+            medium: dto.informedSource.trim(),
+          },
+        });
+      }
+      if (dto.note?.trim()) {
+        const note = await tx.note.create({
+          data: {
+            organizationId,
+            content: dto.note.trim(),
+            authorId: userId,
+            contactId: contact.id,
+            dealId: created.id,
+          },
+        });
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: "NOTE_CREATED",
+            title: "Nota adicionada",
+            dealId: created.id,
+            contactId: contact.id,
+            actorId: userId,
+            metadata: { noteId: note.id },
+          },
+        });
+      }
+      if (dto.taskTitle?.trim()) {
+        const status = await tx.taskStatusDefinition.findFirst({
+          where: {
+            organizationId,
+            deletedAt: null,
+            archived: false,
+            active: true,
+            category: "OPEN",
+          },
+          orderBy: { position: "asc" },
+        });
+        if (!status) throw new BadRequestException("Nenhum status de tarefa aberto configurado");
+        const task = await tx.task.create({
+          data: {
+            organizationId,
+            title: dto.taskTitle.trim(),
+            statusDefinitionId: status.id,
+            status: "PENDING",
+            type: "FOLLOW_UP",
+            assigneeId: ownerId,
+            createdById: userId,
+            contactId: contact.id,
+            dealId: created.id,
+            pipelineId: dto.pipelineId,
+            stageId: stage.id,
+            dueAt: taskDueAt,
+          },
+        });
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: "TASK_CREATED",
+            title: "Tarefa criada",
+            taskId: task.id,
+            dealId: created.id,
+            contactId: contact.id,
+            actorId: userId,
+          },
+        });
+      }
       return created;
     });
   }
@@ -238,7 +466,76 @@ export class DealsService {
       if (stageChanged) {
         await this.recordStageChange(tx, organizationId, deal, stage, userId, now);
       }
+      if (dto.ownerId !== undefined && dto.ownerId !== deal.ownerId) {
+        const users = await tx.user.findMany({
+          where: {
+            id: { in: [deal.ownerId, dto.ownerId].filter(Boolean) as string[] },
+            organizationId,
+          },
+          select: { id: true, name: true },
+        });
+        const names = new Map(users.map((user) => [user.id, user.name]));
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: ActivityType.OWNER_CHANGED,
+            title: "Deal owner changed",
+            dealId: deal.id,
+            contactId: deal.contactId,
+            actorId: userId,
+            metadata: {
+              fromOwnerId: deal.ownerId,
+              fromOwnerName: deal.ownerId
+                ? (names.get(deal.ownerId) ?? "Usuário indisponível")
+                : "Não atribuído",
+              toOwnerId: dto.ownerId,
+              toOwnerName: dto.ownerId
+                ? (names.get(dto.ownerId) ?? "Usuário indisponível")
+                : "Não atribuído",
+            },
+          },
+        });
+      }
       return updated;
+    });
+  }
+
+  async addTag(organizationId: string, id: string, tagId: string, userId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const deal = await this.requireDeal(tx, organizationId, id);
+      const tag = await tx.tag.findFirst({ where: { id: tagId, organizationId, ...notDeleted } });
+      if (!tag) throw new NotFoundException(`Tag ${tagId} not found`);
+      const result = await tx.dealTag.createMany({
+        data: [{ dealId: id, tagId }],
+        skipDuplicates: true,
+      });
+      if (result.count) {
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: ActivityType.TAG_ADDED,
+            title: `Tag adicionada: ${tag.name}`,
+            dealId: id,
+            contactId: deal.contactId,
+            actorId: userId,
+            metadata: { tagId, tagName: tag.name },
+          },
+        });
+      }
+      return { updated: result.count > 0, tag };
+    });
+  }
+
+  async removeTag(organizationId: string, id: string, tagId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.requireDeal(tx, organizationId, id);
+      const tag = await tx.tag.findFirst({
+        where: { id: tagId, organizationId, ...notDeleted },
+        select: { id: true },
+      });
+      if (!tag) throw new NotFoundException(`Tag ${tagId} not found`);
+      const result = await tx.dealTag.deleteMany({ where: { dealId: id, tagId } });
+      return { updated: result.count > 0 };
     });
   }
 
@@ -259,6 +556,9 @@ export class DealsService {
       await this.requireOrganizationUser(tx, organizationId, userId);
       await this.requireActivePipeline(tx, organizationId, deal.pipelineId);
       const stage = await this.requireActiveStage(tx, organizationId, deal.pipelineId, dto.stageId);
+      if (stage.id === deal.stageId) {
+        return tx.deal.findUniqueOrThrow({ where: { id: deal.id }, include: { stage: true } });
+      }
       const now = new Date();
 
       const updated = await tx.deal.update({
@@ -332,6 +632,11 @@ export class DealsService {
         throw new BadRequestException("All deals must belong to the target stage pipeline");
       }
 
+      const previousStages = await tx.pipelineStage.findMany({
+        where: { id: { in: [...new Set(deals.map((deal) => deal.stageId))] } },
+        select: { id: true, name: true },
+      });
+      const previousStageNames = new Map(previousStages.map((item) => [item.id, item.name]));
       const now = new Date();
       const result = await tx.deal.updateMany({
         where: {
@@ -370,7 +675,9 @@ export class DealsService {
           actorId: userId,
           metadata: {
             fromStageId: deal.stageId,
+            fromStageName: previousStageNames.get(deal.stageId) ?? "Etapa anterior",
             stageId: stage.id,
+            stageName: stage.name,
             pipelineId: stage.pipelineId,
           },
         })),
@@ -384,7 +691,7 @@ export class DealsService {
    * Legacy endpoint kept for compatibility. Its payload intentionally mirrors
    * GET /pipelines/:id/board so clients do not need two Kanban contracts.
    */
-  async kanban(organizationId: string, pipelineId: string) {
+  async kanban(organizationId: string, pipelineId: string, user?: { id: string; role: string }) {
     const pipeline = await this.prisma.pipeline.findFirst({
       where: { id: pipelineId, organizationId, ...notDeleted },
       include: {
@@ -427,7 +734,11 @@ export class DealsService {
       stages: pipeline.stages.map((stage) => ({
         ...stage,
         position: stage.position,
-        deals: stage.deals.map((deal) => toDealResponse(deal)),
+        deals: stage.deals.map((deal) => {
+          const fullAccess = !user || user.role === "ADMIN" || deal.ownerId === user.id;
+          if (!fullAccess) return { id: deal.id, name: deal.name, leadSequence: deal.leadSequence, pipelineId: deal.pipelineId, stageId: deal.stageId, ownerId: deal.ownerId, owner: deal.owner, value: Number(deal.value), status: deal.status, accessLevel: "SUMMARY", canOpen: false, canMove: false, canEdit: false, canChangeResponsible: false };
+          return { ...toDealResponse(deal), accessLevel: "FULL", canOpen: true, canMove: true, canEdit: true, canChangeResponsible: user?.role === "ADMIN" };
+        }),
       })),
     };
   }
@@ -718,6 +1029,10 @@ export class DealsService {
     userId: string,
     movedAt: Date,
   ) {
+    const previousStage = await tx.pipelineStage.findUnique({
+      where: { id: deal.stageId },
+      select: { name: true },
+    });
     await tx.dealStageHistory.create({
       data: {
         dealId: deal.id,
@@ -738,7 +1053,9 @@ export class DealsService {
         actorId: userId,
         metadata: {
           fromStageId: deal.stageId,
+          fromStageName: previousStage?.name ?? "Etapa anterior",
           stageId: stage.id,
+          stageName: stage.name,
           pipelineId: stage.pipelineId,
         },
       },

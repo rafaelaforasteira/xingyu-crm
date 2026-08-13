@@ -20,6 +20,18 @@ export interface UserRef {
   status?: string;
 }
 
+export interface ManagedUser extends Omit<UserRef, "team"> {
+  email: string;
+  phone?: string | null;
+  authRole: "ADMIN" | "MANAGER" | "CONSULTANT";
+  status: "ACTIVE" | "INVITED" | "INACTIVE";
+  lastLoginAt?: string | null;
+  team?: { id: string; name: string } | null;
+  activeSessions: number;
+  directPipelineIds: string[];
+  channelOwnerships?: Array<{ id: string; name: string; type: string; status: string }>;
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -360,9 +372,15 @@ export interface Deal {
   lastMessagePreview?: string | null;
   lastMessageAt?: string | null;
   awaitingReply?: boolean;
+  taskSummary?: { open: number; today: number; overdue: number };
   status?: string;
   createdAt: string;
   updatedAt?: string;
+  accessLevel?: "FULL" | "SUMMARY";
+  canOpen?: boolean;
+  canMove?: boolean;
+  canEdit?: boolean;
+  canChangeResponsible?: boolean;
 }
 
 export interface ConversationChannelSummary {
@@ -489,6 +507,23 @@ export interface ConversationContextCounts {
   activitiesCount: number;
 }
 
+export interface ConversationContextUtm {
+  source: string | null;
+  medium: string | null;
+  campaign: string | null;
+  content: string | null;
+  term: string | null;
+}
+
+export interface ConversationContextTracking {
+  firstContactAt: string | null;
+  firstContactDirection: "INBOUND" | "OUTBOUND" | null;
+  leadCreatedAt: string | null;
+  utm: ConversationContextUtm | null;
+  landingPage: string | null;
+  referrer: string | null;
+}
+
 export interface ConversationContext {
   conversation: {
     id: string;
@@ -501,19 +536,24 @@ export interface ConversationContext {
   };
   contact: Contact | null;
   company: Company | null;
-  currentDeal: (ConversationDealSummary & {
-    owner?: UserRef | null;
-    team?: Team | null;
-  }) | null;
+  currentDeal:
+    | (ConversationDealSummary & {
+        owner?: UserRef | null;
+        team?: Team | null;
+      })
+    | null;
   pipeline: Pipeline | null;
   stage: PipelineStage | null;
   owner: UserRef | null;
   team: Team | null;
   channel: ConversationChannelSummary | null;
   tags: Tag[];
-  nextTask: Pick<Task, "id" | "title" | "dueAt" | "status" | "priority"> & {
-    assignee?: UserRef | null;
-  } | null;
+  tagSources?: { contactTagIds: string[]; dealTagIds: string[] };
+  nextTask:
+    | (Pick<Task, "id" | "title" | "dueAt" | "status" | "priority"> & {
+        assignee?: UserRef | null;
+      })
+    | null;
   lastOrder: {
     id: string;
     number: string;
@@ -521,6 +561,7 @@ export interface ConversationContext {
     finalValue?: number | string;
     orderedAt?: string | null;
   } | null;
+  tracking?: ConversationContextTracking | null;
   counts: ConversationContextCounts;
 }
 
@@ -532,6 +573,25 @@ export interface MessageAttachment {
   url: string;
   kind: "image" | "video" | "audio" | "document" | string;
   createdAt?: string;
+}
+
+export interface LeadFile {
+  id: string;
+  organizationId: string;
+  dealId: string;
+  conversationId?: string | null;
+  messageId?: string | null;
+  attachmentId?: string | null;
+  savedById?: string | null;
+  savedBy?: UserRef | null;
+  fileName: string;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  url: string;
+  kind: string;
+  messageDirection?: "INBOUND" | "OUTBOUND" | "INTERNAL" | null;
+  messageCreatedAt?: string | null;
+  savedAt: string;
 }
 
 export interface Message {
@@ -560,6 +620,7 @@ export interface Note {
   isInternal?: boolean;
   authorId?: string | null;
   author?: UserRef | null;
+  generatedTasks?: Task[];
   createdAt: string;
 }
 
@@ -590,6 +651,7 @@ export interface Task {
   contact?: Contact | null;
   dealId?: string | null;
   deal?: Deal | null;
+  sourceNoteId?: string | null;
   pipelineId?: string | null;
   pipeline?: { id: string; name: string; color?: string | null } | null;
   stageId?: string | null;
@@ -629,13 +691,57 @@ export interface Order {
   company?: Company | null;
   dealId?: string | null;
   status: OrderStatus;
-  total: number;
+  total?: number;
+  grossValue?: number | string;
+  discount?: number | string;
+  coupon?: string | null;
+  shippingCost?: number | string;
+  taxes?: number | string;
+  finalValue?: number | string;
   currency?: string;
+  channel?: string | null;
+  source?: string | null;
+  campaign?: string | null;
+  orderedAt?: string | null;
+  createdAt?: string;
+  externalId?: string | null;
+  externalName?: string | null;
+  externalUrl?: string | null;
+  financialStatus?: string | null;
+  paymentGateway?: string | null;
+  customerNameSnapshot?: string | null;
+  customerEmailSnapshot?: string | null;
+  customerPhoneSnapshot?: string | null;
+  recipientNameSnapshot?: string | null;
+  address1Snapshot?: string | null;
+  address2Snapshot?: string | null;
+  addressNumberSnapshot?: string | null;
+  complementSnapshot?: string | null;
+  neighborhoodSnapshot?: string | null;
+  citySnapshot?: string | null;
+  provinceSnapshot?: string | null;
+  postalCodeSnapshot?: string | null;
+  countrySnapshot?: string | null;
+  countryCodeSnapshot?: string | null;
+  formattedAddressSnapshot?: string | null;
+  isFirstPurchase?: boolean | null;
+  purchaseOrdinal?: number | null;
+  trackingSourceSnapshot?: string | null;
+  trackingMediumSnapshot?: string | null;
+  trackingCampaignSnapshot?: string | null;
+  trackingContentSnapshot?: string | null;
+  trackingTermSnapshot?: string | null;
+  landingPageSnapshot?: string | null;
+  referrerSnapshot?: string | null;
   itemsCount?: number;
   placedAt?: string | null;
   updatedAt?: string;
   timeline?: Activity[];
   items?: OrderItem[];
+  payments?: OrderPayment[];
+  shipments?: OrderShipment[];
+  attributions?: OrderAttribution[];
+  events?: OrderEvent[];
 }
 
 export interface OrderItem {
@@ -644,19 +750,61 @@ export interface OrderItem {
   sku?: string | null;
   quantity: number;
   unitPrice: number;
-  total: number;
+  discount?: number | string;
+  total?: number;
+  totalPrice?: number | string;
+  externalProductId?: string | null;
+  externalVariantId?: string | null;
+  variantTitle?: string | null;
+}
+
+export interface OrderPayment {
+  id: string;
+  amount: number | string;
+  method: string;
+  status: string;
+  paidAt?: string | null;
+  dueAt?: string | null;
+  paymentLink?: string | null;
+  receiptUrl?: string | null;
+}
+export interface OrderShipment {
+  id: string;
+  carrier?: string | null;
+  trackingCode?: string | null;
+  status: string;
+  postedAt?: string | null;
+  deliveredAt?: string | null;
+}
+export interface OrderAttribution {
+  id: string;
+  source?: string | null;
+  medium?: string | null;
+  campaign?: string | null;
+  content?: string | null;
+  term?: string | null;
+  page?: string | null;
+  channel?: string | null;
+}
+export interface OrderEvent {
+  id: string;
+  type: string;
+  title: string;
+  description?: string | null;
+  occurredAt: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface Activity {
   id: string;
   type: string;
-  title: string;
+  title?: string;
   description?: string | null;
   entityType?: string;
   entityId?: string;
   actor?: UserRef | null;
   createdAt: string;
-  meta?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface Occurrence {
@@ -695,30 +843,15 @@ export interface RepurchaseLead {
   team?: Team | null;
 }
 
-export type ReactivationStatus =
-  | "LEAD"
-  | "QUALIFIED"
-  | "ACTIVE_CUSTOMER"
-  | "INACTIVE"
-  | "ARCHIVED";
+export type ReactivationStatus = "LEAD" | "QUALIFIED" | "ACTIVE_CUSTOMER" | "INACTIVE" | "ARCHIVED";
 
-export type ReactivationFilterStatus = Exclude<
-  ReactivationStatus,
-  "ARCHIVED"
->;
+export type ReactivationFilterStatus = Exclude<ReactivationStatus, "ARCHIVED">;
 
 export type ReactivationSegment =
-  | "lead_nunca_comprou"
-  | "comprou_uma_vez"
-  | "recorrente_parou"
-  | "cliente_sem_resposta";
+  "lead_nunca_comprou" | "comprou_uma_vez" | "recorrente_parou" | "cliente_sem_resposta";
 
 export type ReactivationSortBy =
-  | "score"
-  | "daysInactive"
-  | "lastPurchaseAt"
-  | "lastInteractionAt"
-  | "name";
+  "score" | "daysInactive" | "lastPurchaseAt" | "lastInteractionAt" | "name";
 
 export interface ReactivationContact {
   id: string;
@@ -747,11 +880,7 @@ export interface ReactivationConversation {
   lastMessageAt: string | null;
 }
 
-export type ReactivationWorkflowStatus =
-  | "APPROACHED"
-  | "POSTPONED"
-  | "DISCARDED"
-  | "CONVERTED";
+export type ReactivationWorkflowStatus = "APPROACHED" | "POSTPONED" | "DISCARDED" | "CONVERTED";
 
 export interface ReactivationWorkflow {
   status: ReactivationWorkflowStatus;
@@ -1012,6 +1141,13 @@ export interface DealActionItem extends Deal {
 export interface Team {
   id: string;
   name: string;
+  members?: UserRef[];
+}
+
+export interface PipelineAccessOverview {
+  pipelines: Array<Pick<Pipeline, "id" | "name" | "position"> & { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] }>;
+  teams: Team[];
+  users: Array<UserRef & { team?: Team | null }>;
 }
 
 export interface SettingsOverview {

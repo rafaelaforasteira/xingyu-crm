@@ -18,6 +18,7 @@ import { OrganizationId } from "../common/decorators/organization.decorator";
 import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/demo-user.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
+import { PipelineAccessService } from "../pipelines/pipeline-access.service";
 import { uploadMaxBytes } from "../common/upload/upload.util";
 import {
   CreateConversationDto,
@@ -31,12 +32,12 @@ import {
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
 @Controller("conversations")
 export class ConversationsController {
-  constructor(private readonly conversationsService: ConversationsService) {}
+  constructor(private readonly conversationsService: ConversationsService, private readonly access: PipelineAccessService) {}
 
   @Get()
   @ApiOperation({ summary: "List conversations (light inbox payload)" })
-  findAll(@OrganizationId() orgId: string, @Query() query: QueryConversationsDto) {
-    return this.conversationsService.findAll(orgId, query);
+  async findAll(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryConversationsDto) {
+    return this.conversationsService.findAll(orgId, query, await this.access.accessiblePipelineIds(user), await this.access.conversationWhere(user));
   }
 
   @Get(":id/context")
@@ -45,29 +46,34 @@ export class ConversationsController {
     description:
       "Returns counts and summaries only. Use notes/tasks/orders APIs with entity ids from this payload for full lists.",
   })
-  getContext(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async getContext(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    await this.access.assertConversationAccess(user, id);
     return this.conversationsService.getContext(orgId, id);
   }
 
   @Get(":id/messages")
   @ApiOperation({ summary: "List messages with cursor pagination" })
-  listMessages(
+  async listMessages(
     @OrganizationId() orgId: string,
     @Param("id") id: string,
     @Query() query: QueryMessagesDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    await this.access.assertConversationAccess(user, id);
     return this.conversationsService.listMessages(orgId, id, query);
   }
 
   @Patch(":id/read")
   @ApiOperation({ summary: "Mark conversation as read" })
-  markAsRead(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async markAsRead(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    await this.access.assertConversationAccess(user, id);
     return this.conversationsService.markAsRead(orgId, id);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get conversation detail (no message history)" })
-  findOne(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async findOne(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    await this.access.assertConversationAccess(user, id);
     return this.conversationsService.findOne(orgId, id);
   }
 
@@ -83,17 +89,24 @@ export class ConversationsController {
 
   @Patch(":id")
   @ApiOperation({ summary: "Update conversation" })
-  update(
+  async update(
     @OrganizationId() orgId: string,
     @Param("id") id: string,
     @Body() dto: UpdateConversationDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    await this.access.assertConversationAccess(user, id);
+    if (dto.assigneeId !== undefined) {
+      const pipelineId = await this.access.conversationPipelineId(user, id);
+      if (pipelineId) await this.access.assertEligibleUser(user, pipelineId, dto.assigneeId);
+    }
     return this.conversationsService.update(orgId, id, dto);
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Soft-delete conversation" })
-  remove(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async remove(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    await this.access.assertConversationAccess(user, id);
     return this.conversationsService.remove(orgId, id);
   }
 
@@ -111,13 +124,14 @@ export class ConversationsController {
       limits: { fileSize: uploadMaxBytes(), files: 10 },
     }),
   )
-  sendMessage(
+  async sendMessage(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Param("id") id: string,
     @Body() dto: SendMessageDto,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
+    await this.access.assertConversationAccess(user, id);
     return this.conversationsService.sendMessage(
       orgId,
       id,

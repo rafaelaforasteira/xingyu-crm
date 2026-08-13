@@ -20,6 +20,25 @@ export type BoardLatestMessage = {
   direction: "INBOUND" | "OUTBOUND" | string;
 };
 
+export function summarizeBoardTasks(
+  rows: Array<{ dealId: string | null; dueAt: Date | null }>,
+  now = new Date(),
+) {
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const byDeal = new Map<string, { open: number; today: number; overdue: number }>();
+  for (const task of rows) {
+    if (!task.dealId) continue;
+    const summary = byDeal.get(task.dealId) ?? { open: 0, today: 0, overdue: 0 };
+    summary.open += 1;
+    if (task.dueAt && task.dueAt < todayStart) summary.overdue += 1;
+    else if (task.dueAt && task.dueAt < tomorrowStart) summary.today += 1;
+    byDeal.set(task.dealId, summary);
+  }
+  return byDeal;
+}
+
 /**
  * Prefer OPEN conversations, then most recent lastMessageAt.
  * Deal.conversationId is 1:1 today; this keeps selection rules explicit for tests.
@@ -60,8 +79,7 @@ export function buildBoardConversationSummary(
     : conversation.lastMessageAt
       ? new Date(conversation.lastMessageAt).toISOString()
       : null;
-  const awaitingReply =
-    conversation.status === "OPEN" && latest?.direction === "INBOUND";
+  const awaitingReply = conversation.status === "OPEN" && latest?.direction === "INBOUND";
 
   return {
     conversationId: conversation.id,
@@ -91,13 +109,9 @@ export function normalizeBoardDealCard(input: {
   conversations?: BoardConversationCandidate[];
   latestMessage?: BoardLatestMessage | null;
 }) {
-  const conversation =
-    input.conversation ??
-    selectRelevantConversation(input.conversations ?? []);
+  const conversation = input.conversation ?? selectRelevantConversation(input.conversations ?? []);
   const latestForDeal =
-    input.latestMessage &&
-    conversation &&
-    input.latestMessage.conversationId === conversation.id
+    input.latestMessage && conversation && input.latestMessage.conversationId === conversation.id
       ? input.latestMessage
       : null;
   const resolved = buildBoardConversationSummary(conversation, latestForDeal);

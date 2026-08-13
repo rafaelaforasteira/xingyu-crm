@@ -11,19 +11,16 @@ import {
   Copy,
   EllipsisVertical,
   ExternalLink,
-  Handshake,
-  Headphones,
-  Heart,
   Kanban,
   Pencil,
   Plus,
-  Rocket,
   Search,
   Settings,
-  ShoppingBag,
+  Star,
   SlidersHorizontal,
   Trash2,
   Users,
+  UsersRound,
   Wifi,
   type LucideIcon,
 } from "lucide-react";
@@ -33,7 +30,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { cn, formatCurrency } from "@/lib/utils";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
-import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
+import { ManualCreateLeadDialog } from "@/components/crm/manual-create-lead-dialog";
 import { DealWorkspaceDrawer } from "@/components/crm/deal-workspace";
 import { PipelineFormDialog } from "@/components/crm/pipeline-form-dialog";
 import { useUiStore } from "@/stores/ui";
@@ -42,10 +39,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { resolvePipelineIcon } from "@/lib/pipeline-icons";
+import { useAuth } from "@/components/auth/auth-provider";
 
 const KanbanBoard = dynamic(
   () => import("@/components/crm/kanban-board").then((mod) => ({ default: mod.KanbanBoard })),
@@ -56,14 +55,6 @@ const KanbanBoard = dynamic(
 
 type PipelineTab = "active" | "archived" | "favorites";
 type PipelineAction = "duplicate" | "favorite" | "archive" | "restore";
-
-const PIPELINE_ICONS: Record<string, LucideIcon> = {
-  Kanban,
-  ShoppingBag,
-  Handshake,
-  Rocket,
-  Headphones,
-};
 
 function formatUpdatedAt(value?: string) {
   if (!value) return "—";
@@ -119,14 +110,17 @@ function PipelineCard({
   onEdit,
   onDelete,
   onAction,
+  canManage,
 }: {
   pipeline: Pipeline;
   actionPending: boolean;
   onEdit: (pipeline: Pipeline) => void;
   onDelete: (pipeline: Pipeline) => void;
   onAction: (action: PipelineAction, pipeline: Pipeline) => void;
+  canManage: boolean;
 }) {
-  const Icon = PIPELINE_ICONS[pipeline.icon ?? ""] ?? Kanban;
+  const router = useRouter();
+  const Icon = resolvePipelineIcon(pipeline.icon);
   const stagesCount = pipeline.stagesCount ?? pipeline.stages?.length ?? 0;
   const dealsCount = pipeline.dealsCount ?? 0;
   const channels = pipeline.channels?.filter((channel) => channel.enabled !== false) ?? [];
@@ -135,7 +129,14 @@ function PipelineCard({
     <Card
       data-testid="pipeline-card"
       data-pipeline-id={pipeline.id}
-      className="flex h-full flex-col transition hover:border-primary/30 hover:shadow-soft"
+      role="link"
+      tabIndex={0}
+      aria-label={`Abrir pipeline ${pipeline.name}`}
+      className="flex h-full cursor-pointer flex-col transition hover:border-primary/30 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={() => router.push(`/pipelines/${pipeline.id}?view=kanban`)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") router.push(`/pipelines/${pipeline.id}?view=kanban`);
+      }}
     >
       <CardHeader className="flex-row items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
@@ -148,8 +149,9 @@ function PipelineCard({
           <div className="min-w-0">
             <CardTitle className="truncate">
               <Link
-                href={`/pipelines/${pipeline.id}`}
+                href={`/pipelines/${pipeline.id}?view=kanban`}
                 className="outline-none hover:text-primary focus-visible:text-primary"
+                onClick={(event) => event.stopPropagation()}
               >
                 {pipeline.name}
               </Link>
@@ -159,19 +161,14 @@ function PipelineCard({
                 {pipeline.archived ? "Arquivado" : "Ativo"}
               </Badge>
               {pipeline.isDefault ? <Badge>Padrão</Badge> : null}
-              {pipeline.favorite ? (
-                <Badge variant="outline">
-                  <Heart className="mr-1 h-3 w-3 fill-current" />
-                  Favorito
-                </Badge>
-              ) : null}
             </div>
           </div>
         </div>
 
-        <details className="relative shrink-0">
+        <details className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
           <summary
-            aria-label={`Ações de ${pipeline.name}`}
+            aria-label={`Ações do pipeline ${pipeline.name}`}
+            title="Ações do pipeline"
             className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground [&::-webkit-details-marker]:hidden"
           >
             <EllipsisVertical className="h-4 w-4" />
@@ -182,18 +179,18 @@ function PipelineCard({
           >
             <Link
               role="menuitem"
-              href={`/pipelines/${pipeline.id}`}
+              href={`/pipelines/${pipeline.id}?view=kanban`}
               className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition hover:bg-accent"
             >
               <ExternalLink className="h-4 w-4" />
               Abrir
             </Link>
-            <MenuButton icon={Pencil} disabled={actionPending} onClick={() => onEdit(pipeline)}>
+            {canManage ? <><MenuButton icon={Pencil} disabled={actionPending} onClick={() => onEdit(pipeline)}>
               Editar
             </MenuButton>
             <Link
               role="menuitem"
-              href={`/pipelines/${pipeline.id}/settings/stages`}
+              href={`/pipelines/access?pipelineId=${pipeline.id}`}
               className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition hover:bg-accent"
             >
               <Settings className="h-4 w-4" />
@@ -224,7 +221,7 @@ function PipelineCard({
               Duplicar
             </MenuButton>
             <MenuButton
-              icon={Heart}
+              icon={Star}
               disabled={actionPending}
               onClick={() => onAction("favorite", pipeline)}
             >
@@ -255,6 +252,7 @@ function PipelineCard({
             >
               Excluir
             </MenuButton>
+            </> : null}
           </div>
         </details>
       </CardHeader>
@@ -290,20 +288,20 @@ function PipelineCard({
             <dd className="max-w-[65%] text-right">
               {channels.length
                 ? channels.map((channel) => channel.name).join(", ")
-                : "Nenhum canal"}
+                : "Nenhum canal conectado"}
             </dd>
           </div>
           <div className="flex items-start justify-between gap-3">
             <dt className="flex items-center gap-1.5 text-muted-foreground">
               <Users className="h-3.5 w-3.5" />
-              Equipe
+              Equipe padrão
             </dt>
             <dd className="max-w-[65%] truncate text-right">
               {pipeline.defaultTeam?.name ?? "Não definida"}
             </dd>
           </div>
           <div className="flex items-start justify-between gap-3">
-            <dt className="text-muted-foreground">Responsável</dt>
+            <dt className="text-muted-foreground">Responsável padrão</dt>
             <dd className="max-w-[65%] truncate text-right">
               {pipeline.defaultOwner?.name ?? "Não definido"}
             </dd>
@@ -315,10 +313,11 @@ function PipelineCard({
             Atualizado em {formatUpdatedAt(pipeline.updatedAt)}
           </p>
           <Link
-            href={`/pipelines/${pipeline.id}`}
+            href={`/pipelines/${pipeline.id}?view=kanban`}
             className="text-xs font-medium text-primary hover:underline"
+            onClick={(event) => event.stopPropagation()}
           >
-            Abrir quadro
+            Abrir pipeline
           </Link>
         </div>
       </CardContent>
@@ -327,6 +326,8 @@ function PipelineCard({
 }
 
 export function PipelinesListPage() {
+  const { user } = useAuth();
+  const canManage = user?.role === "ADMIN";
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -337,6 +338,8 @@ export function PipelinesListPage() {
   const [formOpen, setFormOpen] = React.useState(false);
   const [editingPipeline, setEditingPipeline] = React.useState<Pipeline | null>(null);
   const [pipelineToDelete, setPipelineToDelete] = React.useState<Pipeline | null>(null);
+  const [pendingAction, setPendingAction] = React.useState<{ action: "duplicate" | "archive"; pipeline: Pipeline } | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = React.useState("");
 
   const params = {
     page,
@@ -375,8 +378,21 @@ export function PipelinesListPage() {
       if (action === "archive") return pipelinesApi.archive(pipeline.id);
       return pipelinesApi.restore(pipeline.id);
     },
+    onMutate: async (variables) => {
+      if (variables.action !== "favorite") return;
+      await queryClient.cancelQueries({ queryKey: queryKeys.pipelines.all });
+      const snapshots = queryClient.getQueriesData({ queryKey: queryKeys.pipelines.all });
+      queryClient.setQueriesData({ queryKey: queryKeys.pipelines.all }, (current: unknown) => {
+        if (!current || typeof current !== "object") return current;
+        const response = current as { data?: Pipeline[] };
+        if (!Array.isArray(response.data)) return current;
+        return { ...response, data: response.data.map((item) => item.id === variables.pipeline.id ? { ...item, favorite: !item.favorite } : item) };
+      });
+      return { snapshots };
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.all });
+      setPendingAction(null);
       const messages: Record<PipelineAction, string> = {
         duplicate: "Pipeline duplicado",
         favorite: variables.pipeline.favorite
@@ -387,7 +403,10 @@ export function PipelinesListPage() {
       };
       toast.success(messages[variables.action]);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error, _variables, context) => {
+      context?.snapshots?.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      toast.error(error.message);
+    },
   });
 
   const deleteMutation = useMutation({
@@ -396,6 +415,7 @@ export function PipelinesListPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.all });
       toast.success(`Pipeline “${pipeline.name}” excluído`);
       setPipelineToDelete(null);
+      setDeleteConfirmation("");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -416,10 +436,10 @@ export function PipelinesListPage() {
         title="Pipelines"
         description="Crie, organize e acompanhe todos os funis da operação."
         actions={
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4" />
-            Criar pipeline
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {canManage ? <Link className={buttonVariants({ variant: "outline" })} href="/pipelines/access"><UsersRound className="h-4 w-4" />Equipes e acessos</Link> : null}
+            {canManage ? <Button onClick={openCreateDialog}><Plus className="h-4 w-4" />Criar pipeline</Button> : null}
+          </div>
         }
       />
 
@@ -492,12 +512,14 @@ export function PipelinesListPage() {
               <PipelineCard
                 key={pipeline.id}
                 pipeline={pipeline}
+                canManage={canManage}
                 actionPending={actionMutation.isPending || deleteMutation.isPending}
                 onEdit={openEditDialog}
-                onDelete={setPipelineToDelete}
-                onAction={(action, selectedPipeline) =>
-                  actionMutation.mutate({ action, pipeline: selectedPipeline })
-                }
+                onDelete={(selectedPipeline) => { setDeleteConfirmation(""); setPipelineToDelete(selectedPipeline); }}
+                onAction={(action, selectedPipeline) => {
+                  if (action === "duplicate" || action === "archive") setPendingAction({ action, pipeline: selectedPipeline });
+                  else actionMutation.mutate({ action, pipeline: selectedPipeline });
+                }}
               />
             ))}
           </div>
@@ -526,29 +548,38 @@ export function PipelinesListPage() {
         onOpenChange={(open) => {
           if (!open) setPipelineToDelete(null);
         }}
-        title="Excluir pipeline"
-        description="Confirme a exclusão deste pipeline."
+        title={pipelineToDelete && (pipelineToDelete.dealsCount ?? 0) > 0 ? "Não é possível excluir este pipeline" : "Excluir pipeline?"}
+        description={pipelineToDelete && (pipelineToDelete.dealsCount ?? 0) > 0 ? "Arquive-o para removê-lo da operação sem perder dados." : "Esta ação é permanente."}
       >
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            O pipeline <strong className="text-foreground">{pipelineToDelete?.name}</strong> será
-            removido da central. A API impedirá a operação se houver vínculos que não possam ser
-            preservados com segurança.
-          </p>
+          {(pipelineToDelete?.dealsCount ?? 0) > 0 ? <p className="text-sm text-muted-foreground">Este pipeline possui <strong className="text-foreground">{pipelineToDelete?.dealsCount} negócios</strong>. Os negócios e o histórico serão preservados.</p> : <>
+            <p className="text-sm text-muted-foreground">Digite <strong className="text-foreground">{pipelineToDelete?.name}</strong> para confirmar:</p>
+            <Input aria-label="Nome do pipeline para confirmar exclusão" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" />
+          </>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setPipelineToDelete(null)}>
               Cancelar
             </Button>
-            <Button
+            {(pipelineToDelete?.dealsCount ?? 0) === 0 ? <Button
               type="button"
               variant="destructive"
-              disabled={!pipelineToDelete || deleteMutation.isPending}
+              disabled={!pipelineToDelete || deleteMutation.isPending || deleteConfirmation !== pipelineToDelete.name}
               onClick={() => {
                 if (pipelineToDelete) deleteMutation.mutate(pipelineToDelete);
               }}
             >
-              {deleteMutation.isPending ? "Excluindo…" : "Excluir pipeline"}
-            </Button>
+              {deleteMutation.isPending ? "Excluindo…" : "Excluir permanentemente"}
+            </Button> : null}
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog open={Boolean(pendingAction)} onOpenChange={(open) => { if (!open) setPendingAction(null); }} title={pendingAction?.action === "duplicate" ? "Duplicar pipeline?" : "Arquivar pipeline?"} description={pendingAction?.action === "duplicate" ? "Será criada uma nova esteira com a mesma estrutura de etapas." : `“${pendingAction?.pipeline.name ?? ""}” deixará de aparecer entre os pipelines ativos.`}>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">{pendingAction?.action === "duplicate" ? "Negócios e históricos não serão copiados." : "Os negócios e o histórico serão preservados."}</p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setPendingAction(null)}>Cancelar</Button>
+            <Button type="button" disabled={!pendingAction || actionMutation.isPending} onClick={() => pendingAction && actionMutation.mutate(pendingAction)}>{actionMutation.isPending ? "Processando…" : pendingAction?.action === "duplicate" ? "Duplicar" : "Arquivar"}</Button>
           </div>
         </div>
       </Dialog>
@@ -565,9 +596,7 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
   const idleDaysRaw = searchParams.get("idleDays");
   const idleDays = idleDaysRaw ? Number(idleDaysRaw) : undefined;
   const idleDaysFilter =
-    idleDays != null && Number.isFinite(idleDays) && idleDays > 0
-      ? idleDays
-      : undefined;
+    idleDays != null && Number.isFinite(idleDays) && idleDays > 0 ? idleDays : undefined;
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.pipelines.board(pipelineId),
@@ -604,7 +633,7 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
               onClick={() => setCreateDealOpen(true)}
             >
               <Plus className="h-4 w-4" />
-              Criar card
+              Criar lead
             </Button>
           </div>
         }
@@ -633,7 +662,11 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
         />
       ) : null}
       {data ? (
-        <CreateDealDialog open={createDealOpen} onOpenChange={setCreateDealOpen} pipeline={data} />
+        <ManualCreateLeadDialog
+          open={createDealOpen}
+          onOpenChange={setCreateDealOpen}
+          pipeline={data}
+        />
       ) : null}
       <DealWorkspaceDrawer />
     </div>

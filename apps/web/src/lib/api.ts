@@ -13,6 +13,7 @@ import type {
   DashboardJourneySummaries,
   Deal,
   DealActionItem,
+  LeadFile,
   Message,
   MessageCursorPage,
   MessageQuery,
@@ -28,6 +29,7 @@ import type {
   PipelineChannelTestResult,
   PipelineLeadSimulationInput,
   PipelineLeadSimulationResult,
+  PipelineAccessOverview,
   PipelineInput,
   PipelineListQuery,
   PipelineNavigationItem,
@@ -46,6 +48,7 @@ import type {
   TaskStatusDefinition,
   Team,
   UserRef,
+  ManagedUser,
 } from "./types";
 import { normalizeMessages, unwrapMessageCursorPage } from "./inbox-utils";
 import { normalizeReactivationResponse } from "./reactivation-utils";
@@ -154,8 +157,7 @@ async function request<T>(
 
   let response: Response;
   try {
-    const isFormData =
-      typeof FormData !== "undefined" && rest.body instanceof FormData;
+    const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
     response = await fetch(url, {
       ...rest,
       credentials: "include",
@@ -167,10 +169,7 @@ async function request<T>(
       signal: controller.signal,
     });
   } catch {
-    throw new ApiError(
-      "NÃ£o foi possÃ­vel conectar Ã  API do Xingyu CRM.",
-      0,
-    );
+    throw new ApiError("NÃ£o foi possÃ­vel conectar Ã  API do Xingyu CRM.", 0);
   } finally {
     clearTimeout(timeout);
   }
@@ -195,7 +194,7 @@ async function request<T>(
     const serverMessage =
       body && typeof body === "object" && "message" in body
         ? Array.isArray((body as { message: unknown }).message)
-          ? ((body as { message: string[] }).message).join(", ")
+          ? (body as { message: string[] }).message.join(", ")
           : String((body as { message: unknown }).message)
         : null;
     const message =
@@ -203,7 +202,7 @@ async function request<T>(
         ? "O banco de dados local nÃ£o estÃ¡ disponÃ­vel. Inicie o ambiente com pnpm dev:local."
         : response.status >= 500
           ? "O Xingyu CRM encontrou um erro ao processar a solicitaÃ§Ã£o."
-          : serverMessage ?? `Erro ${response.status}`;
+          : (serverMessage ?? `Erro ${response.status}`);
     throw new ApiError(message, response.status, body);
   }
 
@@ -242,7 +241,50 @@ export const healthApi = {
   check: () => api.get<{ status: string }>("/health"),
 };
 
+export type DashboardGoalAnalytics = {
+  id: string;
+  metric: string;
+  scope: string;
+  teamId?: string | null;
+  userId?: string | null;
+  pipelineId?: string | null;
+  targetValue: number;
+  target: number;
+  actual: number;
+  progressPct: number;
+  remaining: number;
+  exceeded: number;
+  expectedToDate: number;
+  requiredPerDay: number | null;
+  daysElapsed: number;
+  daysRemaining: number;
+  pace: string;
+  periodStart: string;
+  periodEnd: string;
+  team?: { id: string; name: string } | null;
+  user?: { id: string; name: string } | null;
+  curve: Array<{ date: string; actual: number; expected: number }>;
+};
+
 export const dashboardApi = {
+  filters: () =>
+    api.get<{
+      pipelines: Array<{ id: string; name: string }>;
+      teams: Array<{ id: string; name: string }>;
+      users: Array<{ id: string; name: string; teamId?: string | null }>;
+      channels: Array<{
+        id: string;
+        name: string;
+        displayName?: string | null;
+        accessMode: string;
+      }>;
+      timezone: string;
+      currency: string;
+    }>("/dashboard/filters"),
+  area: (
+    area: "overview" | "commercial" | "attendance" | "team" | "customers" | "channels",
+    query?: Record<string, QueryValue>,
+  ) => api.get<Record<string, any>>(`/dashboard/${area}`, query),
   metrics: (query?: Record<string, QueryValue>) =>
     api.get<DashboardMetrics>("/dashboard/metrics", query),
   charts: (query?: Record<string, QueryValue>) =>
@@ -259,6 +301,22 @@ export const dashboardApi = {
       pendingPayments?: unknown[];
       journeys?: DashboardJourneySummaries;
     }>("/dashboard/lists", query),
+  goals: (query?: Record<string, QueryValue>) =>
+    api.get<{ goals: DashboardGoalAnalytics[]; registry: Record<string, unknown> }>(
+      "/dashboard/goals/analytics",
+      query,
+    ),
+  createGoal: (data: Record<string, unknown>) =>
+    api.post<Record<string, unknown>>("/dashboard/goals", data),
+  updateGoal: (id: string, data: Record<string, unknown>) =>
+    api.patch<Record<string, unknown>>(`/dashboard/goals/${id}`, data),
+  archiveGoal: (id: string) => api.delete<Record<string, unknown>>(`/dashboard/goals/${id}`),
+  explore: (query?: Record<string, QueryValue>) =>
+    api.get<{
+      metric: string;
+      dimension: string;
+      rows: Array<{ label: string; value: number | null }>;
+    }>("/dashboard/explore", query),
 };
 
 export const contactsApi = {
@@ -272,6 +330,12 @@ export const contactsApi = {
   deals: (id: string) => api.get<Deal[]>(`/contacts/${id}/deals`),
   orders: (id: string) => api.get<Order[]>(`/contacts/${id}/orders`),
   tasks: (id: string) => api.get<Task[]>(`/contacts/${id}/tasks`),
+  updateTags: (contactId: string, tagIds: string[], mode: "add" | "remove" | "set") =>
+    api.post<{ updated: number }>("/contacts/bulk/tags", {
+      contactIds: [contactId],
+      tagIds,
+      mode,
+    }),
 };
 
 export const companiesApi = {
@@ -302,12 +366,17 @@ export const companiesApi = {
       notes: string;
       ownerId: string;
     }>,
-  ) =>
-    api.patch<Company>(`/companies/${id}`, data),
+  ) => api.patch<Company>(`/companies/${id}`, data),
   contacts: (id: string) => api.get<Contact[]>(`/companies/${id}/contacts`),
 };
 
 export const pipelinesApi = {
+  accessOverview: () => api.get<PipelineAccessOverview>("/pipelines/access"),
+  updateAccess: (
+    id: string,
+    data: { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] },
+  ) => api.put<PipelineAccessOverview>(`/pipelines/access/${id}`, data),
+  eligibleUsers: (id: string) => api.get<UserRef[]>(`/pipelines/access/${id}/eligible-users`),
   navigation: () => api.get<PipelineNavigationItem[]>("/pipelines/navigation"),
   list: async (query?: PipelineListQuery): Promise<PaginatedResponse<Pipeline>> => {
     const res = await api.get<Pipeline[] | PaginatedResponse<Pipeline>>("/pipelines", {
@@ -344,26 +413,15 @@ export const pipelineStagesApi = {
     api.get<PipelineStage[]>(`/pipelines/${pipelineId}/stages`, { archived }),
   create: (pipelineId: string, data: PipelineStageInput) =>
     api.post<PipelineStage>(`/pipelines/${pipelineId}/stages`, data),
-  update: (
-    pipelineId: string,
-    stageId: string,
-    data: Partial<PipelineStageInput>,
-  ) =>
-    api.patch<PipelineStage>(
-      `/pipelines/${pipelineId}/stages/${stageId}`,
-      data,
-    ),
+  update: (pipelineId: string, stageId: string, data: Partial<PipelineStageInput>) =>
+    api.patch<PipelineStage>(`/pipelines/${pipelineId}/stages/${stageId}`, data),
   reorder: (pipelineId: string, stageIds: string[]) =>
     api.post<PipelineStage[]>(`/pipelines/${pipelineId}/stages/reorder`, {
       stageIds,
     }),
   remove: (pipelineId: string, stageId: string, targetStageId?: string) => {
-    const query = targetStageId
-      ? `?targetStageId=${encodeURIComponent(targetStageId)}`
-      : "";
-    return api.delete<PipelineStage>(
-      `/pipelines/${pipelineId}/stages/${stageId}${query}`,
-    );
+    const query = targetStageId ? `?targetStageId=${encodeURIComponent(targetStageId)}` : "";
+    return api.delete<PipelineStage>(`/pipelines/${pipelineId}/stages/${stageId}${query}`);
   },
 };
 
@@ -374,47 +432,33 @@ function unwrapData<T>(response: T[] | { data: T[] }) {
 export const pipelineChannelsApi = {
   list: async (pipelineId: string) =>
     unwrapData(
-      await api.get<
-        PipelineChannelConnection[] | { data: PipelineChannelConnection[] }
-      >(`/pipelines/${pipelineId}/channels`),
+      await api.get<PipelineChannelConnection[] | { data: PipelineChannelConnection[] }>(
+        `/pipelines/${pipelineId}/channels`,
+      ),
     ),
   available: async (pipelineId: string) =>
     unwrapData(
-      await api.get<
-        AvailablePipelineChannel[] | { data: AvailablePipelineChannel[] }
-      >(`/pipelines/${pipelineId}/channels/available`),
+      await api.get<AvailablePipelineChannel[] | { data: AvailablePipelineChannel[] }>(
+        `/pipelines/${pipelineId}/channels/available`,
+      ),
     ),
   connect: (pipelineId: string, data: PipelineChannelInput) =>
-    api.post<PipelineChannelConnection>(
-      `/pipelines/${pipelineId}/channels`,
-      data,
-    ),
+    api.post<PipelineChannelConnection>(`/pipelines/${pipelineId}/channels`, data),
   update: (
     pipelineId: string,
     connectionId: string,
     data: Partial<Omit<PipelineChannelInput, "channelId">>,
   ) =>
-    api.patch<PipelineChannelConnection>(
-      `/pipelines/${pipelineId}/channels/${connectionId}`,
-      data,
-    ),
+    api.patch<PipelineChannelConnection>(`/pipelines/${pipelineId}/channels/${connectionId}`, data),
   pause: (pipelineId: string, connectionId: string) =>
-    api.patch<PipelineChannelConnection>(
-      `/pipelines/${pipelineId}/channels/${connectionId}/pause`,
-    ),
+    api.patch<PipelineChannelConnection>(`/pipelines/${pipelineId}/channels/${connectionId}/pause`),
   resume: (pipelineId: string, connectionId: string) =>
     api.patch<PipelineChannelConnection>(
       `/pipelines/${pipelineId}/channels/${connectionId}/resume`,
     ),
   test: (pipelineId: string, connectionId: string) =>
-    api.post<PipelineChannelTestResult>(
-      `/pipelines/${pipelineId}/channels/${connectionId}/test`,
-    ),
-  simulate: (
-    pipelineId: string,
-    connectionId: string,
-    data: PipelineLeadSimulationInput,
-  ) =>
+    api.post<PipelineChannelTestResult>(`/pipelines/${pipelineId}/channels/${connectionId}/test`),
+  simulate: (pipelineId: string, connectionId: string, data: PipelineLeadSimulationInput) =>
     api.post<PipelineLeadSimulationResult>(
       `/pipelines/${pipelineId}/channels/${connectionId}/simulate`,
       data,
@@ -428,22 +472,54 @@ export const pipelineChannelsApi = {
 export const dealsApi = {
   get: (id: string) => api.get<Deal>(`/deals/${id}`),
   create: (data: Partial<Deal>) => api.post<Deal>("/deals", data),
+  lookupManualLead: (query: { pipelineId: string; phone?: string; email?: string }) =>
+    api.get<{
+      phone: string | null;
+      contact:
+        | (Contact & {
+            deals: Array<
+              Deal & { pipeline?: Pipeline; stage?: PipelineStage; owner?: UserRef | null }
+            >;
+          })
+        | null;
+      activeDeal: (Deal & { stage?: PipelineStage; owner?: UserRef | null }) | null;
+      possibleEmailContact: Pick<Contact, "id" | "firstName" | "lastName" | "email"> | null;
+    }>("/deals/manual-lead/lookup", query),
+  createManualLead: (data: {
+    phone: string;
+    contactName: string;
+    email?: string;
+    pipelineId: string;
+    stageId: string;
+    ownerId?: string;
+    value?: number;
+    informedSource?: string;
+    note?: string;
+    taskTitle?: string;
+    taskDueAt?: string;
+  }) => api.post<Deal>("/deals/manual-lead", data),
   update: (id: string, data: Partial<Deal>) => api.patch<Deal>(`/deals/${id}`, data),
-  move: (id: string, stageId: string) =>
-    api.patch<Deal>(`/deals/${id}`, { stageId }),
+  addTag: (id: string, tagId: string) => api.post(`/deals/${id}/tags/${tagId}`),
+  removeTag: (id: string, tagId: string) => api.delete(`/deals/${id}/tags/${tagId}`),
+  move: (id: string, stageId: string) => api.patch<Deal>(`/deals/${id}`, { stageId }),
   activities: (id: string) => api.get<Activity[]>(`/deals/${id}/activities`),
-  files: (id: string) =>
-    api.get<{ id: string; name: string; url: string; createdAt: string }[]>(
-      `/deals/${id}/files`,
-    ),
+  files: async (id: string) =>
+    (await api.get<{ data: LeadFile[]; total: number }>(`/deals/${id}/files`)).data,
+  saveMessageFile: (id: string, data: { messageId: string; attachmentId: string }) =>
+    api.post<LeadFile>(`/deals/${id}/files/from-message`, data),
+  removeFile: (dealId: string, id: string) =>
+    api.delete<{ removed: true }>(`/deals/${dealId}/files/${id}`),
 };
 
 export const conversationsApi = {
   list: (query?: ConversationListQuery) =>
-    api.get<PaginatedResponse<ConversationListItem> | {
-      data: ConversationListItem[];
-      meta: { pageSize: number; hasMore: boolean; nextCursor: string | null };
-    }>("/conversations", query as Record<string, QueryValue> | undefined),
+    api.get<
+      | PaginatedResponse<ConversationListItem>
+      | {
+          data: ConversationListItem[];
+          meta: { pageSize: number; hasMore: boolean; nextCursor: string | null };
+        }
+    >("/conversations", query as Record<string, QueryValue> | undefined),
   get: (id: string) => api.get<Conversation>(`/conversations/${id}`),
   messages: async (id: string, query?: MessageQuery): Promise<MessageCursorPage> =>
     unwrapMessageCursorPage(
@@ -452,8 +528,7 @@ export const conversationsApi = {
         query as Record<string, QueryValue> | undefined,
       ),
     ),
-  context: (id: string) =>
-    api.get<ConversationContext>(`/conversations/${id}/context`),
+  context: (id: string) => api.get<ConversationContext>(`/conversations/${id}/context`),
   markRead: (id: string) =>
     api.patch<{ id: string; unreadCount: number }>(`/conversations/${id}/read`),
   sendMessage: async (id: string, body: string) => {
@@ -464,10 +539,7 @@ export const conversationsApi = {
     }
     return messages[0];
   },
-  sendMessageWithAttachments: async (
-    id: string,
-    payload: { body?: string; files: File[] },
-  ) => {
+  sendMessageWithAttachments: async (id: string, payload: { body?: string; files: File[] }) => {
     const form = new FormData();
     if (payload.body?.trim()) form.append("body", payload.body.trim());
     for (const file of payload.files) {
@@ -481,9 +553,10 @@ export const conversationsApi = {
     return messages[0];
   },
   byDeal: async (dealId: string) => {
-    const res = await api.get<
-      Conversation | Conversation[] | PaginatedResponse<Conversation>
-    >("/conversations", { dealId });
+    const res = await api.get<Conversation | Conversation[] | PaginatedResponse<Conversation>>(
+      "/conversations",
+      { dealId },
+    );
     if (Array.isArray(res)) return res[0] ?? null;
     if (res && typeof res === "object" && "data" in res) {
       return (res as PaginatedResponse<Conversation>).data[0] ?? null;
@@ -493,20 +566,17 @@ export const conversationsApi = {
 };
 
 export const notesApi = {
-  list: (query?: Record<string, QueryValue>) => api.get<Note[]>("/notes", query),
-  create: (data: {
-    content: string;
-    contactId?: string;
-    dealId?: string;
-    isInternal?: boolean;
-  }) => api.post<Note>("/notes", data),
+  listPage: (query?: Record<string, QueryValue>) =>
+    api.get<PaginatedResponse<Note>>("/notes", query),
+  list: async (query?: Record<string, QueryValue>) =>
+    unwrapData(await api.get<Note[] | PaginatedResponse<Note>>("/notes", query)),
+  create: (data: { content: string; contactId?: string; dealId?: string; isInternal?: boolean }) =>
+    api.post<Note>("/notes", data),
 };
 
 export const tasksApi = {
-  list: (query?: Record<string, QueryValue>) =>
-    api.get<PaginatedResponse<Task>>("/tasks", query),
-  board: (query?: Record<string, QueryValue>) =>
-    api.get<TaskBoardGroup[]>("/tasks/board", query),
+  list: (query?: Record<string, QueryValue>) => api.get<PaginatedResponse<Task>>("/tasks", query),
+  board: (query?: Record<string, QueryValue>) => api.get<TaskBoardGroup[]>("/tasks/board", query),
   statuses: (includeArchived = false) =>
     api.get<TaskStatusDefinition[]>("/tasks/statuses", {
       includeArchived: includeArchived ? true : undefined,
@@ -528,8 +598,7 @@ export const tasksApi = {
 };
 
 export const ordersApi = {
-  list: (query?: Record<string, QueryValue>) =>
-    api.get<PaginatedResponse<Order>>("/orders", query),
+  list: (query?: Record<string, QueryValue>) => api.get<PaginatedResponse<Order>>("/orders", query),
   get: (id: string) => api.get<Order>(`/orders/${id}`),
   timeline: (id: string) => api.get<Activity[]>(`/orders/${id}/timeline`),
 };
@@ -538,23 +607,14 @@ export const repurchaseApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<RepurchaseLead>>("/repurchase", query),
   createOpportunity: (contactId: string, data: CreateLifecycleOpportunityInput) =>
-    api.post<LifecycleOpportunityResult>(
-      `/repurchase/${contactId}/opportunity`,
-      data,
-    ),
+    api.post<LifecycleOpportunityResult>(`/repurchase/${contactId}/opportunity`, data),
 };
 
 export const reactivationApi = {
   list: async (query: ReactivationListQuery = {}) =>
-    normalizeReactivationResponse(
-      await api.get<unknown>("/reactivation", { ...query }),
-      query,
-    ),
+    normalizeReactivationResponse(await api.get<unknown>("/reactivation", { ...query }), query),
   createOpportunity: (contactId: string, data: CreateLifecycleOpportunityInput) =>
-    api.post<LifecycleOpportunityResult>(
-      `/reactivation/${contactId}/opportunity`,
-      data,
-    ),
+    api.post<LifecycleOpportunityResult>(`/reactivation/${contactId}/opportunity`, data),
   createAction: (contactId: string, data: CreateReactivationActionInput) =>
     api.post<{ id: string; type: string; contactId: string }>(
       `/reactivation/${contactId}/actions`,
@@ -590,7 +650,10 @@ export const marketingApi = {
   overview: () =>
     api.get<{
       campaigns: { id: string; name: string; status: string; spend: number; leads: number }[];
-      charts: { reach: { label: string; value: number }[]; conversions: { label: string; value: number }[] };
+      charts: {
+        reach: { label: string; value: number }[];
+        conversions: { label: string; value: number }[];
+      };
     }>("/marketing/overview"),
 };
 
@@ -612,11 +675,10 @@ export const searchApi = {
 
 export const notificationsApi = {
   list: async () => {
-    const response =
-      await api.get<
-        | (Omit<NotificationItem, "read"> & { readAt?: string | null })[]
-        | PaginatedResponse<Omit<NotificationItem, "read"> & { readAt?: string | null }>
-      >("/notifications");
+    const response = await api.get<
+      | (Omit<NotificationItem, "read"> & { readAt?: string | null })[]
+      | PaginatedResponse<Omit<NotificationItem, "read"> & { readAt?: string | null }>
+    >("/notifications");
     const notifications = Array.isArray(response) ? response : response.data;
     return notifications.map((notification) => ({
       ...notification,
@@ -630,31 +692,63 @@ export const notificationsApi = {
 export const settingsApi = {
   overview: () => api.get<SettingsOverview>("/settings"),
   teams: async () => {
-    const response = await api.get<Team[] | PaginatedResponse<Team>>(
-      "/settings/teams",
-      { pageSize: 100 },
-    );
+    const response = await api.get<Team[] | PaginatedResponse<Team>>("/settings/teams", {
+      pageSize: 100,
+    });
     return Array.isArray(response) ? response : response.data;
   },
   users: async () => {
-    const response = await api.get<UserRef[] | PaginatedResponse<UserRef>>(
-      "/settings/users",
-      { pageSize: 100 },
-    );
+    const response = await api.get<UserRef[] | PaginatedResponse<UserRef>>("/settings/users", {
+      pageSize: 100,
+    });
     return Array.isArray(response) ? response : response.data;
   },
   tags: async () => {
-    const response = await api.get<Tag[] | PaginatedResponse<Tag>>(
-      "/settings/tags",
-      { pageSize: 100 },
-    );
+    const response = await api.get<Tag[] | PaginatedResponse<Tag>>("/settings/tags", {
+      pageSize: 100,
+    });
     return Array.isArray(response) ? response : response.data;
   },
+  createTag: (data: { name: string; color?: string }) => api.post<Tag>("/settings/tags", data),
   update: (data: Partial<SettingsOverview>) => api.patch("/settings", data),
+};
+
+export const usersApi = {
+  list: (query?: { page?: number; pageSize?: number; search?: string; status?: string }) =>
+    api.get<PaginatedResponse<ManagedUser>>("/users", query),
+  invite: (data: {
+    name: string;
+    email: string;
+    phone?: string;
+    role: "ADMIN" | "MANAGER" | "CONSULTANT";
+    teamId?: string;
+  }) =>
+    api.post<{ user: ManagedUser; inviteUrl: string; expiresAt: string }>("/users/invite", data),
+  resendInvite: (id: string) =>
+    api.post<{ inviteUrl: string; expiresAt: string }>(`/users/${id}/resend-invite`),
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      phone: string;
+      role: "ADMIN" | "MANAGER" | "CONSULTANT";
+      teamId: string | null;
+    }>,
+  ) => api.patch<ManagedUser>(`/users/${id}`, data),
+  deactivate: (id: string) => api.post(`/users/${id}/deactivate`),
+  reactivate: (id: string) => api.post(`/users/${id}/reactivate`),
+  revokeSessions: (id: string) => api.post<{ revoked: number }>(`/users/${id}/revoke-sessions`),
+  inspectInvite: (token: string) =>
+    api.get<{ name: string; email: string; expiresAt: string }>(
+      `/users/invites/${encodeURIComponent(token)}`,
+    ),
+  acceptInvite: (token: string, data: { password: string; confirmPassword: string }) =>
+    api.post<{ ok: true }>(`/users/invites/${encodeURIComponent(token)}/accept`, data),
 };
 
 export const activitiesApi = {
   list: (query?: Record<string, QueryValue>) =>
-    api.get<Activity[]>("/activities", query),
+    api.get<PaginatedResponse<Activity>>("/activities", query),
+  history: (dealId: string, page = 1, pageSize = 20) =>
+    api.get<PaginatedResponse<Activity>>("/activities/timeline", { dealId, page, pageSize }),
 };
-

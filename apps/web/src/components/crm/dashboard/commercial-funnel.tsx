@@ -61,9 +61,7 @@ export function CommercialFunnel({
                   key={stage.id}
                   type="button"
                   className="grid w-full grid-cols-[96px_1fr_48px] items-center gap-2 text-left sm:grid-cols-[112px_1fr_54px]"
-                  onClick={() =>
-                    router.push(`/pipelines/${stage.pipelineId}?stageId=${stage.id}`)
-                  }
+                  onClick={() => router.push(`/pipelines/${stage.pipelineId}?stageId=${stage.id}`)}
                 >
                   <span className="truncate text-xs text-muted-foreground">{stage.label}</span>
                   <div className="h-8 overflow-hidden rounded-lg bg-muted">

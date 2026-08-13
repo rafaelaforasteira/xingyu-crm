@@ -89,6 +89,7 @@ function pipelineResult() {
     favorite: false,
     position: 0,
     archived: false,
+    accessMode: "ORGANIZATION" as const,
     defaultTeamId: null,
     defaultOwnerId: null,
     createdById: userId,
@@ -268,7 +269,7 @@ describe("PipelinesService stage management", () => {
 
   it("blocks deletion when a stage has a deal and no target stage", async () => {
     prisma.pipelineStage.findFirst.mockResolvedValue(stage("stage-source", { isInitial: false }));
-    prisma.pipelineStage.count.mockResolvedValue(1);
+    prisma.pipelineStage.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
     prisma.deal.findMany.mockResolvedValue([{ id: "deal-1" }]);
 
     await expect(
@@ -298,7 +299,7 @@ describe("PipelinesService stage management", () => {
       deletedAt: new Date("2026-01-02T00:00:00.000Z"),
     };
     prisma.pipelineStage.findFirst.mockResolvedValueOnce(source).mockResolvedValueOnce(target);
-    prisma.pipelineStage.count.mockResolvedValue(1);
+    prisma.pipelineStage.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
     prisma.pipelineStage.findMany.mockResolvedValue([{ id: target.id }]);
     prisma.pipelineStage.update.mockResolvedValueOnce(removed).mockResolvedValueOnce(target);
     prisma.deal.findMany.mockResolvedValue([{ id: "deal-1" }, { id: "deal-2" }]);
@@ -358,6 +359,47 @@ describe("PipelinesService stage management", () => {
         isInitial: false,
         deletedAt: expect.any(Date),
       }),
+    });
+  });
+
+  it("rejects duplicate stage names case-insensitively within the pipeline", async () => {
+    prisma.pipelineStage.findFirst.mockResolvedValue(stage("stage-existing", { name: "Contato" }));
+
+    await expect(
+      service.addStage(organizationId, pipelineId, { name: " contato ", type: "OPEN" }, userId),
+    ).rejects.toThrow(
+      new ConflictException("A stage with this name already exists in the pipeline"),
+    );
+
+    expect(prisma.pipelineStage.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps at least one active stage", async () => {
+    prisma.pipelineStage.findFirst.mockResolvedValue(stage("stage-only"));
+    prisma.pipelineStage.count.mockResolvedValue(1);
+
+    await expect(
+      service.removeStage(organizationId, pipelineId, "stage-only", {}, userId),
+    ).rejects.toThrow(new ConflictException("Pipeline must keep at least one active stage"));
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("promotes the first remaining open stage when deleting the initial stage", async () => {
+    const source = stage("stage-source", { isInitial: true });
+    const replacement = stage("stage-replacement", { position: 1 });
+    prisma.pipelineStage.findFirst.mockResolvedValueOnce(source).mockResolvedValueOnce(replacement);
+    prisma.pipelineStage.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
+    prisma.deal.findMany.mockResolvedValue([]);
+    prisma.pipelineStage.findMany.mockResolvedValue([{ id: replacement.id }]);
+    prisma.pipelineStage.update.mockResolvedValue(source);
+    prisma.auditLog.create.mockResolvedValue({});
+
+    await service.removeStage(organizationId, pipelineId, source.id, {}, userId);
+
+    expect(prisma.pipelineStage.update).toHaveBeenCalledWith({
+      where: { id: replacement.id },
+      data: { isInitial: true },
     });
   });
 });

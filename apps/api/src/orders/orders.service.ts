@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
@@ -14,7 +15,45 @@ import {
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: QueryOrdersDto) {
+  private async validateRelations(
+    organizationId: string,
+    ids: { contactId?: string; companyId?: string; dealId?: string; ownerId?: string },
+  ) {
+    const [contact, company, deal, owner] = await Promise.all([
+      ids.contactId
+        ? this.prisma.contact.findFirst({
+            where: { id: ids.contactId, organizationId, ...notDeleted },
+            select: { id: true },
+          })
+        : null,
+      ids.companyId
+        ? this.prisma.company.findFirst({
+            where: { id: ids.companyId, organizationId, ...notDeleted },
+            select: { id: true },
+          })
+        : null,
+      ids.dealId
+        ? this.prisma.deal.findFirst({
+            where: { id: ids.dealId, organizationId, ...notDeleted },
+            select: { id: true },
+          })
+        : null,
+      ids.ownerId
+        ? this.prisma.user.findFirst({
+            where: { id: ids.ownerId, organizationId, ...notDeleted },
+            select: { id: true },
+          })
+        : null,
+    ]);
+    const invalid =
+      (ids.contactId && !contact && "Contato") ||
+      (ids.companyId && !company && "Empresa") ||
+      (ids.dealId && !deal && "Negociação") ||
+      (ids.ownerId && !owner && "Responsável");
+    if (invalid) throw new BadRequestException(`${invalid} inválido`);
+  }
+
+  async findAll(organizationId: string, query: QueryOrdersDto, allowedPipelineIds?: string[] | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
@@ -25,6 +64,8 @@ export class OrdersService {
       ...(query.contactId ? { contactId: query.contactId } : {}),
       ...(query.companyId ? { companyId: query.companyId } : {}),
       ...(query.ownerId ? { ownerId: query.ownerId } : {}),
+      ...(query.dealId ? { dealId: query.dealId } : {}),
+      ...(allowedPipelineIds ? { AND: [{ OR: [{ dealId: null }, { deal: { pipelineId: { in: allowedPipelineIds } } }] }] } : {}),
       ...(query.search
         ? {
             OR: [
@@ -39,13 +80,15 @@ export class OrdersService {
         where,
         skip,
         take,
-        orderBy: { [query.sortBy ?? "updatedAt"]: query.sortOrder ?? "desc" },
+        orderBy: { [query.sortBy ?? "orderedAt"]: query.sortOrder ?? "desc" },
         include: {
           contact: { select: { id: true, firstName: true, lastName: true } },
           company: { select: { id: true, legalName: true } },
           items: { include: { product: true } },
           payments: true,
           shipments: true,
+          attributions: { orderBy: { createdAt: "asc" } },
+          events: { orderBy: { occurredAt: "desc" } },
         },
       }),
       this.prisma.order.count({ where }),
@@ -63,6 +106,8 @@ export class OrdersService {
         items: { include: { product: true } },
         payments: true,
         shipments: true,
+        attributions: { orderBy: { createdAt: "asc" } },
+        events: { orderBy: { occurredAt: "desc" } },
       },
     });
     if (!order) throw new NotFoundException(`Order ${id} not found`);
@@ -70,8 +115,19 @@ export class OrdersService {
   }
 
   async create(organizationId: string, dto: CreateOrderDto, userId: string) {
-    const { items, total, ...data } = dto as CreateOrderDto & { total?: number };
-    const number = `ORD-${Date.now()}`;
+    const { items, total, customerSnapshot, addressSnapshot, trackingSnapshot, ...data } = dto;
+    const number = data.number?.trim() || data.externalName?.trim() || `ORD-${Date.now()}`;
+    await this.validateRelations(organizationId, {
+      contactId: data.contactId,
+      companyId: data.companyId,
+      dealId: data.dealId,
+      ownerId: data.ownerId ?? userId,
+    });
+    const existingOrders = data.contactId
+      ? await this.prisma.order.count({
+          where: { organizationId, contactId: data.contactId, ...notDeleted },
+        })
+      : 0;
     return this.prisma.order.create({
       data: {
         contactId: data.contactId,
@@ -80,16 +136,59 @@ export class OrdersService {
         observations: data.notes,
         organizationId,
         number,
+        orderedAt: data.orderedAt ? new Date(data.orderedAt) : undefined,
+        channel: data.channel,
+        source: data.source,
+        campaign: data.campaign,
         status: (data.status as never) ?? "ORDER_PLACED",
         ownerId: data.ownerId ?? userId,
+        currency: data.currency ?? "BRL",
+        coupon: data.coupon,
+        externalId: data.externalId,
+        externalName: data.externalName,
+        externalUrl: data.externalUrl,
+        financialStatus: data.financialStatus,
+        paymentGateway: data.paymentGateway,
+        isFirstPurchase:
+          data.isFirstPurchase ?? (data.contactId ? existingOrders === 0 : undefined),
+        purchaseOrdinal: data.purchaseOrdinal ?? (data.contactId ? existingOrders + 1 : undefined),
+        customerNameSnapshot: customerSnapshot?.name,
+        customerEmailSnapshot: customerSnapshot?.email,
+        customerPhoneSnapshot: customerSnapshot?.phone,
+        recipientNameSnapshot: addressSnapshot?.recipientName,
+        address1Snapshot: addressSnapshot?.address1,
+        address2Snapshot: addressSnapshot?.address2,
+        addressNumberSnapshot: addressSnapshot?.number,
+        complementSnapshot: addressSnapshot?.complement,
+        neighborhoodSnapshot: addressSnapshot?.neighborhood,
+        citySnapshot: addressSnapshot?.city,
+        provinceSnapshot: addressSnapshot?.province,
+        postalCodeSnapshot: addressSnapshot?.postalCode,
+        countrySnapshot: addressSnapshot?.country,
+        countryCodeSnapshot: addressSnapshot?.countryCode,
+        formattedAddressSnapshot: addressSnapshot?.formattedAddress,
+        trackingSourceSnapshot: trackingSnapshot?.source,
+        trackingMediumSnapshot: trackingSnapshot?.medium,
+        trackingCampaignSnapshot: trackingSnapshot?.campaign,
+        trackingContentSnapshot: trackingSnapshot?.content,
+        trackingTermSnapshot: trackingSnapshot?.term,
+        landingPageSnapshot: trackingSnapshot?.landingPage,
+        referrerSnapshot: trackingSnapshot?.referrer,
         finalValue: total ?? 0,
-        grossValue: total ?? 0,
+        grossValue: data.grossValue ?? total ?? 0,
+        discount: data.discount ?? 0,
+        shippingCost: data.shippingCost ?? 0,
+        taxes: data.taxes ?? 0,
         ...(items?.length
           ? {
               items: {
                 create: items.map((item) => ({
                   productId: item.productId,
-                  productName: (item as { productName?: string }).productName ?? "Item",
+                  productName: item.productName ?? "Item",
+                  sku: item.sku,
+                  externalProductId: item.externalProductId,
+                  externalVariantId: item.externalVariantId,
+                  variantTitle: item.variantTitle,
                   quantity: item.quantity,
                   unitPrice: item.unitPrice ?? 0,
                   totalPrice: (item.unitPrice ?? 0) * item.quantity,
@@ -98,21 +197,73 @@ export class OrdersService {
             }
           : {}),
       },
-      include: { items: { include: { product: true } } },
+      include: {
+        items: { include: { product: true } },
+        payments: true,
+        attributions: true,
+        events: true,
+      },
     });
   }
 
   async update(organizationId: string, id: string, dto: UpdateOrderDto) {
     await this.findOne(organizationId, id);
-    const { items: _items, total, ...data } = dto as UpdateOrderDto & { total?: number };
+    await this.validateRelations(organizationId, {
+      contactId: dto.contactId,
+      companyId: dto.companyId,
+      dealId: dto.dealId,
+      ownerId: dto.ownerId,
+    });
+    const {
+      items: _items,
+      total,
+      customerSnapshot,
+      addressSnapshot,
+      trackingSnapshot,
+      ...data
+    } = dto;
     return this.prisma.order.update({
       where: { id },
       data: {
         ...data,
+        ...(customerSnapshot
+          ? {
+              customerNameSnapshot: customerSnapshot.name,
+              customerEmailSnapshot: customerSnapshot.email,
+              customerPhoneSnapshot: customerSnapshot.phone,
+            }
+          : {}),
+        ...(addressSnapshot
+          ? {
+              recipientNameSnapshot: addressSnapshot.recipientName,
+              address1Snapshot: addressSnapshot.address1,
+              address2Snapshot: addressSnapshot.address2,
+              addressNumberSnapshot: addressSnapshot.number,
+              complementSnapshot: addressSnapshot.complement,
+              neighborhoodSnapshot: addressSnapshot.neighborhood,
+              citySnapshot: addressSnapshot.city,
+              provinceSnapshot: addressSnapshot.province,
+              postalCodeSnapshot: addressSnapshot.postalCode,
+              countrySnapshot: addressSnapshot.country,
+              countryCodeSnapshot: addressSnapshot.countryCode,
+              formattedAddressSnapshot: addressSnapshot.formattedAddress,
+            }
+          : {}),
+        ...(trackingSnapshot
+          ? {
+              trackingSourceSnapshot: trackingSnapshot.source,
+              trackingMediumSnapshot: trackingSnapshot.medium,
+              trackingCampaignSnapshot: trackingSnapshot.campaign,
+              trackingContentSnapshot: trackingSnapshot.content,
+              trackingTermSnapshot: trackingSnapshot.term,
+              landingPageSnapshot: trackingSnapshot.landingPage,
+              referrerSnapshot: trackingSnapshot.referrer,
+            }
+          : {}),
         ...(total !== undefined ? { finalValue: total } : {}),
         ...(data.notes !== undefined ? { observations: data.notes, notes: undefined } : {}),
         status: data.status as never,
-      } as never,
+      } as Prisma.OrderUpdateInput,
       include: { items: { include: { product: true } }, payments: true, shipments: true },
     });
   }

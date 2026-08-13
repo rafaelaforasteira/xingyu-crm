@@ -8,9 +8,7 @@ import { cn } from "@/lib/utils";
 export function DashboardHeader() {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-        Visão geral da operação
-      </h1>
+      <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Visão geral da operação</h1>
       <div className="flex flex-wrap gap-2">
         <Link
           href="/tasks?new=1"

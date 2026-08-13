@@ -2,698 +2,563 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CheckSquare,
-  ChevronDown,
+  CalendarClock,
+  CheckCircle2,
+  ChevronLeft,
   ChevronRight,
+  Filter,
+  ListChecks,
   Plus,
-  Settings2,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
-import { pipelinesApi, settingsApi, tasksApi } from "@/lib/api";
-import { queryKeys } from "@/lib/query-keys";
-import { cn, formatTaskDue } from "@/lib/utils";
-import type { Task, TaskStatusDefinition } from "@/lib/types";
-import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog } from "@/components/ui/dialog";
-import { Label, Select } from "@/components/ui/form-controls";
+import { useAuth } from "@/components/auth/auth-provider";
+import { CreateTaskDialog, TaskStatusButton } from "@/components/crm/conversation/lead-tasks";
+import { ErrorBanner, PageHeader } from "@/components/crm/page-header";
 import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { Label, Select } from "@/components/ui/form-controls";
+import { Popover } from "@/components/ui/popover";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { pipelinesApi, pipelineStagesApi, settingsApi, tasksApi } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
+import type { Task, TaskStatusDefinition } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-const PRIORITY_LABEL: Record<string, string> = {
-  LOW: "Baixa",
-  MEDIUM: "Média",
-  HIGH: "Alta",
-  URGENT: "Urgente",
-};
+type Scope = "mine" | "team" | "all";
+type State = "open" | "completed";
+type Due = "" | "overdue" | "today" | "upcoming" | "no-date";
 
-function contactLabel(task: Task) {
-  const contact = task.contact as { name?: string; firstName?: string; lastName?: string } | null;
-  if (!contact) return "—";
-  if (contact.name) return contact.name;
-  return `${contact.firstName ?? ""} ${contact.lastName ?? ""}`.trim() || "—";
+const DUE_OPTIONS: Array<{ value: Due; label: string }> = [
+  { value: "", label: "Todas abertas" },
+  { value: "overdue", label: "Atrasadas" },
+  { value: "today", label: "Hoje" },
+  { value: "upcoming", label: "Próximas" },
+  { value: "no-date", label: "Sem data" },
+];
+
+function dueBucket(task: Task) {
+  if (!task.dueAt) return "no-date";
+  const due = new Date(task.dueAt);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  if (due < start) return "overdue";
+  if (due < end) return "today";
+  return "upcoming";
+}
+
+function dueLabel(task: Task) {
+  if (!task.dueAt) return "Sem data";
+  const due = new Date(task.dueAt);
+  const bucket = dueBucket(task);
+  const time = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(due);
+  if (bucket === "today") return `Hoje · ${time}`;
+  if (bucket === "overdue")
+    return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(due);
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(due);
+}
+
+function TaskRow({
+  task,
+  statuses,
+  pending,
+  onStatus,
+}: {
+  task: Task;
+  statuses: TaskStatusDefinition[];
+  pending: boolean;
+  onStatus: (status: TaskStatusDefinition) => void;
+}) {
+  const dealHref =
+    task.dealId && task.pipelineId ? `/pipelines/${task.pipelineId}/deals/${task.dealId}` : null;
+  const leadCode = task.deal && "leadSequence" in task.deal ? task.deal.leadSequence : null;
+  const contactName =
+    task.contact?.name ||
+    [task.contact?.firstName, task.contact?.lastName].filter(Boolean).join(" ");
+  const overdue = dueBucket(task) === "overdue" && task.statusDefinition?.category !== "DONE";
+  return (
+    <div className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)] gap-2 border-b border-border/60 px-3 py-3 last:border-0 sm:grid-cols-[32px_minmax(0,1fr)_minmax(110px,0.5fr)_120px] sm:items-center lg:px-4">
+      <TaskStatusButton task={task} statuses={statuses} pending={pending} onChange={onStatus} />
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium" title={task.title}>
+          {task.title}
+        </p>
+        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+          {dealHref ? (
+            <Link href={dealHref} className="font-medium text-primary hover:underline">
+              Lead #{String(leadCode ?? "—").padStart(4, "0")}
+            </Link>
+          ) : (
+            <span>Tarefa avulsa</span>
+          )}
+          {contactName ? (
+            <>
+              <span>·</span>
+              <span className="truncate">{contactName}</span>
+            </>
+          ) : null}
+          {task.pipeline?.name ? (
+            <>
+              <span>·</span>
+              <span className="truncate">{task.pipeline.name}</span>
+            </>
+          ) : null}
+          {task.stage?.name ? (
+            <>
+              <span>·</span>
+              <span className="truncate">{task.stage.name}</span>
+            </>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Avatar name={task.assignee?.name ?? "?"} src={task.assignee?.avatarUrl} size="sm" />
+        <span className="truncate text-xs">{task.assignee?.name ?? "Sem responsável"}</span>
+      </div>
+      <time
+        dateTime={task.dueAt ?? undefined}
+        className={cn("text-xs text-muted-foreground", overdue && "font-medium text-destructive")}
+      >
+        {dueLabel(task)}
+      </time>
+    </div>
+  );
 }
 
 export function TasksPage() {
-  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const queryClient = useQueryClient();
-  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
-  const [filters, setFilters] = React.useState({
-    assigneeId: "",
-    pipelineId: "",
-    priority: "",
-    overdue: false,
-    due: "",
-    search: "",
-  });
-  const [open, setOpen] = React.useState(false);
-  const [statusOpen, setStatusOpen] = React.useState(false);
-  const [draftStatusId, setDraftStatusId] = React.useState<string>("");
-  const [form, setForm] = React.useState({
-    title: "",
-    priority: "MEDIUM",
-    dueAt: "",
-    assigneeId: "",
-    dealId: "",
-    contactId: "",
-    pipelineId: "",
-    statusDefinitionId: "",
-  });
-  const [newStatusName, setNewStatusName] = React.useState("");
-  const [newStatusColor, setNewStatusColor] = React.useState("#64748B");
-  const [newStatusCategory, setNewStatusCategory] = React.useState("OPEN");
-
-  React.useEffect(() => {
-    if (searchParams.get("new") === "1") setOpen(true);
-    const overdue = searchParams.get("overdue") === "1";
-    const due = searchParams.get("view") === "today" ? "today" : "";
-    if (overdue || due) {
-      setFilters((current) => ({
-        ...current,
-        overdue: overdue || current.overdue,
-        due: due || current.due,
-      }));
-    }
-  }, [searchParams]);
-
-  const boardParams = React.useMemo(
-    () => ({
-      assigneeId: filters.assigneeId || undefined,
-      pipelineId: filters.pipelineId || undefined,
-      priority: filters.priority || undefined,
-      overdue: filters.overdue || undefined,
-      due: filters.due || undefined,
-      search: filters.search || undefined,
-      pageSize: 100,
-    }),
-    [filters],
+  const { user } = useAuth();
+  const scope = (params.get("scope") as Scope) || "mine";
+  const state = (params.get("state") as State) || "open";
+  const due = (params.get("due") as Due) || "";
+  const pipelineId = params.get("pipeline") || "";
+  const stageId = params.get("stage") || "";
+  const assigneeId = params.get("assignee") || "";
+  const statusId = params.get("status") || "";
+  const priority = params.get("priority") || "";
+  const page = Math.max(1, Number(params.get("page") || 1));
+  const [search, setSearch] = React.useState(params.get("q") || "");
+  const [debouncedSearch, setDebouncedSearch] = React.useState(search);
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+  const [createOpen, setCreateOpen] = React.useState(params.get("new") === "1");
+  const replace = React.useCallback(
+    (changes: Record<string, string | null>) => {
+      const next = new URLSearchParams(params.toString());
+      Object.entries(changes).forEach(([key, value]) =>
+        value ? next.set(key, value) : next.delete(key),
+      );
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [params, pathname, router],
   );
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search);
+      replace({ q: search || null, page: null });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [search, replace]);
 
-  const boardQuery = useQuery({
-    queryKey: queryKeys.tasks.board(boardParams),
-    queryFn: () => tasksApi.board(boardParams),
-    retry: false,
+  const taskQuery = useQuery({
+    queryKey: queryKeys.tasks.list({
+      scope,
+      state,
+      due,
+      pipelineId,
+      stageId,
+      assigneeId,
+      statusId,
+      priority,
+      q: debouncedSearch,
+      page,
+    }),
+    queryFn: () =>
+      tasksApi.list({
+        scope,
+        state,
+        due: due || undefined,
+        pipelineId: pipelineId || undefined,
+        stageId: stageId || undefined,
+        assigneeId: assigneeId || undefined,
+        statusDefinitionId: statusId || undefined,
+        priority: priority || undefined,
+        search: debouncedSearch || undefined,
+        page,
+        pageSize: 50,
+      }),
     placeholderData: (previous) => previous,
+    retry: false,
   });
-
   const statusesQuery = useQuery({
     queryKey: queryKeys.tasks.statuses,
     queryFn: () => tasksApi.statuses(),
     staleTime: 60_000,
   });
-
   const usersQuery = useQuery({
-    queryKey: ["settings", "users"],
+    queryKey: ["settings", "users", "tasks"],
     queryFn: () => settingsApi.users(),
     staleTime: 60_000,
   });
-
   const pipelinesQuery = useQuery({
     queryKey: queryKeys.pipelines.navigation,
     queryFn: () => pipelinesApi.navigation(),
     staleTime: 60_000,
   });
-
-  const invalidateTasks = () => {
+  const stagesQuery = useQuery({
+    queryKey: ["pipelines", pipelineId, "stages", "tasks"],
+    queryFn: () => pipelineStagesApi.list(pipelineId),
+    enabled: Boolean(pipelineId),
+    staleTime: 60_000,
+  });
+  const currentUser = (usersQuery.data ?? []).find((candidate) => candidate.id === user?.id);
+  const teamAvailable =
+    Boolean(currentUser?.teamId) && (user?.role === "ADMIN" || user?.role === "MANAGER");
+  const statuses = statusesQuery.data ?? [];
+  const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
   };
-
-  const createTask = useMutation({
-    mutationFn: () =>
-      tasksApi.create({
-        title: form.title,
-        priority: form.priority,
-        dueAt: form.dueAt || undefined,
-        assigneeId: form.assigneeId || undefined,
-        dealId: form.dealId || undefined,
-        contactId: form.contactId || undefined,
-        pipelineId: form.pipelineId || undefined,
-        statusDefinitionId:
-          form.statusDefinitionId || draftStatusId || undefined,
-      }),
-    onSuccess: () => {
-      invalidateTasks();
-      toast.success("Tarefa criada");
-      setOpen(false);
-      setForm({
-        title: "",
-        priority: "MEDIUM",
-        dueAt: "",
-        assigneeId: "",
-        dealId: "",
-        contactId: "",
-        pipelineId: "",
-        statusDefinitionId: "",
+  const statusMutation = useMutation({
+    mutationFn: ({ id, statusDefinitionId }: { id: string; statusDefinitionId: string }) =>
+      tasksApi.update(id, { statusDefinitionId }),
+    onMutate: async ({ id, statusDefinitionId }) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const snapshots = queryClient.getQueriesData({ queryKey: ["tasks"] });
+      queryClient.setQueriesData({ queryKey: ["tasks"] }, (old: unknown) => {
+        if (!old || typeof old !== "object" || !("data" in old)) return old;
+        return {
+          ...old,
+          data: (old as { data: Task[] }).data.map((task) =>
+            task.id === id
+              ? {
+                  ...task,
+                  statusDefinitionId,
+                  statusDefinition: statuses.find((item) => item.id === statusDefinitionId),
+                }
+              : task,
+          ),
+        };
       });
+      return snapshots;
     },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const patchTask = useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: string;
-      data: Parameters<typeof tasksApi.update>[1];
-    }) => tasksApi.update(id, data),
-    onSuccess: () => {
-      invalidateTasks();
-      toast.success("Tarefa atualizada");
+    onError: (error: Error, _variables, snapshots) => {
+      snapshots?.forEach(([key, value]) => queryClient.setQueryData(key, value));
+      toast.error(error.message);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onSettled: refresh,
   });
-
-  const completeTask = useMutation({
-    mutationFn: (id: string) => tasksApi.complete(id),
-    onSuccess: () => {
-      invalidateTasks();
-      toast.success("Tarefa concluída");
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const createStatus = useMutation({
-    mutationFn: () =>
-      tasksApi.createStatus({
-        name: newStatusName,
-        color: newStatusColor,
-        category: newStatusCategory,
-      }),
-    onSuccess: () => {
-      invalidateTasks();
-      toast.success("Status criado");
-      setNewStatusName("");
-      setStatusOpen(false);
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const openCreateForStatus = (status: TaskStatusDefinition) => {
-    setDraftStatusId(status.id);
-    setForm((current) => ({ ...current, statusDefinitionId: status.id }));
-    setOpen(true);
-  };
-
-  const groups = boardQuery.data ?? [];
+  const tasks = taskQuery.data?.data ?? [];
+  const groups =
+    state === "completed"
+      ? [{ key: "completed", label: "Concluídas", tasks }]
+      : [
+          {
+            key: "overdue",
+            label: "Atrasadas",
+            tasks: tasks.filter((task) => dueBucket(task) === "overdue"),
+          },
+          {
+            key: "today",
+            label: "Hoje",
+            tasks: tasks.filter((task) => dueBucket(task) === "today"),
+          },
+          {
+            key: "upcoming",
+            label: "Próximas",
+            tasks: tasks.filter((task) => dueBucket(task) === "upcoming"),
+          },
+          {
+            key: "no-date",
+            label: "Sem data",
+            tasks: tasks.filter((task) => dueBucket(task) === "no-date"),
+          },
+        ];
+  const activeFilters = [pipelineId, stageId, assigneeId, statusId, priority].filter(
+    Boolean,
+  ).length;
 
   return (
     <div data-testid="tasks-page">
       <PageHeader
         title="Tarefas"
-        description="Lista operacional agrupada por status personalizáveis."
+        description="Organize e acompanhe as atividades da operação."
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setStatusOpen(true)}>
-              <Settings2 className="h-4 w-4" />
-              Status
-            </Button>
-            <Button
-              onClick={() => {
-                setDraftStatusId(statusesQuery.data?.[0]?.id ?? "");
-                setOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Nova tarefa
-            </Button>
-          </div>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Nova tarefa
+          </Button>
         }
       />
-      {boardQuery.error ? (
-        <ErrorBanner message={(boardQuery.error as Error).message} />
-      ) : null}
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Input
-          placeholder="Buscar tarefas…"
-          value={filters.search}
-          onChange={(event) =>
-            setFilters((current) => ({ ...current, search: event.target.value }))
-          }
-          className="sm:max-w-xs"
-          aria-label="Buscar tarefas"
-        />
-        <Select
-          aria-label="Filtrar por responsável"
-          className="w-44"
-          value={filters.assigneeId}
-          onChange={(event) =>
-            setFilters((current) => ({
-              ...current,
-              assigneeId: event.target.value,
-            }))
-          }
+      <div className="space-y-4">
+        <Tabs
+          value={scope}
+          onValueChange={(value) => replace({ scope: value === "mine" ? null : value, page: null })}
         >
-          <option value="">Todas consultoras</option>
-          {(usersQuery.data ?? []).map((user) => (
-            <option key={user.id} value={user.id}>
-              {user.name}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Filtrar por pipeline"
-          className="w-44"
-          value={filters.pipelineId}
-          onChange={(event) =>
-            setFilters((current) => ({
-              ...current,
-              pipelineId: event.target.value,
-            }))
-          }
-        >
-          <option value="">Todos pipelines</option>
-          {(pipelinesQuery.data ?? []).map((pipeline) => (
-            <option key={pipeline.id} value={pipeline.id}>
-              {pipeline.name}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Filtrar por prioridade"
-          className="w-36"
-          value={filters.priority}
-          onChange={(event) =>
-            setFilters((current) => ({
-              ...current,
-              priority: event.target.value,
-            }))
-          }
-        >
-          <option value="">Prioridade</option>
-          <option value="LOW">Baixa</option>
-          <option value="MEDIUM">Média</option>
-          <option value="HIGH">Alta</option>
-          <option value="URGENT">Urgente</option>
-        </Select>
-        <Select
-          aria-label="Filtrar por vencimento"
-          className="w-36"
-          value={filters.due}
-          onChange={(event) =>
-            setFilters((current) => ({
-              ...current,
-              due: event.target.value,
-              overdue: false,
-            }))
-          }
-        >
-          <option value="">Vencimento</option>
-          <option value="today">Hoje</option>
-          <option value="week">Esta semana</option>
-        </Select>
-        <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={filters.overdue}
-            onChange={(event) =>
-              setFilters((current) => ({
-                ...current,
-                overdue: event.target.checked,
-                due: "",
-              }))
-            }
-          />
-          Vencidas
-        </label>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-        <div className="hidden grid-cols-[minmax(16rem,1.6fr)_7rem_9rem_8rem_9rem_9rem_8rem_7rem] gap-2 border-b border-border bg-muted/40 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
-          <span>Nome</span>
-          <span>Prioridade</span>
-          <span>Responsável</span>
-          <span>Vencimento</span>
-          <span>Lead</span>
-          <span>Pipeline</span>
-          <span>Etapa</span>
-          <span>Ações</span>
-        </div>
-
-        {boardQuery.isLoading ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-12 w-full" />
-            ))}
-          </div>
-        ) : null}
-
-        {!boardQuery.isLoading && groups.every((group) => group.count === 0) ? (
-          <div className="p-6">
-            <EmptyState icon={CheckSquare} title="Nenhuma tarefa" />
-          </div>
-        ) : null}
-
-        {groups.map((group) => {
-          const isCollapsed = collapsed[group.status.id];
-          return (
-            <section
-              key={group.status.id}
-              data-testid={`task-group-${group.status.slug}`}
-              className="border-b border-border/70 last:border-0"
+          <TabsList>
+            <TabsTrigger value="mine">Minhas tarefas</TabsTrigger>
+            <TabsTrigger value="team" className={!teamAvailable ? "hidden" : undefined}>
+              Equipe
+            </TabsTrigger>
+            <TabsTrigger value="all">Todas</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border bg-card p-1">
+            <Button
+              size="sm"
+              variant={state === "open" ? "secondary" : "ghost"}
+              onClick={() => replace({ state: null, due: null, page: null })}
             >
-              <div className="flex items-center gap-2 bg-muted/20 px-3 py-2">
-                <button
-                  type="button"
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                  onClick={() =>
-                    setCollapsed((current) => ({
-                      ...current,
-                      [group.status.id]: !current[group.status.id],
-                    }))
-                  }
-                  aria-expanded={!isCollapsed}
-                >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: group.status.color }}
-                    aria-hidden
-                  />
-                  <span className="truncate text-xs font-bold uppercase tracking-wide">
-                    {group.status.name}
-                  </span>
-                  <Badge variant="outline" className="font-normal">
-                    {group.count}
-                  </Badge>
-                </button>
+              Abertas
+            </Button>
+            <Button
+              size="sm"
+              variant={state === "completed" ? "secondary" : "ghost"}
+              onClick={() => replace({ state: "completed", due: null, page: null })}
+            >
+              Concluídas
+            </Button>
+          </div>
+          {state === "open"
+            ? DUE_OPTIONS.map((option) => (
                 <Button
+                  key={option.value || "all"}
                   size="sm"
-                  variant="ghost"
-                  onClick={() => openCreateForStatus(group.status)}
+                  variant={due === option.value ? "secondary" : "ghost"}
+                  onClick={() => replace({ due: option.value || null, page: null })}
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Adicionar
+                  {option.label}
                 </Button>
-              </div>
-
-              {!isCollapsed
-                ? group.tasks.map((task) => (
-                    <div
-                      key={task.id}
-                      data-testid={`task-row-${task.id}`}
-                      className="grid gap-2 border-t border-border/50 px-3 py-2.5 text-sm lg:grid-cols-[minmax(16rem,1.6fr)_7rem_9rem_8rem_9rem_9rem_8rem_7rem] lg:items-center lg:px-4"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{task.title}</p>
-                        <p className="truncate text-xs text-muted-foreground lg:hidden">
-                          {contactLabel(task)} · {task.pipeline?.name ?? "—"}
-                        </p>
-                      </div>
-                      <Select
-                        aria-label={`Prioridade de ${task.title}`}
-                        className="h-8 text-xs"
-                        value={String(task.priority ?? "MEDIUM")}
-                        onChange={(event) =>
-                          patchTask.mutate({
-                            id: task.id,
-                            data: { priority: event.target.value },
-                          })
-                        }
-                      >
-                        {Object.entries(PRIORITY_LABEL).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </Select>
-                      <div className="flex items-center gap-2 truncate">
-                        <Avatar name={task.assignee?.name ?? "?"} size="sm" />
-                        <span className="truncate text-xs">
-                          {task.assignee?.name ?? "—"}
-                        </span>
-                      </div>
-                      <span
-                        className={cn(
-                          "text-xs",
-                          task.dueAt &&
-                            new Date(task.dueAt) < new Date() &&
-                            task.status !== "COMPLETED" &&
-                            "font-medium text-destructive",
-                        )}
-                      >
-                        {formatTaskDue(task.dueAt)}
-                      </span>
-                      <span className="truncate text-xs">
-                        {task.contactId ? (
-                          <Link
-                            href={`/contacts/${task.contactId}`}
-                            className="text-primary hover:underline"
-                          >
-                            {contactLabel(task)}
-                          </Link>
-                        ) : (
-                          "—"
-                        )}
-                      </span>
-                      <span className="truncate text-xs">
-                        {task.pipeline?.name ?? "—"}
-                      </span>
-                      <span className="truncate text-xs">
-                        {task.stage?.name ?? "—"}
-                      </span>
-                      <div className="flex flex-wrap gap-1">
-                        <Select
-                          aria-label={`Status de ${task.title}`}
-                          className="h-8 min-w-[7rem] text-xs"
-                          value={task.statusDefinitionId ?? ""}
-                          onChange={(event) =>
-                            patchTask.mutate({
-                              id: task.id,
-                              data: { statusDefinitionId: event.target.value },
-                            })
-                          }
-                        >
-                          {(statusesQuery.data ?? []).map((status) => (
-                            <option key={status.id} value={status.id}>
-                              {status.name}
-                            </option>
-                          ))}
-                        </Select>
-                        {task.status !== "COMPLETED" ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => completeTask.mutate(task.id)}
-                          >
-                            Concluir
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))
-                : null}
-            </section>
-          );
-        })}
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen} title="Nova tarefa">
-        <form
-          className="space-y-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            createTask.mutate();
-          }}
-        >
-          <div>
-            <Label htmlFor="task-title">Nome</Label>
+              ))
+            : null}
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              id="task-title"
-              value={form.title}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, title: event.target.value }))
-              }
-              required
+              className="pl-9"
+              placeholder="Buscar tarefas..."
+              aria-label="Buscar tarefas"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="task-status">Status</Label>
-              <Select
-                id="task-status"
-                value={form.statusDefinitionId || draftStatusId}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    statusDefinitionId: event.target.value,
-                  }))
-                }
-              >
-                {(statusesQuery.data ?? []).map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="task-priority">Prioridade</Label>
-              <Select
-                id="task-priority"
-                value={form.priority}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    priority: event.target.value,
-                  }))
-                }
-              >
-                {Object.entries(PRIORITY_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="task-assignee">Responsável</Label>
-              <Select
-                id="task-assignee"
-                value={form.assigneeId}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    assigneeId: event.target.value,
-                  }))
-                }
-              >
-                <option value="">Eu (padrão)</option>
-                {(usersQuery.data ?? []).map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="task-due">Vencimento</Label>
-              <Input
-                id="task-due"
-                type="datetime-local"
-                value={form.dueAt}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, dueAt: event.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="task-pipeline">Pipeline</Label>
-              <Select
-                id="task-pipeline"
-                value={form.pipelineId}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    pipelineId: event.target.value,
-                  }))
-                }
-              >
-                <option value="">Opcional</option>
-                {(pipelinesQuery.data ?? []).map((pipeline) => (
-                  <option key={pipeline.id} value={pipeline.id}>
-                    {pipeline.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="task-deal">Deal ID</Label>
-              <Input
-                id="task-deal"
-                placeholder="Opcional — preenche pipeline/etapa"
-                value={form.dealId}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, dealId: event.target.value }))
-                }
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={createTask.isPending || !form.title.trim()}>
-              Criar
-            </Button>
-          </div>
-        </form>
-      </Dialog>
-
-      <Dialog open={statusOpen} onOpenChange={setStatusOpen} title="Status personalizados">
-        <div className="space-y-4">
-          <ul className="space-y-2">
-            {(statusesQuery.data ?? []).map((status) => (
-              <li
-                key={status.id}
-                className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: status.color }}
-                />
-                <span className="font-semibold uppercase">{status.name}</span>
-                <Badge variant="outline">{status.category}</Badge>
-              </li>
-            ))}
-          </ul>
-          <form
-            className="space-y-3 border-t border-border pt-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              createStatus.mutate();
-            }}
+          <Popover
+            open={filtersOpen}
+            onOpenChange={setFiltersOpen}
+            align="end"
+            trigger={
+              <Button variant="outline" onClick={() => setFiltersOpen((value) => !value)}>
+                <Filter className="h-4 w-4" />
+                Filtros{activeFilters ? <Badge className="ml-1">{activeFilters}</Badge> : null}
+              </Button>
+            }
           >
-            <div>
-              <Label htmlFor="status-name">Novo status</Label>
-              <Input
-                id="status-name"
-                value={newStatusName}
-                onChange={(event) => setNewStatusName(event.target.value)}
-                placeholder="Ex.: AGUARDANDO CLIENTE"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3 p-3">
               <div>
-                <Label htmlFor="status-color">Cor</Label>
-                <Input
-                  id="status-color"
-                  type="color"
-                  value={newStatusColor}
-                  onChange={(event) => setNewStatusColor(event.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="status-category">Categoria</Label>
+                <Label>Pipeline</Label>
                 <Select
-                  id="status-category"
-                  value={newStatusCategory}
-                  onChange={(event) => setNewStatusCategory(event.target.value)}
+                  value={pipelineId}
+                  onChange={(event) =>
+                    replace({ pipeline: event.target.value || null, stage: null, page: null })
+                  }
                 >
-                  <option value="OPEN">Aberto</option>
-                  <option value="IN_PROGRESS">Em andamento</option>
-                  <option value="DONE">Concluído</option>
+                  <option value="">Todos acessíveis</option>
+                  {(pipelinesQuery.data ?? []).map((pipeline) => (
+                    <option key={pipeline.id} value={pipeline.id}>
+                      {pipeline.name}
+                    </option>
+                  ))}
                 </Select>
               </div>
+              <div>
+                <Label>Etapa</Label>
+                <Select
+                  disabled={!pipelineId}
+                  value={stageId}
+                  onChange={(event) => replace({ stage: event.target.value || null, page: null })}
+                >
+                  <option value="">Todas</option>
+                  {(stagesQuery.data ?? []).map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Responsável</Label>
+                <Select
+                  value={assigneeId}
+                  onChange={(event) =>
+                    replace({ assignee: event.target.value || null, page: null })
+                  }
+                >
+                  <option value="">Todos permitidos</option>
+                  {(usersQuery.data ?? []).map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select
+                  value={statusId}
+                  onChange={(event) => replace({ status: event.target.value || null, page: null })}
+                >
+                  <option value="">Todos</option>
+                  {statuses.map((status) => (
+                    <option key={status.id} value={status.id}>
+                      {status.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Prioridade</Label>
+                <Select
+                  value={priority}
+                  onChange={(event) =>
+                    replace({ priority: event.target.value || null, page: null })
+                  }
+                >
+                  <option value="">Todas</option>
+                  <option value="LOW">Baixa</option>
+                  <option value="MEDIUM">Média</option>
+                  <option value="HIGH">Alta</option>
+                  <option value="URGENT">Urgente</option>
+                </Select>
+              </div>
+              {activeFilters ? (
+                <Button
+                  className="w-full"
+                  variant="ghost"
+                  onClick={() =>
+                    replace({
+                      pipeline: null,
+                      stage: null,
+                      assignee: null,
+                      status: null,
+                      priority: null,
+                      page: null,
+                    })
+                  }
+                >
+                  Limpar filtros
+                </Button>
+              ) : null}
             </div>
-            <Button type="submit" disabled={!newStatusName.trim() || createStatus.isPending}>
-              Adicionar status
-            </Button>
-          </form>
+          </Popover>
         </div>
-      </Dialog>
+        {taskQuery.error ? <ErrorBanner message={(taskQuery.error as Error).message} /> : null}
+        {taskQuery.isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : null}
+        {!taskQuery.isLoading && !tasks.length ? (
+          <EmptyState
+            icon={state === "completed" ? CheckCircle2 : CalendarClock}
+            title={state === "completed" ? "Nenhuma tarefa concluída" : "Nenhuma tarefa por aqui"}
+            description={
+              scope === "team"
+                ? "Sua equipe não possui tarefas neste recorte."
+                : "Ajuste os filtros ou crie uma nova tarefa."
+            }
+            actionLabel="Nova tarefa"
+            onAction={() => setCreateOpen(true)}
+          />
+        ) : null}
+        {groups
+          .filter((group) => group.tasks.length)
+          .map((group) => (
+            <section
+              key={group.key}
+              className="overflow-hidden rounded-xl border border-border bg-card shadow-soft"
+            >
+              <header className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2.5">
+                <ListChecks className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-xs font-bold uppercase tracking-wide">{group.label}</h2>
+                <Badge variant="outline">{group.tasks.length}</Badge>
+              </header>
+              {group.tasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  statuses={statuses}
+                  pending={statusMutation.isPending && statusMutation.variables?.id === task.id}
+                  onStatus={(status) =>
+                    statusMutation.mutate({ id: task.id, statusDefinitionId: status.id })
+                  }
+                />
+              ))}
+            </section>
+          ))}
+        {(taskQuery.data?.meta.totalPages ?? 1) > 1 ? (
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>
+              Página {page} de {taskQuery.data?.meta.totalPages}
+            </span>
+            <div className="flex gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                disabled={page <= 1}
+                onClick={() => replace({ page: String(page - 1) })}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                disabled={page >= (taskQuery.data?.meta.totalPages ?? 1)}
+                onClick={() => replace({ page: String(page + 1) })}
+                aria-label="Próxima página"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <CreateTaskDialog
+        open={createOpen}
+        onOpenChange={(value) => {
+          setCreateOpen(value);
+          if (!value) replace({ new: null });
+        }}
+        links={{}}
+        owner={currentUser ?? undefined}
+        statuses={statuses}
+        users={usersQuery.data ?? []}
+        description="Crie uma tarefa avulsa ou vincule-a depois a um lead."
+        onCreated={() => {
+          refresh();
+          toast.success("Tarefa criada");
+        }}
+      />
     </div>
   );
 }

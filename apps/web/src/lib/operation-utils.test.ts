@@ -176,7 +176,7 @@ describe("navigation mode", () => {
     expect(FULL_NAV_GROUPS.some((g) => g.items.some((i) => i.href === "/dashboard"))).toBe(true);
     expect(CORE_OPERATION_NAV_GROUPS).toHaveLength(1);
     expect(CORE_OPERATION_NAV_GROUPS[0]?.items.map((i) => i.href)).toEqual([
-      "/operacao",
+      "/pipelines",
       "/settings",
     ]);
   });

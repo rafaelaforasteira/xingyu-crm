@@ -6,6 +6,7 @@ import {
   ArrayUnique,
   IsArray,
   IsEnum,
+  IsEmail,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -93,6 +94,26 @@ export class CreateDealDto {
 }
 
 export class UpdateDealDto extends PartialType(CreateDealDto) {}
+
+export class LookupManualLeadDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() phone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;
+  @ApiProperty() @IsString() @IsNotEmpty() pipelineId!: string;
+}
+
+export class CreateManualLeadDto {
+  @ApiProperty() @IsString() @IsNotEmpty() phone!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() @MaxLength(200) contactName!: string;
+  @ApiPropertyOptional() @IsOptional() @IsEmail() email?: string;
+  @ApiProperty() @IsString() @IsNotEmpty() pipelineId!: string;
+  @ApiProperty() @IsString() @IsNotEmpty() stageId!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() ownerId?: string;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(0) value?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) informedSource?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(5000) note?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) taskTitle?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() taskDueAt?: string;
+}
 
 export class QueryDealsDto extends PaginationQueryDto {
   @ApiPropertyOptional()

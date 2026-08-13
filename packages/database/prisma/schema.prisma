@@ -19,6 +19,25 @@ enum AuthRole {
   CONSULTANT
 }
 
+enum GoalScope {
+  ORGANIZATION
+  TEAM
+  USER
+}
+
+enum GoalMetric {
+  REVENUE
+  ORDERS
+  NEW_CUSTOMERS
+  REPEAT_CUSTOMERS
+}
+
+enum ChannelAccessMode {
+  ORGANIZATION
+  PIPELINE
+  PERSONAL
+}
+
 enum ContactStatus {
   LEAD
   QUALIFIED
@@ -55,6 +74,11 @@ enum PipelineStageType {
   OPEN
   WON
   LOST
+}
+
+enum PipelineAccessMode {
+  ORGANIZATION
+  RESTRICTED
 }
 
 enum TaskStatus {
@@ -261,6 +285,9 @@ enum ActivityType {
   DEAL_CREATED
   TASK_CREATED
   TASK_COMPLETED
+  TASK_REOPENED
+  FILE_SAVED
+  FILE_REMOVED
   ORDER_CREATED
   PAYMENT_APPROVED
   ORDER_SHIPPED
@@ -285,15 +312,15 @@ enum LifecycleActionType {
 }
 
 model Organization {
-  id        String    @id @default(cuid())
-  name      String
-  slug      String    @unique
-  timezone  String    @default("America/Sao_Paulo")
-  currency  String    @default("BRL")
-  nextLeadSequence Int    @default(1)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  timezone         String    @default("America/Sao_Paulo")
+  currency         String    @default("BRL")
+  nextLeadSequence Int       @default(1)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
 
   users                      User[]
   teams                      Team[]
@@ -310,6 +337,8 @@ model Organization {
   conversations              Conversation[]
   channels                   Channel[]
   pipelineChannelConnections PipelineChannelConnection[]
+  pipelineTeamAccesses       PipelineTeamAccess[]
+  pipelineUserAccesses       PipelineUserAccess[]
   orders                     Order[]
   products                   Product[]
   collections                ProductCollection[]
@@ -322,6 +351,9 @@ model Organization {
   attributions               Attribution[]
   lifecycleActions           LifecycleAction[]
   taskStatusDefinitions      TaskStatusDefinition[]
+  leadFiles                  LeadFile[]
+  userInvites                UserInvite[]
+  goals                      Goal[]
 }
 
 model Role {
@@ -358,6 +390,8 @@ model Team {
   tasks                      Task[]
   defaultPipelines           Pipeline[]                  @relation("PipelineDefaultTeam")
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultTeam")
+  pipelineAccesses           PipelineTeamAccess[]
+  goals                      Goal[]
 
   @@index([organizationId])
 }
@@ -383,11 +417,11 @@ model User {
   updatedAt      DateTime   @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  team         Team?        @relation(fields: [teamId], references: [id])
-  role         Role?        @relation(fields: [roleId], references: [id])
-  manager      User?        @relation("UserManager", fields: [managerId], references: [id])
-  reports      User[]       @relation("UserManager")
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  team         Team?         @relation(fields: [teamId], references: [id])
+  role         Role?         @relation(fields: [roleId], references: [id])
+  manager      User?         @relation("UserManager", fields: [managerId], references: [id])
+  reports      User[]        @relation("UserManager")
   sessions     UserSession[]
 
   ownedContacts              Contact[]                   @relation("ContactOwner")
@@ -406,6 +440,13 @@ model User {
   defaultPipelines           Pipeline[]                  @relation("PipelineDefaultOwner")
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultOwner")
   lifecycleActions           LifecycleAction[]           @relation("LifecycleActionActor")
+  savedLeadFiles             LeadFile[]                  @relation("LeadFileSavedBy")
+  pipelineAccesses           PipelineUserAccess[]
+  channelOwnerships          Channel[]                   @relation("ChannelOwner")
+  invites                    UserInvite[]                @relation("InvitedUser")
+  createdInvites             UserInvite[]                @relation("InviteCreator")
+  goals                      Goal[]                      @relation("GoalTargetUser")
+  createdGoals               Goal[]                      @relation("GoalCreatedBy")
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -413,6 +454,55 @@ model User {
   @@index([status])
   @@index([email])
   @@index([authRole])
+}
+
+model Goal {
+  id              String     @id @default(cuid())
+  organizationId  String
+  metric          GoalMetric
+  scope           GoalScope
+  teamId          String?
+  userId          String?
+  pipelineId      String?
+  targetValue     Decimal    @db.Decimal(14, 2)
+  periodStart     DateTime
+  periodEnd       DateTime
+  createdByUserId String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  archivedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team?        @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  user         User?        @relation("GoalTargetUser", fields: [userId], references: [id], onDelete: Restrict)
+  pipeline     Pipeline?    @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  createdBy    User         @relation("GoalCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, periodStart, periodEnd])
+  @@index([organizationId, scope, metric])
+  @@index([teamId])
+  @@index([userId])
+  @@index([pipelineId])
+}
+
+model UserInvite {
+  id              String    @id @default(cuid())
+  organizationId  String
+  userId          String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  usedAt          DateTime?
+  revokedAt       DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation("InvitedUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("InviteCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, userId])
+  @@index([userId, usedAt, revokedAt])
+  @@index([expiresAt])
 }
 
 model UserSession {
@@ -545,22 +635,23 @@ model Contact {
 }
 
 model Pipeline {
-  id             String    @id @default(cuid())
+  id             String             @id @default(cuid())
   organizationId String
   name           String
   description    String?
-  color          String?   @default("#7C3AED")
+  color          String?            @default("#7C3AED")
   icon           String?
-  isDefault      Boolean   @default(false)
-  favorite       Boolean   @default(false)
-  position       Int       @default(0)
-  archived       Boolean   @default(false)
+  isDefault      Boolean            @default(false)
+  favorite       Boolean            @default(false)
+  position       Int                @default(0)
+  archived       Boolean            @default(false)
+  accessMode     PipelineAccessMode @default(ORGANIZATION)
   defaultTeamId  String?
   defaultOwnerId String?
   createdById    String?
   updatedById    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
   deletedAt      DateTime?
 
   organization       Organization                @relation(fields: [organizationId], references: [id])
@@ -570,12 +661,47 @@ model Pipeline {
   deals              Deal[]
   tasks              Task[]
   channelConnections PipelineChannelConnection[]
+  teamAccesses       PipelineTeamAccess[]
+  userAccesses       PipelineUserAccess[]
+  goals              Goal[]
 
   @@index([organizationId])
   @@index([archived])
   @@index([defaultTeamId])
   @@index([defaultOwnerId])
   @@index([organizationId, deletedAt, archived, favorite])
+}
+
+model PipelineTeamAccess {
+  id             String   @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  teamId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, teamId])
+  @@index([organizationId, teamId])
+  @@index([organizationId, pipelineId])
+}
+
+model PipelineUserAccess {
+  id             String   @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, userId])
+  @@index([organizationId, userId])
+  @@index([organizationId, pipelineId])
 }
 
 model PipelineStage {
@@ -657,6 +783,7 @@ model Deal {
   notes           Note[]
   customValues    CustomFieldValue[]
   lifecycleAction LifecycleAction?
+  leadFiles       LeadFile[]
 
   @@unique([organizationId, leadSequence])
   @@index([organizationId])
@@ -733,27 +860,30 @@ model Task {
   stageId            String?
   orderId            String?
   occurrenceId       String?
+  sourceNoteId       String?
   teamId             String?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   deletedAt          DateTime?
 
-  organization     Organization         @relation(fields: [organizationId], references: [id])
+  organization     Organization          @relation(fields: [organizationId], references: [id])
   statusDefinition TaskStatusDefinition? @relation(fields: [statusDefinitionId], references: [id], onDelete: SetNull)
-  assignee         User?                @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  creator          User?                @relation("TaskCreator", fields: [createdById], references: [id])
-  contact          Contact?             @relation(fields: [contactId], references: [id])
-  company          Company?             @relation(fields: [companyId], references: [id])
-  deal             Deal?                @relation(fields: [dealId], references: [id])
-  pipeline         Pipeline?            @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
-  stage            PipelineStage?       @relation(fields: [stageId], references: [id], onDelete: SetNull)
-  order            Order?               @relation(fields: [orderId], references: [id])
-  occurrence       Occurrence?          @relation(fields: [occurrenceId], references: [id])
-  team             Team?                @relation(fields: [teamId], references: [id])
+  assignee         User?                 @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  creator          User?                 @relation("TaskCreator", fields: [createdById], references: [id])
+  contact          Contact?              @relation(fields: [contactId], references: [id])
+  company          Company?              @relation(fields: [companyId], references: [id])
+  deal             Deal?                 @relation(fields: [dealId], references: [id])
+  pipeline         Pipeline?             @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  stage            PipelineStage?        @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  order            Order?                @relation(fields: [orderId], references: [id])
+  occurrence       Occurrence?           @relation(fields: [occurrenceId], references: [id])
+  sourceNote       Note?                 @relation(fields: [sourceNoteId], references: [id], onDelete: SetNull)
+  team             Team?                 @relation(fields: [teamId], references: [id])
   activities       Activity[]
 
   @@index([organizationId])
   @@index([assigneeId])
+  @@index([sourceNoteId])
   @@index([status])
   @@index([statusDefinitionId])
   @@index([dueAt])
@@ -794,6 +924,7 @@ model Activity {
   @@index([organizationId])
   @@index([contactId])
   @@index([dealId])
+  @@index([organizationId, dealId, createdAt(sort: Desc)], map: "Activity_deal_timeline_idx")
   @@index([orderId])
   @@index([createdAt])
   @@index([type])
@@ -839,17 +970,19 @@ model Note {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  author       User?        @relation(fields: [authorId], references: [id])
-  contact      Contact?     @relation(fields: [contactId], references: [id])
-  company      Company?     @relation(fields: [companyId], references: [id])
-  deal         Deal?        @relation(fields: [dealId], references: [id])
-  order        Order?       @relation(fields: [orderId], references: [id])
-  occurrence   Occurrence?  @relation(fields: [occurrenceId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  author         User?        @relation(fields: [authorId], references: [id])
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+  company        Company?     @relation(fields: [companyId], references: [id])
+  deal           Deal?        @relation(fields: [dealId], references: [id])
+  order          Order?       @relation(fields: [orderId], references: [id])
+  occurrence     Occurrence?  @relation(fields: [occurrenceId], references: [id])
+  generatedTasks Task[]
 
   @@index([organizationId])
   @@index([contactId])
   @@index([dealId])
+  @@index([organizationId, dealId, createdAt])
 }
 
 model Tag {
@@ -939,15 +1072,15 @@ model CustomFieldValue {
 }
 
 model Channel {
-  id                String      @id @default(cuid())
+  id                String            @id @default(cuid())
   organizationId    String
   type              ChannelType
   name              String
   provider          String?
   externalAccountId String?
   displayName       String?
-  status            String      @default("ACTIVE")
-  isActive          Boolean     @default(true)
+  status            String            @default("ACTIVE")
+  isActive          Boolean           @default(true)
   /// Non-sensitive account configuration. Credentials must be referenced by
   /// secretReference and never persisted in this JSON field.
   config            Json?
@@ -955,19 +1088,23 @@ model Channel {
   lastSyncAt        DateTime?
   lastErrorAt       DateTime?
   lastErrorMessage  String?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   deletedAt         DateTime?
+  accessMode        ChannelAccessMode @default(ORGANIZATION)
+  ownerUserId       String?
 
   organization        Organization                @relation(fields: [organizationId], references: [id])
   conversations       Conversation[]
   messages            Message[]
   pipelineConnections PipelineChannelConnection[]
+  owner               User?                       @relation("ChannelOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([type])
   @@index([organizationId, status, deletedAt])
   @@index([organizationId, provider, externalAccountId])
+  @@index([organizationId, accessMode, ownerUserId])
 }
 
 /// Routes one existing Channel integration account into one pipeline. Channel
@@ -1035,6 +1172,7 @@ model Conversation {
   deal             Deal?
   activities       Activity[]
   lifecycleActions LifecycleAction[]
+  leadFiles        LeadFile[]
 
   @@index([organizationId])
   @@index([contactId])
@@ -1065,6 +1203,7 @@ model Message {
   channel      Channel?            @relation(fields: [channelId], references: [id])
   sender       User?               @relation("MessageSender", fields: [senderId], references: [id])
   attachments  MessageAttachment[]
+  leadFiles    LeadFile[]
 
   @@index([conversationId])
   @@index([sentAt])
@@ -1082,9 +1221,40 @@ model MessageAttachment {
   kind      String   @default("file")
   createdAt DateTime @default(now())
 
-  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  leadFiles LeadFile[]
 
   @@index([messageId])
+}
+
+model LeadFile {
+  id               String            @id @default(cuid())
+  organizationId   String
+  dealId           String
+  conversationId   String?
+  messageId        String?
+  attachmentId     String?
+  savedById        String?
+  fileName         String
+  mimeType         String?
+  fileSize         Int?
+  url              String
+  kind             String
+  messageDirection MessageDirection?
+  messageCreatedAt DateTime?
+  savedAt          DateTime          @default(now())
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  deal         Deal               @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  conversation Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  message      Message?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  attachment   MessageAttachment? @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+  savedBy      User?              @relation("LeadFileSavedBy", fields: [savedById], references: [id], onDelete: SetNull)
+
+  @@unique([dealId, attachmentId])
+  @@index([organizationId, dealId, savedAt])
+  @@index([messageId])
+  @@index([attachmentId])
 }
 
 model ProductCollection {
@@ -1127,32 +1297,62 @@ model Product {
 }
 
 model Order {
-  id             String      @id @default(cuid())
-  organizationId String
-  number         String
-  contactId      String?
-  companyId      String?
-  ownerId        String?
-  dealId         String?
-  channel        String?
-  source         String?
-  campaign       String?
-  orderedAt      DateTime    @default(now())
-  grossValue     Decimal     @default(0) @db.Decimal(14, 2)
-  discount       Decimal     @default(0) @db.Decimal(14, 2)
-  coupon         String?
-  shippingCost   Decimal     @default(0) @db.Decimal(14, 2)
-  taxes          Decimal     @default(0) @db.Decimal(14, 2)
-  finalValue     Decimal     @default(0) @db.Decimal(14, 2)
-  status         OrderStatus @default(ORDER_PLACED)
-  expectedAt     DateTime?
-  trackingCode   String?
-  observations   String?
-  createdById    String?
-  updatedById    String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  deletedAt      DateTime?
+  id                       String      @id @default(cuid())
+  organizationId           String
+  number                   String
+  contactId                String?
+  companyId                String?
+  ownerId                  String?
+  dealId                   String?
+  channel                  String?
+  source                   String?
+  campaign                 String?
+  currency                 String      @default("BRL")
+  externalId               String?
+  externalName             String?
+  externalUrl              String?
+  financialStatus          String?
+  paymentGateway           String?
+  customerNameSnapshot     String?
+  customerEmailSnapshot    String?
+  customerPhoneSnapshot    String?
+  recipientNameSnapshot    String?
+  address1Snapshot         String?
+  address2Snapshot         String?
+  addressNumberSnapshot    String?
+  complementSnapshot       String?
+  neighborhoodSnapshot     String?
+  citySnapshot             String?
+  provinceSnapshot         String?
+  postalCodeSnapshot       String?
+  countrySnapshot          String?
+  countryCodeSnapshot      String?
+  formattedAddressSnapshot String?
+  isFirstPurchase          Boolean?
+  purchaseOrdinal          Int?
+  trackingSourceSnapshot   String?
+  trackingMediumSnapshot   String?
+  trackingCampaignSnapshot String?
+  trackingContentSnapshot  String?
+  trackingTermSnapshot     String?
+  landingPageSnapshot      String?
+  referrerSnapshot         String?
+  orderedAt                DateTime    @default(now())
+  grossValue               Decimal     @default(0) @db.Decimal(14, 2)
+  discount                 Decimal     @default(0) @db.Decimal(14, 2)
+  coupon                   String?
+  shippingCost             Decimal     @default(0) @db.Decimal(14, 2)
+  taxes                    Decimal     @default(0) @db.Decimal(14, 2)
+  finalValue               Decimal     @default(0) @db.Decimal(14, 2)
+  status                   OrderStatus @default(ORDER_PLACED)
+  expectedAt               DateTime?
+  trackingCode             String?
+  observations             String?
+  createdById              String?
+  updatedById              String?
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+  deletedAt                DateTime?
 
   organization Organization  @relation(fields: [organizationId], references: [id])
   contact      Contact?      @relation(fields: [contactId], references: [id])
@@ -1167,6 +1367,7 @@ model Order {
   activities   Activity[]
   notes        Note[]
   attributions Attribution[]
+  events       OrderEvent[]
 
   @@unique([organizationId, number])
   @@index([organizationId])
@@ -1174,26 +1375,46 @@ model Order {
   @@index([status])
   @@index([orderedAt])
   @@index([ownerId])
+  @@index([contactId, orderedAt])
+  @@index([organizationId, externalId])
 }
 
 model OrderItem {
-  id          String  @id @default(cuid())
-  orderId     String
-  productId   String?
-  productName String
-  sku         String?
-  collection  String?
-  quantity    Int     @default(1)
-  unitPrice   Decimal @db.Decimal(12, 2)
-  discount    Decimal @default(0) @db.Decimal(12, 2)
-  totalPrice  Decimal @db.Decimal(12, 2)
-  imageUrl    String?
+  id                String  @id @default(cuid())
+  orderId           String
+  productId         String?
+  externalProductId String?
+  externalVariantId String?
+  variantTitle      String?
+  productName       String
+  sku               String?
+  collection        String?
+  quantity          Int     @default(1)
+  unitPrice         Decimal @db.Decimal(12, 2)
+  discount          Decimal @default(0) @db.Decimal(12, 2)
+  totalPrice        Decimal @db.Decimal(12, 2)
+  imageUrl          String?
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
+}
+
+model OrderEvent {
+  id          String   @id @default(cuid())
+  orderId     String
+  type        String
+  title       String
+  description String?
+  occurredAt  DateTime @default(now())
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, occurredAt])
 }
 
 model Payment {

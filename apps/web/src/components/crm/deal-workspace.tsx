@@ -1,703 +1,153 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import {
-  CheckSquare,
-  FileText,
-  History,
-  MessageSquare,
-  Paperclip,
-  Send,
-  StickyNote,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
-import {
-  conversationsApi,
-  dealsApi,
-  notesApi,
-  ordersApi,
-  tasksApi,
-} from "@/lib/api";
+import { Bell, Check, FileText, Flag, FolderOpen, History, MessageSquare, NotebookPen, ShoppingBag, UserRound, X } from "lucide-react";
+import { conversationsApi, dealsApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import type { Deal, Message, Task } from "@/lib/types";
-import { cn, formatCurrency, formatTaskDue } from "@/lib/utils";
-import { ClientRelativeTime } from "@/components/ui/client-relative-time";
+import { cn, formatCurrency } from "@/lib/utils";
+import { formatPrimaryPhoneForDisplay } from "@/lib/format-phone-display";
 import { useUiStore } from "@/stores/ui";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Label, Select } from "@/components/ui/form-controls";
-
-function DealTasksPanel({
-  dealId,
-  contactId,
-  pipelineId,
-  stageId,
-  tasks,
-}: {
-  dealId: string;
-  contactId?: string | null;
-  pipelineId?: string | null;
-  stageId?: string | null;
-  tasks: Task[];
-}) {
-  const queryClient = useQueryClient();
-  const [title, setTitle] = React.useState("");
-
-  const create = useMutation({
-    mutationFn: () =>
-      tasksApi.create({
-        title,
-        dealId,
-        contactId: contactId || undefined,
-        pipelineId: pipelineId || undefined,
-        stageId: stageId || undefined,
-      }),
-    onSuccess: () => {
-      setTitle("");
-      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      toast.success("Tarefa criada");
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const complete = useMutation({
-    mutationFn: (id: string) => tasksApi.complete(id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      toast.success("Tarefa concluída");
-    },
-  });
-
-  return (
-    <div className="space-y-3" data-testid="deal-tasks-panel">
-      <form
-        className="flex gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!title.trim()) return;
-          create.mutate();
-        }}
-      >
-        <Input
-          placeholder="Nova tarefa neste card…"
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          aria-label="Nova tarefa do deal"
-        />
-        <Button type="submit" disabled={!title.trim() || create.isPending}>
-          Criar
-        </Button>
-      </form>
-      {tasks.length === 0 ? (
-        <EmptyState title="Sem tarefas" description="Crie a primeira tarefa deste card." />
-      ) : (
-        tasks.map((task) => (
-          <div
-            key={task.id}
-            className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{task.title}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatTaskDue(task.dueAt)}
-                {task.stage?.name ? ` · ${task.stage.name}` : ""}
-              </p>
-            </div>
-            {task.status !== "COMPLETED" ? (
-              <Button size="sm" variant="ghost" onClick={() => complete.mutate(task.id)}>
-                Concluir
-              </Button>
-            ) : (
-              <Badge variant="secondary">Concluída</Badge>
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
+import { Popover } from "@/components/ui/popover";
+import type { Deal, DealPriority, UserRef } from "@/lib/types";
+import { ConversationThread } from "@/components/crm/conversation/conversation-thread";
+import { LeadContextPanel } from "@/components/crm/conversation/lead-context-panel";
+import { LeadTasks } from "@/components/crm/conversation/lead-tasks";
+import { LeadOrders } from "@/components/crm/conversation/lead-orders";
+import { LeadNotes } from "@/components/crm/conversation/lead-notes";
+import { LeadFiles } from "@/components/crm/conversation/lead-files";
+import { LeadHistory } from "@/components/crm/conversation/lead-history";
+import { ConversationChannelBadge } from "@/components/crm/conversation/conversation-channel-badge";
+import { PipelineStageSelector } from "@/components/crm/conversation/pipeline-stage-selector";
+import { conversationContactDisplayName, formatLeadCode } from "@/components/crm/conversation/conversation-list-utils";
 
 const TABS = [
-  { id: "conversa", label: "Conversa", icon: MessageSquare },
-  { id: "resumo", label: "Resumo", icon: FileText },
-  { id: "tarefas", label: "Tarefas", icon: CheckSquare },
-  { id: "pedidos", label: "Pedidos", icon: StickyNote },
-  { id: "historico", label: "Histórico", icon: History },
-  { id: "arquivos", label: "Arquivos", icon: Paperclip },
+  { id: "conversation", label: "Conversa", icon: MessageSquare },
+  { id: "overview", label: "Visão geral", icon: FileText },
+  { id: "tasks", label: "Tarefas", icon: Bell },
+  { id: "orders", label: "Pedidos", icon: ShoppingBag },
+  { id: "notes", label: "Notas", icon: NotebookPen },
+  { id: "files", label: "Arquivos", icon: FolderOpen },
+  { id: "history", label: "Histórico", icon: History },
 ] as const;
+type WorkspaceTab = (typeof TABS)[number]["id"];
 
-function MessageBubble({ message }: { message: Message }) {
-  const outbound = message.direction === "OUTBOUND";
-  const internal = message.direction === "INTERNAL";
-  return (
-    <div className={cn("flex", outbound ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
-          internal
-            ? "bg-warning/15 text-foreground"
-            : outbound
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground",
-        )}
-      >
-        <p className="whitespace-pre-wrap">{message.body}</p>
-        <p
-          className={cn(
-            "mt-1 text-[10px]",
-            outbound && !internal ? "text-primary-foreground/70" : "text-muted-foreground",
-          )}
-        >
-          {format(new Date(message.createdAt), "dd/MM HH:mm", { locale: ptBR })}
-          {message.author?.name ? ` · ${message.author.name}` : ""}
-        </p>
-      </div>
-    </div>
-  );
-}
+const PRIORITIES: Array<{ id: DealPriority; label: string }> = [
+  { id: "LOW", label: "Baixa" }, { id: "MEDIUM", label: "Média" },
+  { id: "HIGH", label: "Alta" }, { id: "URGENT", label: "Urgente" },
+];
 
-function ConversationPane({ deal }: { deal: Deal }) {
+function DealHeaderControls({ deal, conversationId }: { deal: Deal; conversationId?: string }) {
   const queryClient = useQueryClient();
-  const [body, setBody] = React.useState("");
-  const [note, setNote] = React.useState("");
-  const [taskTitle, setTaskTitle] = React.useState("");
-  const [showNote, setShowNote] = React.useState(false);
-  const [showTask, setShowTask] = React.useState(false);
-  const bottomRef = React.useRef<HTMLDivElement>(null);
-
-  const conversationId = deal.conversationId;
-
-  const { data: conversation } = useQuery({
-    queryKey: ["conversations", "byDeal", deal.id],
-    queryFn: () => conversationsApi.byDeal(deal.id),
-    enabled: !conversationId,
-    retry: false,
-  });
-
-  const resolvedId = conversationId ?? conversation?.id;
-
-  const { data: messagePage, isLoading } = useQuery({
-    queryKey: queryKeys.conversations.messages(resolvedId ?? "none"),
-    queryFn: () => conversationsApi.messages(resolvedId!),
-    enabled: !!resolvedId,
-    retry: false,
-  });
-  const messages = messagePage?.data ?? [];
-
-  const { data: notes = [] } = useQuery({
-    queryKey: queryKeys.notes("deal", deal.id),
-    queryFn: () => notesApi.list({ dealId: deal.id }),
-    retry: false,
-  });
-
-  React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
-
-  const sendMutation = useMutation({
-    mutationFn: (text: string) => conversationsApi.sendMessage(resolvedId!, text),
+  const [ownerOpen, setOwnerOpen] = React.useState(false);
+  const [priorityOpen, setPriorityOpen] = React.useState(false);
+  const users = useQuery({ queryKey: queryKeys.pipelines.eligibleUsers(deal.pipelineId), queryFn: () => pipelinesApi.eligibleUsers(deal.pipelineId), staleTime: 300_000 });
+  const update = useMutation({
+    mutationFn: (patch: { ownerId?: string | null; priority?: DealPriority }) => dealsApi.update(deal.id, patch),
     onSuccess: () => {
-      setBody("");
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations.messages(resolvedId!),
-      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.deals.detail(deal.id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.pipelines.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+      if (conversationId) void queryClient.invalidateQueries({ queryKey: queryKeys.conversations.context(conversationId) });
     },
-    onError: (e: Error) => toast.error(e.message),
   });
-
-  const noteMutation = useMutation({
-    mutationFn: () =>
-      notesApi.create({
-        content: note,
-        dealId: deal.id,
-        contactId: deal.contactId ?? undefined,
-        isInternal: true,
-      }),
-    onSuccess: () => {
-      setNote("");
-      setShowNote(false);
-      queryClient.invalidateQueries({ queryKey: queryKeys.notes("deal", deal.id) });
-      toast.success("Nota salva");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const taskMutation = useMutation({
-    mutationFn: () =>
-      tasksApi.create({
-        title: taskTitle,
-        dealId: deal.id,
-        contactId: deal.contactId ?? undefined,
-        status: "PENDING",
-        type: "FOLLOW_UP",
-      }),
-    onSuccess: () => {
-      setTaskTitle("");
-      setShowTask(false);
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list() });
-      toast.success("Tarefa criada");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="scrollbar-thin flex-1 space-y-3 overflow-y-auto px-1 py-2">
-        {!resolvedId && !isLoading ? (
-          <EmptyState
-            icon={MessageSquare}
-            title="Sem conversa vinculada"
-            description="Este negócio ainda não possui uma conversa na API."
-            className="border-0 bg-transparent py-10"
-          />
-        ) : isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-16 w-2/3" />
-            <Skeleton className="ml-auto h-16 w-1/2" />
-            <Skeleton className="h-12 w-3/5" />
-          </div>
-        ) : (
-          messages.map((m) => <MessageBubble key={m.id} message={m} />)
-        )}
-        {notes.length > 0 ? (
-          <div className="space-y-2 border-t border-dashed border-border pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Notas
-            </p>
-            {notes.map((n) => (
-              <div key={n.id} className="rounded-lg bg-warning/10 px-3 py-2 text-sm">
-                <p>{n.body ?? n.content}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {n.author?.name ?? "Equipe"} ·{" "}
-                  <ClientRelativeTime value={n.createdAt} />
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="space-y-2 border-t border-border pt-3">
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={showNote ? "secondary" : "outline"}
-            onClick={() => {
-              setShowNote((v) => !v);
-              setShowTask(false);
-            }}
-          >
-            <StickyNote className="h-3.5 w-3.5" />
-            Nota
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={showTask ? "secondary" : "outline"}
-            onClick={() => {
-              setShowTask((v) => !v);
-              setShowNote(false);
-            }}
-          >
-            <CheckSquare className="h-3.5 w-3.5" />
-            Tarefa
-          </Button>
-        </div>
-
-        {showNote ? (
-          <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-2">
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Escreva uma nota interna…"
-              rows={3}
-            />
-            <Button
-              size="sm"
-              disabled={!note.trim() || noteMutation.isPending}
-              onClick={() => noteMutation.mutate()}
-            >
-              Salvar nota
-            </Button>
-          </div>
-        ) : null}
-
-        {showTask ? (
-          <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-2">
-            <Input
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-              placeholder="Título da tarefa"
-            />
-            <Button
-              size="sm"
-              disabled={!taskTitle.trim() || taskMutation.isPending}
-              onClick={() => taskMutation.mutate()}
-            >
-              Criar tarefa
-            </Button>
-          </div>
-        ) : null}
-
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!body.trim() || !resolvedId) return;
-            sendMutation.mutate(body.trim());
-          }}
-        >
-          <Input
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={
-              resolvedId
-                ? "Escreva uma mensagem…"
-                : "Conversa indisponível"
-            }
-            disabled={!resolvedId || sendMutation.isPending}
-          />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={!resolvedId || !body.trim() || sendMutation.isPending}
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </form>
-      </div>
-    </div>
-  );
+  const ownerOption = (owner: UserRef | null) => <button key={owner?.id ?? "none"} type="button" className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted" onClick={() => { update.mutate({ ownerId: owner?.id ?? null }); setOwnerOpen(false); }}>{owner ? <Avatar name={owner.name} src={owner.avatarUrl} size="sm" /> : <UserRound className="h-4 w-4" />}<span className="min-w-0 flex-1 truncate">{owner?.name ?? "Não atribuído"}</span>{deal.ownerId === owner?.id || (!deal.ownerId && !owner) ? <Check className="h-4 w-4" /> : null}</button>;
+  return <>
+    <Popover open={ownerOpen} onOpenChange={setOwnerOpen} align="start" contentWidth={260} aria-label="Alterar responsável" contentClassName="rounded-xl" trigger={<button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2 text-xs" onClick={() => setOwnerOpen((value) => !value)} aria-label={`Alterar responsável. Responsável atual: ${deal.owner?.name ?? "não atribuído"}.`}><Avatar name={deal.owner?.name ?? "?"} src={deal.owner?.avatarUrl} size="sm" className="h-5 w-5 text-[8px]" /><span className="max-w-28 truncate">{deal.owner?.name ?? "Não atribuído"}</span></button>}><div className="max-h-64 overflow-y-auto p-2">{ownerOption(null)}{(users.data ?? []).map((user) => ownerOption(user))}</div></Popover>
+    <Popover open={priorityOpen} onOpenChange={setPriorityOpen} align="start" contentWidth={190} aria-label="Alterar prioridade" contentClassName="rounded-xl" trigger={<button type="button" className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2 text-xs" onClick={() => setPriorityOpen((value) => !value)} aria-label={`Alterar prioridade. Prioridade atual: ${PRIORITIES.find((item) => item.id === deal.priority)?.label ?? "nenhuma"}.`}><Flag className="h-3.5 w-3.5" />{PRIORITIES.find((item) => item.id === deal.priority)?.label ?? "Prioridade"}</button>}><div className="p-2">{PRIORITIES.map((priority) => <button key={priority.id} type="button" className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted" onClick={() => { update.mutate({ priority: priority.id }); setPriorityOpen(false); }}><Flag className="h-4 w-4" /><span className="flex-1">{priority.label}</span>{deal.priority === priority.id ? <Check className="h-4 w-4" /> : null}</button>)}</div></Popover>
+  </>;
 }
 
 function DealWorkspaceBody({ dealId }: { dealId: string }) {
-  const { data: deal, isLoading, isError, error } = useQuery({
+  const [tab, setTab] = React.useState<WorkspaceTab>("conversation");
+  const dealQuery = useQuery({
     queryKey: queryKeys.deals.detail(dealId),
     queryFn: () => dealsApi.get(dealId),
     retry: false,
   });
-
-  const { data: activities = [] } = useQuery({
-    queryKey: queryKeys.deals.activities(dealId),
-    queryFn: () => dealsApi.activities(dealId),
-    enabled: !!deal,
+  const deal = dealQuery.data;
+  const linkedConversationQuery = useQuery({
+    queryKey: ["conversations", "byDeal", dealId],
+    queryFn: () => conversationsApi.byDeal(dealId),
+    enabled: Boolean(deal && !deal.conversationId),
+    retry: false,
+  });
+  const conversationId = deal?.conversationId ?? linkedConversationQuery.data?.id;
+  const detailQuery = useQuery({
+    queryKey: queryKeys.conversations.detail(conversationId ?? ""),
+    queryFn: () => conversationsApi.get(conversationId!),
+    enabled: Boolean(conversationId),
     retry: false,
   });
 
-  const { data: files = [] } = useQuery({
-    queryKey: queryKeys.deals.files(dealId),
-    queryFn: () => dealsApi.files(dealId),
-    enabled: !!deal,
-    retry: false,
-  });
+  if (dealQuery.isLoading) return <div className="space-y-3 p-5"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-16 w-full" /><Skeleton className="h-72 w-full" /></div>;
+  if (!deal) return <EmptyState title="Negócio não encontrado" description={(dealQuery.error as Error)?.message ?? "Não foi possível carregar o lead."} className="m-5" />;
 
-  const { data: tasksData } = useQuery({
-    queryKey: queryKeys.tasks.list({ dealId }),
-    queryFn: () => tasksApi.list({ dealId }),
-    enabled: !!deal,
-    retry: false,
-  });
-
-  const { data: ordersData } = useQuery({
-    queryKey: queryKeys.orders.list({ dealId }),
-    queryFn: () => ordersApi.list({ dealId }),
-    enabled: !!deal,
-    retry: false,
-  });
-
-  if (isLoading) {
-    return (
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-4 w-1/3" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (isError || !deal) {
-    return (
-      <EmptyState
-        title="Negócio não encontrado"
-        description={(error as Error)?.message ?? "Não foi possível carregar o deal."}
-        className="m-4"
-      />
-    );
-  }
-
-  const tasks = tasksData?.data ?? [];
-  const orders = ordersData?.data ?? [];
+  const contactName = conversationContactDisplayName(detailQuery.data?.contact ?? deal.contact);
+  const leadCode = formatLeadCode(detailQuery.data?.deal?.leadSequence ?? deal.leadSequence);
+  const phone = formatPrimaryPhoneForDisplay(detailQuery.data?.contact ?? deal.contact);
+  const owner = detailQuery.data?.deal?.owner ?? detailQuery.data?.assignee ?? deal.owner;
+  const channel = detailQuery.data?.channel ?? deal.channel;
+  const stageId = detailQuery.data?.deal?.stageId ?? deal.stageId;
+  const stageName = detailQuery.data?.deal?.stage?.name;
+  const taskCount = deal.taskSummary?.open ?? 0;
+  const links = { dealId: deal.id, contactId: deal.contactId ?? deal.contact?.id, pipelineId: deal.pipelineId, stageId };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-border px-5 py-4">
-        <div className="flex items-start justify-between gap-3">
+    <div className="flex h-full min-h-0 flex-col" data-testid="unified-deal-workspace">
+      <header className="shrink-0 border-b border-border bg-card px-5 py-4 pr-14" data-testid="deal-workspace-header">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold">{deal.name}</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {deal.contact?.name ?? "Sem contato"}
-              {deal.company?.name ? ` · ${deal.company.name}` : ""}
+            <h2 className="truncate text-lg font-semibold" title={contactName}>{contactName}</h2>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {leadCode ?? "Lead sem código"} · {phone}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-lg font-semibold text-primary">
-              {formatCurrency(deal.value ?? 0, deal.currency)}
-            </p>
-            {deal.owner ? (
-              <div className="mt-1 flex items-center justify-end gap-1.5">
-                <Avatar name={deal.owner.name} size="sm" />
-                <span className="text-xs text-muted-foreground">{deal.owner.name}</span>
-              </div>
-            ) : null}
-          </div>
+          <p className="shrink-0 text-lg font-semibold text-primary">{formatCurrency(deal.value ?? 0, deal.currency)}</p>
         </div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {deal.priority ? <Badge>{deal.priority}</Badge> : null}
-          {deal.tags?.map((t) => (
-            <Badge key={t.id} variant="outline">
-              {t.name}
-            </Badge>
-          ))}
+        <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2">
+          {channel ? <ConversationChannelBadge channel={channel} className="h-7 max-w-[150px] truncate" /> : null}
+          <PipelineStageSelector dealId={deal.id} pipelineId={deal.pipelineId} stageId={stageId} stageName={stageName} conversationId={conversationId} className="h-8 min-w-[130px] max-w-[190px]" />
+          <DealHeaderControls deal={deal} conversationId={conversationId} />
+          <button type="button" className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2 text-xs" onClick={() => setTab("tasks")} aria-label={`Abrir tarefas. ${taskCount} tarefas pendentes.`}>
+            <Bell className="h-3.5 w-3.5" />{taskCount}
+          </button>
         </div>
-      </div>
+      </header>
 
-      <Tabs defaultValue="conversa" className="flex min-h-0 flex-1 flex-col px-5 py-3">
-        <TabsList className="w-full justify-start overflow-x-auto">
-          {TABS.map((tab) => (
-            <TabsTrigger key={tab.id} value={tab.id}>
-              <tab.icon className="mr-1.5 h-3.5 w-3.5" />
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      <nav className="scrollbar-thin flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card px-4 py-2" role="tablist" aria-label="Workspace do lead">
+        {TABS.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)} className={cn("inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-xs font-medium", tab === item.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><item.icon className="h-3.5 w-3.5" />{item.label}</button>)}
+      </nav>
 
-        <TabsContent value="conversa" className="min-h-0 flex-1">
-          <div className="h-[calc(100vh-16rem)]">
-            <ConversationPane deal={deal} />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="resumo" className="space-y-3">
-          <InfoRow label="Contato" value={deal.contact?.name} />
-          <InfoRow label="Empresa" value={deal.company?.name} />
-          <InfoRow label="Valor" value={formatCurrency(deal.value ?? 0)} />
-          <InfoRow label="Prioridade" value={deal.priority} />
-          <InfoRow
-            label="Última interação"
-            value={<ClientRelativeTime value={deal.lastInteractionAt} />}
-          />
-          <InfoRow
-            label="Próxima tarefa"
-            value={
-              deal.nextTask
-                ? `${deal.nextTask.title} (${formatTaskDue(deal.nextTask.dueAt)})`
-                : undefined
-            }
-          />
-        </TabsContent>
-
-        <TabsContent value="tarefas" className="space-y-2">
-          <DealTasksPanel
-            dealId={deal.id}
-            contactId={deal.contactId ?? deal.contact?.id}
-            pipelineId={deal.pipelineId}
-            stageId={deal.stageId}
-            tasks={tasks}
-          />
-        </TabsContent>
-
-        <TabsContent value="pedidos" className="space-y-2">
-          {orders.length === 0 ? (
-            <EmptyState title="Sem pedidos" description="Pedidos vinculados aparecerão aqui." />
-          ) : (
-            orders.map((o) => (
-              <Link
-                key={o.id}
-                href={`/orders/${o.id}`}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 hover:bg-accent"
-              >
-                <div>
-                  <p className="text-sm font-medium">#{o.number}</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(o.total)}</p>
-                </div>
-                <Badge>{o.status}</Badge>
-              </Link>
-            ))
-          )}
-        </TabsContent>
-
-        <TabsContent value="historico" className="space-y-2">
-          {activities.length === 0 ? (
-            <EmptyState title="Sem histórico" description="Atividades do negócio aparecerão aqui." />
-          ) : (
-            activities.map((a) => (
-              <div key={a.id} className="rounded-lg border border-border px-3 py-2">
-                <p className="text-sm font-medium">{a.title}</p>
-                {a.description ? (
-                  <p className="text-xs text-muted-foreground">{a.description}</p>
-                ) : null}
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  <ClientRelativeTime value={a.createdAt} />
-                  {a.actor?.name ? ` · ${a.actor.name}` : ""}
-                </p>
-              </div>
-            ))
-          )}
-        </TabsContent>
-
-        <TabsContent value="arquivos" className="space-y-2">
-          {files.length === 0 ? (
-            <EmptyState title="Sem arquivos" description="Anexos do negócio aparecerão aqui." />
-          ) : (
-            files.map((f) => (
-              <a
-                key={f.id}
-                href={f.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 hover:bg-accent"
-              >
-                <Paperclip className="h-4 w-4 text-primary" />
-                <span className="text-sm">{f.name}</span>
-              </a>
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+      <main className="min-h-0 flex-1 overflow-hidden" role="tabpanel">
+        {tab === "conversation" ? (
+          conversationId ? <ConversationThread conversationId={conversationId} detail={detailQuery.data} detailLoading={detailQuery.isLoading} detailError={detailQuery.error} onRetryDetail={() => void detailQuery.refetch()} listQueryKey={queryKeys.conversations.lists} mounted visible hideHeader showContextButton={false} className="h-full min-h-0" /> : <EmptyState title="Sem conversa vinculada" description="O atendimento ficará disponível quando o lead tiver uma conversa." className="m-5" />
+        ) : null}
+        {tab === "overview" ? conversationId ? <LeadContextPanel conversationId={conversationId} visible className="h-full border-0" /> : <div className="h-full overflow-y-auto p-5"><EmptyState title="Contexto indisponível" description="Este lead ainda não possui conversa vinculada." /></div> : null}
+        {tab === "tasks" ? <div className="h-full overflow-y-auto p-5"><LeadTasks links={links} owner={owner} /></div> : null}
+        {tab === "orders" ? <div className="h-full overflow-y-auto p-5"><LeadOrders contactId={links.contactId} contactName={contactName} initialCount={0} /></div> : null}
+        {tab === "notes" ? <div className="h-full overflow-y-auto p-5"><LeadNotes links={links} owner={owner} /></div> : null}
+        {tab === "files" ? <div className="h-full overflow-y-auto p-5"><LeadFiles dealId={deal.id} leadName={contactName} /></div> : null}
+        {tab === "history" ? <div className="h-full overflow-y-auto p-5"><LeadHistory dealId={deal.id} leadName={contactName} /></div> : null}
+      </main>
     </div>
   );
 }
 
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-right">{value ?? "—"}</span>
-    </div>
-  );
-}
-
-export function DealWorkspaceDrawer({
-  onClose: onCloseProp,
-}: {
-  onClose?: () => void;
-} = {}) {
-  const open = useUiStore((s) => s.dealDrawerOpen);
-  const dealId = useUiStore((s) => s.selectedDealId);
-  const closeStore = useUiStore((s) => s.closeDealDrawer);
-  const close = React.useCallback(() => {
-    closeStore();
-    onCloseProp?.();
-  }, [closeStore, onCloseProp]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
-
+export function DealWorkspaceDrawer({ onClose: onCloseProp }: { onClose?: () => void } = {}) {
+  const open = useUiStore((state) => state.dealDrawerOpen);
+  const dealId = useUiStore((state) => state.selectedDealId);
+  const closeStore = useUiStore((state) => state.closeDealDrawer);
+  const close = React.useCallback(() => { closeStore(); onCloseProp?.(); }, [closeStore, onCloseProp]);
+  React.useEffect(() => { if (!open) return; const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !document.querySelector('[role="dialog"]')) close(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [close, open]);
   if (!open || !dealId) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 hidden md:flex" data-testid="deal-workspace-drawer">
-      <button
-        type="button"
-        className="absolute inset-0 bg-foreground/25 backdrop-blur-[1px]"
-        aria-label="Fechar workspace"
-        onClick={close}
-      />
-      <aside className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col border-l border-border bg-card shadow-drawer xl:max-w-3xl">
-        <div className="absolute right-3 top-3 z-10">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={close}
-            aria-label="Fechar drawer"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        <DealWorkspaceBody dealId={dealId} />
-      </aside>
-    </div>
-  );
+  return <div className="fixed inset-0 z-50 hidden md:flex" data-testid="deal-workspace-drawer"><button type="button" className="absolute inset-0 bg-foreground/25 backdrop-blur-[1px]" aria-label="Fechar workspace" onClick={close} /><aside className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col border-l border-border bg-card shadow-drawer xl:max-w-3xl"><div className="absolute right-3 top-3 z-10"><Button variant="ghost" size="icon" onClick={close} aria-label="Fechar drawer"><X className="h-4 w-4" /></Button></div><DealWorkspaceBody dealId={dealId} /></aside></div>;
 }
 
 export function DealWorkspacePage({ dealId }: { dealId: string }) {
-  return (
-    <div className="mx-auto max-w-4xl rounded-xl border border-border bg-card shadow-card">
-      <DealWorkspaceBody dealId={dealId} />
-    </div>
-  );
-}
-
-export function CreateTaskInlineForm({
-  dealId,
-  contactId,
-}: {
-  dealId?: string;
-  contactId?: string;
-}) {
-  const [title, setTitle] = React.useState("");
-  const [type, setType] = React.useState("FOLLOW_UP");
-  const queryClient = useQueryClient();
-  const mutation = useMutation({
-    mutationFn: () =>
-      tasksApi.create({ title, type, dealId, contactId, status: "PENDING" }),
-    onSuccess: () => {
-      setTitle("");
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list() });
-      toast.success("Tarefa criada");
-    },
-  });
-
-  return (
-    <form
-      className="flex flex-wrap items-end gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!title.trim()) return;
-        mutation.mutate();
-      }}
-    >
-      <div className="min-w-[180px] flex-1 space-y-1">
-        <Label>Título</Label>
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-      <div className="w-40 space-y-1">
-        <Label>Tipo</Label>
-        <Select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="FOLLOW_UP">Follow-up</option>
-          <option value="CALL">Ligação</option>
-          <option value="WHATSAPP">WhatsApp</option>
-          <option value="MEETING">Reunião</option>
-        </Select>
-      </div>
-      <Button type="submit" disabled={mutation.isPending}>
-        Criar
-      </Button>
-    </form>
-  );
+  return <div className="mx-auto h-[calc(100dvh-8rem)] max-w-4xl overflow-hidden rounded-xl border border-border bg-card shadow-card"><DealWorkspaceBody dealId={dealId} /></div>;
 }

@@ -4,11 +4,9 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, LogOut, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, LogOut, MoreVertical, Settings, UserRound, X, type LucideIcon } from "lucide-react";
 import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
-import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
-import { BETA_SINGLE_PIPELINE_MODE } from "@/lib/beta-config";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
 import { formatPipelineNavLabel, resolvePipelineIcon } from "@/lib/pipeline-icons";
@@ -19,6 +17,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { AUTH_ROLE_LABEL } from "@/lib/auth-types";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
+import { Popover } from "@/components/ui/popover";
 
 const PIPELINES_HREF = "/pipelines";
 const PIPELINES_NAV_STALE_TIME = 3 * 60_000;
@@ -207,78 +206,13 @@ function PipelinesNavSection({
   );
 }
 
-function SidebarTeamSwitch() {
-  const selectedTeamId = useUiStore((s) => s.selectedTeamId);
-  const setSelectedTeamId = useUiStore((s) => s.setSelectedTeamId);
-  const [open, setOpen] = React.useState(false);
-  const { data: settings } = useQuery({
-    queryKey: queryKeys.settings,
-    queryFn: () => settingsApi.overview(),
-    retry: false,
-  });
-  const teams = settings?.teams ?? [{ id: "team-gestao", name: "Gestão" }];
-  const selectedTeam = teams.find((t) => t.id === selectedTeamId) ?? teams[0];
-
-  if (teams.length <= 1) {
-    return (
-      <p className="px-2 text-[11px] text-sidebar-muted">
-        Equipe: <span className="text-sidebar-foreground/80">{selectedTeam?.name}</span>
-      </p>
-    );
-  }
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-sidebar-muted transition hover:bg-white/5 hover:text-white"
-      >
-        <span className="truncate">
-          Equipe: <span className="text-sidebar-foreground/80">{selectedTeam?.name}</span>
-        </span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70" />
-      </button>
-      {open ? (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-40"
-            aria-label="Fechar"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute bottom-full left-0 z-50 mb-1 w-full overflow-hidden rounded-xl border border-sidebar-border bg-[#1a1528] py-1 shadow-card">
-            {teams.map((team) => (
-              <button
-                key={team.id}
-                type="button"
-                className={cn(
-                  "flex w-full px-3 py-2 text-left text-xs hover:bg-white/5",
-                  team.id === selectedTeamId
-                    ? "text-white"
-                    : "text-sidebar-muted",
-                )}
-                onClick={() => {
-                  setSelectedTeamId(team.id);
-                  setOpen(false);
-                }}
-              >
-                {team.name}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
   const [pendingHref, setPendingHref] = React.useState<string | null>(null);
   const [loggingOut, setLoggingOut] = React.useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = React.useState(false);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const mobileOpen = useUiStore((s) => s.sidebarMobileOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
@@ -290,6 +224,19 @@ export function Sidebar() {
   staleTime: 30_000,
   retry: false,
   });
+  const accountUser = useQuery({
+    queryKey: [...queryKeys.settings, "sidebar-account", user?.id],
+    queryFn: async () => (await settingsApi.users()).find((candidate) => candidate.id === user?.id) ?? null,
+    enabled: Boolean(user),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const rawTeam = accountUser.data?.team as unknown;
+  const teamName = typeof rawTeam === "string"
+    ? rawTeam
+    : rawTeam && typeof rawTeam === "object" && "name" in rawTeam
+      ? String((rawTeam as { name: unknown }).name)
+      : "Sem equipe";
 
   React.useEffect(() => {
     if (
@@ -329,8 +276,7 @@ export function Sidebar() {
     return undefined;
   };
 
-  const homeHref =
-    BETA_SINGLE_PIPELINE_MODE || CORE_OPERATION_MODE ? "/operacao" : "/dashboard";
+  const homeHref = "/pipelines";
 
   const content = (
     <aside
@@ -352,7 +298,7 @@ export function Sidebar() {
           {!collapsed ? (
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold tracking-tight text-white">{APP_NAME}</p>
-              <p className="truncate text-[11px] text-sidebar-muted">Operação comercial</p>
+              <p className="truncate text-[11px] text-sidebar-muted">Gestão comercial</p>
             </div>
           ) : null}
         </Link>
@@ -375,7 +321,7 @@ export function Sidebar() {
         </Button>
       </div>
 
-      <nav className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-2 py-4">
+      <nav data-testid="sidebar-navigation" className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.id} className="space-y-1.5">
             {!collapsed ? (
@@ -424,58 +370,29 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
-        <div
-          className={cn(
-            "flex items-center gap-2.5 rounded-xl bg-white/5 p-2",
-            collapsed && "justify-center bg-transparent p-0",
-          )}
-        >
-          <Avatar name={user?.name ?? "Usuário"} size="sm" />
-          {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">{user?.name ?? "Usuário"}</p>
-              <p className="truncate text-[11px] text-sidebar-muted">
-                {user ? AUTH_ROLE_LABEL[user.role] : "—"}
-              </p>
-            </div>
-          ) : null}
-        </div>
-        {!collapsed ? (
-          <div className="mt-2 space-y-1.5">
-            <SidebarTeamSwitch />
-            <Link
-              href="/settings"
-              onClick={() => handleNavigate("/settings")}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-sidebar-muted transition hover:bg-white/5 hover:text-white"
-            >
-              Configurações e perfil
-            </Link>
-            <button
-              type="button"
-              onClick={async () => {
-                setLoggingOut(true);
-                try {
-                  await logout();
-                } finally {
-                  setLoggingOut(false);
-                }
-              }}
-              disabled={loggingOut}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-sidebar-muted transition hover:bg-white/5 hover:text-white disabled:opacity-60"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              {loggingOut ? "Saindo…" : "Sair"}
-            </button>
+      <div data-testid="sidebar-user-footer" className="shrink-0 border-t border-sidebar-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <Popover open={accountMenuOpen} onOpenChange={setAccountMenuOpen} side="top" align="start" contentWidth={224} aria-label="Menu da conta" className="w-full" contentClassName="rounded-xl border-sidebar-border bg-[#1a1528] text-sidebar-foreground" trigger={
+          <button type="button" aria-label="Abrir menu da conta" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((value) => !value)} className={cn("flex w-full items-center gap-2.5 rounded-xl bg-white/5 p-2 text-left transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", collapsed && "justify-center bg-transparent p-0")}>
+            <Avatar name={user?.name ?? "Usuário"} size="sm" className="bg-white/10 text-white" />
+            {!collapsed ? <><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-white" title={user?.name}>{user?.name ?? "Usuário"}</p><p className="truncate text-[11px] text-sidebar-muted" title={user ? AUTH_ROLE_LABEL[user.role] : undefined}>{user ? AUTH_ROLE_LABEL[user.role] : "—"}</p></div><MoreVertical className="h-4 w-4 shrink-0 text-sidebar-muted" /></> : null}
+          </button>
+        }>
+          <div role="menu" className="p-1.5">
+            <div className="px-2.5 py-2"><p className="truncate text-sm font-medium text-white" title={user?.name}>{user?.name ?? "Usuário"}</p>{user?.email ? <p className="truncate text-xs text-sidebar-muted" title={user.email}>{user.email}</p> : null}<p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-sidebar-muted">Equipe</p><p className="truncate text-sm text-sidebar-foreground" title={teamName}>{teamName}</p></div>
+            <div className="my-1 border-t border-sidebar-border" />
+            <Link role="menuitem" href="/settings/general" onClick={() => { setAccountMenuOpen(false); handleNavigate("/settings/general"); }} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-white/5 hover:text-white"><UserRound className="h-4 w-4" />Meu perfil</Link>
+            <Link role="menuitem" href="/settings" onClick={() => { setAccountMenuOpen(false); handleNavigate("/settings"); }} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-white/5 hover:text-white"><Settings className="h-4 w-4" />Configurações</Link>
+            <div className="my-1 border-t border-sidebar-border" />
+            <button role="menuitem" type="button" disabled={loggingOut} onClick={async () => { setLoggingOut(true); try { await logout(); } finally { setLoggingOut(false); } }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-white/5 hover:text-white disabled:opacity-60"><LogOut className="h-4 w-4" />{loggingOut ? "Saindo…" : "Sair"}</button>
           </div>
-        ) : null}
+        </Popover>
       </div>
     </aside>
   );
 
   return (
     <>
-      <div className="hidden h-screen shrink-0 lg:block">{content}</div>
+      <div className="sticky top-0 hidden h-dvh shrink-0 lg:block">{content}</div>
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button

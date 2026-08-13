@@ -2,23 +2,38 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { CreateActivityDto, QueryActivitiesDto } from "./dto/activity.dto";
+import { Prisma } from "@xingyu/database";
 
 @Injectable()
 export class ActivitiesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: QueryActivitiesDto) {
+  async findAll(organizationId: string, query: QueryActivitiesDto, allowedPipelineIds?: string[] | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
-    const where: Record<string, unknown> = {
+    const where: Prisma.ActivityWhereInput = {
       organizationId,
       ...(query.contactId ? { contactId: query.contactId } : {}),
       ...(query.companyId ? { companyId: query.companyId } : {}),
       ...(query.dealId ? { dealId: query.dealId } : {}),
       ...(query.orderId ? { orderId: query.orderId } : {}),
-      ...(query.type ? { type: query.type } : {}),
+      ...(query.type ? { type: query.type as never } : {}),
+      ...(allowedPipelineIds ? { OR: [
+        { deal: { pipelineId: { in: allowedPipelineIds } } },
+        { task: { OR: [{ pipelineId: { in: allowedPipelineIds } }, { deal: { pipelineId: { in: allowedPipelineIds } } }] } },
+        { order: { deal: { pipelineId: { in: allowedPipelineIds } } } },
+        { conversation: { OR: [{ deal: { is: null } }, { deal: { pipelineId: { in: allowedPipelineIds } } }] } },
+        { AND: [{ dealId: null }, { taskId: null }, { orderId: null }, { conversationId: null }] },
+      ] } : {}),
     };
+    if (query.dealId) {
+      const deal = await this.prisma.deal.findFirst({
+        where: { id: query.dealId, organizationId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!deal) throw new NotFoundException(`Deal ${query.dealId} not found`);
+    }
     const [data, total] = await Promise.all([
       this.prisma.activity.findMany({
         where,
@@ -26,7 +41,7 @@ export class ActivitiesService {
         take,
         orderBy: { createdAt: "desc" },
         include: {
-          actor: { select: { id: true, name: true } },
+          actor: { select: { id: true, name: true, avatarUrl: true, status: true } },
           contact: { select: { id: true, firstName: true, lastName: true } },
           deal: { select: { id: true, name: true } },
         },
@@ -36,8 +51,37 @@ export class ActivitiesService {
     return paginate(data, total, page, pageSize);
   }
 
-  async timeline(organizationId: string, query: QueryActivitiesDto) {
-    return this.findAll(organizationId, { ...query, pageSize: query.pageSize ?? 50 });
+  async timeline(organizationId: string, query: QueryActivitiesDto, allowedPipelineIds?: string[] | null) {
+    const result = await this.findAll(organizationId, { ...query, pageSize: query.pageSize ?? 20 }, allowedPipelineIds);
+    const allowedMetadata = new Set([
+      "fromStageId",
+      "fromStageName",
+      "stageId",
+      "stageName",
+      "fromOwnerId",
+      "fromOwnerName",
+      "toOwnerId",
+      "toOwnerName",
+      "pipelineId",
+      "noteId",
+      "leadFileId",
+      "attachmentId",
+    ]);
+    return {
+      ...result,
+      data: result.data.map((activity) => ({
+        id: activity.id,
+        type: activity.type,
+        createdAt: activity.createdAt,
+        actor: activity.actor,
+        metadata:
+          activity.metadata && typeof activity.metadata === "object" && !Array.isArray(activity.metadata)
+            ? Object.fromEntries(
+                Object.entries(activity.metadata).filter(([key]) => allowedMetadata.has(key)),
+              )
+            : null,
+      })),
+    };
   }
 
   async findOne(organizationId: string, id: string) {

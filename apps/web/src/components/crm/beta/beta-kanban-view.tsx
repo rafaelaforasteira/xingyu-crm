@@ -8,22 +8,15 @@ import { Plus } from "lucide-react";
 import { pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal } from "@/lib/types";
-import {
-  BETA_PIPELINE_ID,
-  buildBetaConversationsHref,
-  buildBetaKanbanHref,
-} from "@/lib/beta-config";
-import {
-  countBoardDeals,
-  filterPipelineBoard,
-} from "@/lib/operation-utils";
+import { countBoardDeals, filterPipelineBoard } from "@/lib/operation-utils";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { PipelineViewSwitcher } from "@/components/crm/pipeline-view-switcher";
-import { CreateDealDialog } from "@/components/crm/deal-board-dialogs";
+import { ManualCreateLeadDialog } from "@/components/crm/manual-create-lead-dialog";
 import { DealWorkspaceDrawer, DealWorkspacePage } from "@/components/crm/deal-workspace";
 import { useUiStore } from "@/stores/ui";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PipelineStageSettingsButton } from "@/components/crm/operation/pipeline-stage-settings-button";
 
 const KanbanBoard = dynamic(
   () =>
@@ -47,10 +40,10 @@ function useIsMobile() {
   return mobile;
 }
 
-export function BetaKanbanView() {
+export function BetaKanbanView({ pipelineId }: { pipelineId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pipelineId = BETA_PIPELINE_ID;
+  const basePath = `/pipelines/${pipelineId}`;
   const dealParam = searchParams.get("deal");
   const searchQuery = searchParams.get("q") ?? "";
   const openDealDrawer = useUiStore((state) => state.openDealDrawer);
@@ -71,8 +64,7 @@ export function BetaKanbanView() {
   }, [data, searchQuery]);
 
   const hasSearchResults =
-    !searchQuery.trim() ||
-    (filteredBoard != null && countBoardDeals(filteredBoard) > 0);
+    !searchQuery.trim() || (filteredBoard != null && countBoardDeals(filteredBoard) > 0);
 
   const setDealParam = React.useCallback(
     (dealId: string | null) => {
@@ -82,9 +74,9 @@ export function BetaKanbanView() {
       params.delete("conversation");
       if (dealId) params.set("deal", dealId);
       else params.delete("deal");
-      router.replace(`/operacao?${params.toString()}`, { scroll: false });
+      router.replace(`${basePath}?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [basePath, router, searchParams],
   );
 
   React.useEffect(() => {
@@ -123,8 +115,8 @@ export function BetaKanbanView() {
               <PipelineViewSwitcher
                 pipelineId={pipelineId}
                 active="kanban"
-                kanbanHref={buildBetaKanbanHref(null, qOpt)}
-                conversationsHref={buildBetaConversationsHref(null, qOpt)}
+                kanbanHref={`${basePath}?view=kanban${qOpt?.q ? `&q=${encodeURIComponent(qOpt.q)}` : ""}`}
+                conversationsHref={`${basePath}?view=conversations${qOpt?.q ? `&q=${encodeURIComponent(qOpt.q)}` : ""}`}
                 kanbanLabel="Kanban"
                 dataTestIdPrefix="beta"
               />
@@ -134,8 +126,12 @@ export function BetaKanbanView() {
                 onClick={() => setCreateDealOpen(true)}
               >
                 <Plus className="h-4 w-4" />
-                Criar card
+                Criar lead
               </Button>
+              <PipelineStageSettingsButton
+                pipelineId={pipelineId}
+                pipelineName={data?.name ?? "Pipeline"}
+              />
             </div>
           }
         />
@@ -161,7 +157,7 @@ export function BetaKanbanView() {
         </>
       ) : null}
       {data ? (
-        <CreateDealDialog
+        <ManualCreateLeadDialog
           open={createDealOpen}
           onOpenChange={setCreateDealOpen}
           pipeline={data}

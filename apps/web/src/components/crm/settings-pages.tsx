@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { pipelinesApi, settingsApi } from "@/lib/api";
+import { pipelinesApi, settingsApi, usersApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { SettingsOverview } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label, Select } from "@/components/ui/form-controls";
 import { Avatar } from "@/components/ui/avatar";
+import { Dialog } from "@/components/ui/dialog";
 import { Settings, Tags, Users, Plug, Kanban, FormInput } from "lucide-react";
 
 export const SETTINGS_LINKS = [
@@ -117,10 +118,7 @@ export function SettingsGeneralPage() {
   });
 
   return (
-    <SettingsShell
-      title="Configurações"
-      description="Preferências da organização e da operação."
-    >
+    <SettingsShell title="Configurações" description="Preferências da organização e da operação.">
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       {isLoading ? (
         <Skeleton className="h-64 w-full" />
@@ -221,10 +219,7 @@ export function SettingsCustomFieldsPage() {
   });
 
   return (
-    <SettingsShell
-      title="Campos customizados"
-      description="Campos extras por entidade."
-    >
+    <SettingsShell title="Campos customizados" description="Campos extras por entidade.">
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       {isLoading ? <Skeleton className="h-40 w-full" /> : null}
       {!isLoading && (data?.fields.length ?? 0) === 0 ? (
@@ -313,6 +308,210 @@ export function SettingsTagsPage() {
 }
 
 export function SettingsUsersPage() {
+  const [search, setSearch] = React.useState("");
+  const [status, setStatus] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const [inviteUrl, setInviteUrl] = React.useState("");
+  const [form, setForm] = React.useState({
+    name: "",
+    email: "",
+    role: "CONSULTANT" as "ADMIN" | "MANAGER" | "CONSULTANT",
+    teamId: "",
+  });
+  const queryClient = useQueryClient();
+  const usersQuery = useQuery({
+    queryKey: ["managed-users", search, status],
+    queryFn: () =>
+      usersApi.list({ pageSize: 100, search: search || undefined, status: status || undefined }),
+    retry: false,
+  });
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: () => settingsApi.overview(),
+  });
+  const invite = useMutation({
+    mutationFn: () => usersApi.invite({ ...form, teamId: form.teamId || undefined }),
+    onSuccess: (result) => {
+      setInviteUrl(result.inviteUrl);
+      void queryClient.invalidateQueries({ queryKey: ["managed-users"] });
+    },
+    onError: (reason: Error) => toast.error(reason.message),
+  });
+  const users = usersQuery.data?.data ?? [];
+  const teams = settingsQuery.data?.teams ?? [];
+  return (
+    <SettingsShell
+      title="Usuários e permissões"
+      description="Convide pessoas e acompanhe seus acessos ao CRM."
+    >
+      {usersQuery.error ? <ErrorBanner message={(usersQuery.error as Error).message} /> : null}
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+        <Input
+          aria-label="Buscar usuários"
+          placeholder="Buscar por nome ou e-mail"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <Select
+          aria-label="Filtrar status"
+          className="sm:w-44"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+        >
+          <option value="">Todos</option>
+          <option value="ACTIVE">Ativos</option>
+          <option value="INVITED">Convidados</option>
+          <option value="INACTIVE">Inativos</option>
+        </Select>
+        <Button
+          onClick={() => {
+            setInviteUrl("");
+            setOpen(true);
+          }}
+        >
+          Novo usuário
+        </Button>
+      </div>
+      {usersQuery.isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : users.length === 0 ? (
+        <EmptyState icon={Users} title="Nenhum usuário" />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border bg-card shadow-card">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-muted/50 text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 text-left">Usuário</th>
+                <th className="px-4 py-3 text-left">Função</th>
+                <th className="px-4 py-3 text-left">Equipe</th>
+                <th className="px-4 py-3 text-left">Pipelines</th>
+                <th className="px-4 py-3 text-left">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((user) => (
+                <tr key={user.id} className="border-b border-border/60">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Avatar name={user.name} size="sm" />
+                      <span>
+                        <span className="block font-medium">{user.name}</span>
+                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">{user.authRole}</td>
+                  <td className="px-4 py-3">{user.team?.name ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    {user.directPipelineIds.length
+                      ? `${user.directPipelineIds.length} diretos`
+                      : "Herdado"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={user.status === "ACTIVE" ? "success" : "secondary"}>
+                      {user.status === "ACTIVE"
+                        ? "Ativo"
+                        : user.status === "INVITED"
+                          ? "Convidado"
+                          : "Inativo"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Novo usuário"
+        description="O link seguro será exibido para envio manual."
+      >
+        {inviteUrl ? (
+          <div className="space-y-3">
+            <Label>Link válido por 72 horas</Label>
+            <Input readOnly value={inviteUrl} />
+            <Button
+              className="w-full"
+              onClick={() => {
+                void navigator.clipboard.writeText(inviteUrl);
+                toast.success("Link copiado");
+              }}
+            >
+              Copiar link
+            </Button>
+          </div>
+        ) : (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              invite.mutate();
+            }}
+          >
+            <div>
+              <Label htmlFor="invite-name">Nome</Label>
+              <Input
+                id="invite-name"
+                required
+                value={form.name}
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-email">E-mail</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                required
+                value={form.email}
+                onChange={(event) => setForm({ ...form, email: event.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-role">Função</Label>
+              <Select
+                id="invite-role"
+                value={form.role}
+                onChange={(event) =>
+                  setForm({ ...form, role: event.target.value as typeof form.role })
+                }
+              >
+                <option value="CONSULTANT">Consultor</option>
+                <option value="MANAGER">Gerente</option>
+                <option value="ADMIN">Administrador</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="invite-team">Equipe</Label>
+              <Select
+                id="invite-team"
+                value={form.teamId}
+                onChange={(event) => setForm({ ...form, teamId: event.target.value })}
+              >
+                <option value="">Sem equipe</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                O acesso a pipelines pode ser herdado pela equipe.
+              </p>
+            </div>
+            <Button className="w-full" disabled={invite.isPending}>
+              {invite.isPending ? "Criando..." : "Criar convite"}
+            </Button>
+          </form>
+        )}
+      </Dialog>
+    </SettingsShell>
+  );
+}
+
+function LegacySettingsUsersPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.settings,
     queryFn: () => settingsApi.overview(),
@@ -346,9 +545,7 @@ export function SettingsUsersPage() {
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">Usuário</th>
                   <th className="px-4 py-3 text-left font-medium">Papel</th>
-                  <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">
-                    Equipe
-                  </th>
+                  <th className="hidden px-4 py-3 text-left font-medium sm:table-cell">Equipe</th>
                 </tr>
               </thead>
               <tbody>
@@ -384,10 +581,7 @@ export function SettingsIntegrationsPage() {
   const channels = data?.channels ?? [];
 
   return (
-    <SettingsShell
-      title="Integrações"
-      description="Canais e conexões externas."
-    >
+    <SettingsShell title="Integrações" description="Canais e conexões externas.">
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       {isLoading ? (
         <Skeleton className="h-40 w-full" />

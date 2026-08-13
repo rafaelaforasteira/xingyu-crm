@@ -18,6 +18,7 @@ import {
   ConnectPipelineChannelDto,
   SimulatePipelineLeadDto,
   UpdatePipelineChannelDto,
+  UpdateChannelOwnershipDto,
 } from "./dto/pipeline-channel.dto";
 import { acquirePipelineChannelIdentityLock } from "./pipeline-channel-lock";
 import { allocateLeadSequence } from "../common/lead-sequence";
@@ -34,6 +35,9 @@ const channelPublicSelect = {
   lastSyncAt: true,
   lastErrorAt: true,
   lastErrorMessage: true,
+  accessMode: true,
+  ownerUserId: true,
+  owner: { select: { id: true, name: true, avatarUrl: true, status: true } },
 } satisfies Prisma.ChannelSelect;
 
 const connectionInclude = {
@@ -313,6 +317,51 @@ export class PipelineChannelsService {
       );
       const result = await this.requireConnection(organizationId, pipelineId, connectionId, tx);
       return this.attachDefaultTags(organizationId, [result], tx).then(([item]) => item);
+    });
+  }
+
+  async updateOwnership(
+    organizationId: string,
+    pipelineId: string,
+    connectionId: string,
+    dto: UpdateChannelOwnershipDto,
+    userId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const connection = await this.requireConnection(organizationId, pipelineId, connectionId, tx);
+      const ownerUserId = dto.accessMode === "PERSONAL" ? dto.ownerUserId : null;
+      if (dto.accessMode === "PERSONAL" && !ownerUserId) {
+        throw new BadRequestException("Um canal pessoal exige uma pessoa responsavel.");
+      }
+      if (ownerUserId) {
+        const owner = await tx.user.findFirst({
+          where: { id: ownerUserId, organizationId, deletedAt: null, status: "ACTIVE" },
+          select: { id: true },
+        });
+        if (!owner) throw new BadRequestException("Responsavel invalido ou inativo.");
+      }
+      const before = {
+        accessMode: connection.channel.accessMode,
+        ownerUserId: connection.channel.ownerUserId,
+      };
+      const channel = await tx.channel.update({
+        where: { id: connection.channelId },
+        data: { accessMode: dto.accessMode, ownerUserId },
+        select: channelPublicSelect,
+      });
+      await this.audit(
+        tx,
+        organizationId,
+        userId,
+        "UPDATE_CHANNEL_OWNERSHIP",
+        connectionId,
+        before,
+        {
+          accessMode: channel.accessMode,
+          ownerUserId: channel.ownerUserId,
+        },
+      );
+      return channel;
     });
   }
 

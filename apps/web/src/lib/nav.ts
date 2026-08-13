@@ -16,8 +16,6 @@ import {
   Plug,
   type LucideIcon,
 } from "lucide-react";
-import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
-import { BETA_SINGLE_PIPELINE_MODE } from "@/lib/beta-config";
 
 export interface NavItem {
   href: string;
@@ -75,15 +73,15 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Simplified operational menu: Operação + Configurações. */
+/** Legacy operational menu retained for compatibility tests. */
 export const CORE_OPERATION_NAV_GROUPS: NavGroup[] = [
   {
     id: "core",
     label: "Principal",
     items: [
       {
-        href: "/operacao",
-        label: "Operação",
+        href: "/pipelines",
+        label: "Pipelines",
         icon: Kanban,
         countKey: "waitingConversations",
         exact: true,
@@ -93,29 +91,27 @@ export const CORE_OPERATION_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Beta single-pipeline: Operação only. */
+/** Official multi-pipeline navigation. */
 export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
   {
     id: "beta",
     label: "Principal",
     items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       {
-        href: "/operacao",
-        label: "Operação",
+        href: "/pipelines",
+        label: "Pipelines",
         icon: Kanban,
-        countKey: "waitingConversations",
         exact: true,
+        expandablePipelines: true,
       },
+      { href: "/tasks", label: "Tarefas", icon: CheckSquare },
     ],
   },
 ];
 
 /** Grouped sidebar — only real routes. */
-export const NAV_GROUPS: NavGroup[] = BETA_SINGLE_PIPELINE_MODE
-  ? BETA_SINGLE_PIPELINE_NAV_GROUPS
-  : CORE_OPERATION_MODE
-    ? CORE_OPERATION_NAV_GROUPS
-    : FULL_NAV_GROUPS;
+export const NAV_GROUPS: NavGroup[] = BETA_SINGLE_PIPELINE_NAV_GROUPS;
 
 /** Flat list kept for command palette / legacy helpers. */
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items).filter(

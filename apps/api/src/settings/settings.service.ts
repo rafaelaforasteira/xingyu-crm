@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
@@ -35,9 +40,7 @@ export class SettingsService {
     const where = {
       organizationId,
       ...notDeleted,
-      ...(query.search
-        ? { name: { contains: query.search, mode: "insensitive" as const } }
-        : {}),
+      ...(query.search ? { name: { contains: query.search, mode: "insensitive" as const } } : {}),
     };
     const [data, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -112,9 +115,7 @@ export class SettingsService {
     const where = {
       organizationId,
       ...notDeleted,
-      ...(query.search
-        ? { name: { contains: query.search, mode: "insensitive" as const } }
-        : {}),
+      ...(query.search ? { name: { contains: query.search, mode: "insensitive" as const } } : {}),
     };
     const [data, total] = await Promise.all([
       this.prisma.tag.findMany({ where, skip, take, orderBy: { name: "asc" } }),
@@ -124,7 +125,14 @@ export class SettingsService {
   }
 
   async createTag(organizationId: string, dto: CreateTagDto) {
-    return this.prisma.tag.create({ data: { ...dto, organizationId } });
+    const name = dto.name.trim();
+    if (!name) throw new BadRequestException("Tag name is required");
+    const duplicate = await this.prisma.tag.findFirst({
+      where: { organizationId, name: { equals: name, mode: "insensitive" }, ...notDeleted },
+      select: { id: true },
+    });
+    if (duplicate) throw new ConflictException("A tag with this name already exists");
+    return this.prisma.tag.create({ data: { ...dto, name, organizationId } });
   }
 
   async updateTag(organizationId: string, id: string, dto: UpdateTagDto) {

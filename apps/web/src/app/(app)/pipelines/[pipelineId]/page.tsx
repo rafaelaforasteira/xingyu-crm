@@ -1,9 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { PipelineBoardPage } from "@/components/crm/pipelines-page";
+import { BetaOperationPage } from "@/components/crm/beta/beta-operation-page";
 
 export default function Page() {
   const params = useParams<{ pipelineId: string }>();
-  return <PipelineBoardPage pipelineId={params.pipelineId} />;
+  return <BetaOperationPage pipelineId={params.pipelineId} />;
 }

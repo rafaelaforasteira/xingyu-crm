@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsHexColor,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -18,6 +19,7 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export const PIPELINE_STAGE_TYPES = ["OPEN", "WON", "LOST"] as const;
+export const PIPELINE_ICON_KEYS = ["kanban", "briefcase", "target", "sales", "shopping-cart", "shopping-bag", "package", "refresh", "users", "relationship", "messages", "support", "check", "launch", "tasks", "portfolio", "goal", "Kanban", "ShoppingBag", "Handshake", "Rocket", "Headphones"] as const;
 export type PipelineStageTypeValue = (typeof PIPELINE_STAGE_TYPES)[number];
 
 function optionalBoolean({ value, obj, key }: TransformFnParams) {
@@ -116,18 +118,20 @@ export class CreatePipelineDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
+  @MaxLength(140)
   description?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @IsHexColor()
   @MaxLength(32)
   color?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @IsIn(PIPELINE_ICON_KEYS)
   @MaxLength(80)
   icon?: string;
 
