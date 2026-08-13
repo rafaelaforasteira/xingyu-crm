@@ -91,6 +91,14 @@ export class CreateOrderDto {
   @IsString()
   dealId?: string;
 
+  @ApiPropertyOptional() @IsOptional() @IsString() operationalStageId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() operationalAssigneeId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() operationalPriority?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() operationalDueAt?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() operationalIssue?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsString() fulfillmentStatus?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() currentLocation?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -183,7 +191,30 @@ export class QueryOrdersDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   dealId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() stageId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() operationalAssigneeId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() financialStatus?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() fulfillmentStatus?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() priority?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() @Type(() => Boolean) issue?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() @Type(() => Boolean) overdue?: boolean;
 }
+
+export class CreateOrderStageDto {
+  @ApiProperty() @IsString() name!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() code?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() color?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() category?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isInitial?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isFinal?: boolean;
+  @ApiPropertyOptional() @IsOptional() translations?: Record<string, string>;
+}
+export class UpdateOrderStageDto extends PartialType(CreateOrderStageDto) {
+  @ApiPropertyOptional() @IsOptional() @IsInt() position?: number;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() archived?: boolean;
+}
+export class ReorderOrderStagesDto { @ApiProperty({ type: [String] }) @IsArray() @IsString({ each: true }) stageIds!: string[]; }
 
 export class CreatePaymentDto {
   @ApiProperty()

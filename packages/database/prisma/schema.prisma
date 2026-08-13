@@ -206,6 +206,13 @@ enum ShipmentStatus {
   RETURNED
 }
 
+enum OrderStageCategory {
+  OPEN
+  IN_PROGRESS
+  DONE
+  ISSUE
+}
+
 enum OccurrenceType {
   DEFECT
   MISSING_PRODUCT
@@ -355,6 +362,7 @@ model Organization {
   leadFiles                  LeadFile[]
   userInvites                UserInvite[]
   goals                      Goal[]
+  orderStageDefinitions      OrderStageDefinition[]
   taskComments               TaskComment[]
   taskCommentMentions        TaskCommentMention[]
   taskCommentAttachments     TaskCommentAttachment[]
@@ -438,6 +446,7 @@ model User {
   assignedConversations      Conversation[]              @relation("ConversationAssignee")
   sentMessages               Message[]                   @relation("MessageSender")
   ownedOrders                Order[]                     @relation("OrderOwner")
+  operationalOrders          Order[]                     @relation("OrderOperationalAssignee")
   ownedOccurrences           Occurrence[]                @relation("OccurrenceOwner")
   notifications              Notification[]
   activities                 Activity[]                  @relation("ActivityActor")
@@ -902,20 +911,20 @@ model Task {
 }
 
 model TaskComment {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   taskId         String
   authorId       String
-  body           String   @default("")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  body           String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
   organization Organization            @relation(fields: [organizationId], references: [id])
   task         Task                    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author       User                    @relation("TaskCommentAuthor", fields: [authorId], references: [id])
   mentions     TaskCommentMention[]
-  attachments TaskCommentAttachment[]
+  attachments  TaskCommentAttachment[]
 
   @@index([organizationId, taskId, createdAt])
 }
@@ -928,8 +937,8 @@ model TaskCommentMention {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  comment      TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment      TaskComment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, userId])
   @@index([organizationId, userId, createdAt])
@@ -947,7 +956,7 @@ model TaskCommentAttachment {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  comment      TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  comment      TaskComment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, commentId])
 }
@@ -1355,17 +1364,24 @@ model Product {
 }
 
 model Order {
-  id                       String      @id @default(cuid())
+  id                       String       @id @default(cuid())
   organizationId           String
   number                   String
   contactId                String?
   companyId                String?
   ownerId                  String?
   dealId                   String?
+  operationalStageId       String?
+  operationalAssigneeId    String?
+  operationalPriority      TaskPriority @default(MEDIUM)
+  operationalDueAt         DateTime?
+  operationalIssue         Boolean      @default(false)
+  fulfillmentStatus        String?
+  currentLocation          String?
   channel                  String?
   source                   String?
   campaign                 String?
-  currency                 String      @default("BRL")
+  currency                 String       @default("BRL")
   externalId               String?
   externalName             String?
   externalUrl              String?
@@ -1395,37 +1411,39 @@ model Order {
   trackingTermSnapshot     String?
   landingPageSnapshot      String?
   referrerSnapshot         String?
-  orderedAt                DateTime    @default(now())
-  grossValue               Decimal     @default(0) @db.Decimal(14, 2)
-  discount                 Decimal     @default(0) @db.Decimal(14, 2)
+  orderedAt                DateTime     @default(now())
+  grossValue               Decimal      @default(0) @db.Decimal(14, 2)
+  discount                 Decimal      @default(0) @db.Decimal(14, 2)
   coupon                   String?
-  shippingCost             Decimal     @default(0) @db.Decimal(14, 2)
-  taxes                    Decimal     @default(0) @db.Decimal(14, 2)
-  finalValue               Decimal     @default(0) @db.Decimal(14, 2)
-  status                   OrderStatus @default(ORDER_PLACED)
+  shippingCost             Decimal      @default(0) @db.Decimal(14, 2)
+  taxes                    Decimal      @default(0) @db.Decimal(14, 2)
+  finalValue               Decimal      @default(0) @db.Decimal(14, 2)
+  status                   OrderStatus  @default(ORDER_PLACED)
   expectedAt               DateTime?
   trackingCode             String?
   observations             String?
   createdById              String?
   updatedById              String?
-  createdAt                DateTime    @default(now())
-  updatedAt                DateTime    @updatedAt
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
   deletedAt                DateTime?
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  contact      Contact?      @relation(fields: [contactId], references: [id])
-  company      Company?      @relation(fields: [companyId], references: [id])
-  owner        User?         @relation("OrderOwner", fields: [ownerId], references: [id])
-  deal         Deal?         @relation(fields: [dealId], references: [id])
-  items        OrderItem[]
-  payments     Payment[]
-  shipments    Shipment[]
-  occurrences  Occurrence[]
-  tasks        Task[]
-  activities   Activity[]
-  notes        Note[]
-  attributions Attribution[]
-  events       OrderEvent[]
+  organization        Organization          @relation(fields: [organizationId], references: [id])
+  contact             Contact?              @relation(fields: [contactId], references: [id])
+  company             Company?              @relation(fields: [companyId], references: [id])
+  owner               User?                 @relation("OrderOwner", fields: [ownerId], references: [id])
+  deal                Deal?                 @relation(fields: [dealId], references: [id])
+  operationalStage    OrderStageDefinition? @relation(fields: [operationalStageId], references: [id], onDelete: SetNull)
+  operationalAssignee User?                 @relation("OrderOperationalAssignee", fields: [operationalAssigneeId], references: [id], onDelete: SetNull)
+  items               OrderItem[]
+  payments            Payment[]
+  shipments           Shipment[]
+  occurrences         Occurrence[]
+  tasks               Task[]
+  activities          Activity[]
+  notes               Note[]
+  attributions        Attribution[]
+  events              OrderEvent[]
 
   @@unique([organizationId, number])
   @@index([organizationId])
@@ -1435,6 +1453,33 @@ model Order {
   @@index([ownerId])
   @@index([contactId, orderedAt])
   @@index([organizationId, externalId])
+  @@index([organizationId, operationalStageId])
+  @@index([organizationId, operationalAssigneeId])
+  @@index([organizationId, operationalDueAt])
+}
+
+model OrderStageDefinition {
+  id             String             @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  translations   Json               @default("{}")
+  color          String             @default("#64748B")
+  position       Int                @default(0)
+  category       OrderStageCategory @default(OPEN)
+  isInitial      Boolean            @default(false)
+  isFinal        Boolean            @default(false)
+  active         Boolean            @default(true)
+  archived       Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  orders       Order[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, active, archived, position])
 }
 
 model OrderItem {

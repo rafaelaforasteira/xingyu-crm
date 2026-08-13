@@ -21,6 +21,7 @@ import type {
   NotificationItem,
   Occurrence,
   Order,
+  OrderStageDefinition,
   PaginatedResponse,
   Pipeline,
   AvailablePipelineChannel,
@@ -604,6 +605,11 @@ export const tasksApi = {
 export const ordersApi = {
   list: (query?: Record<string, QueryValue>) => api.get<PaginatedResponse<Order>>("/orders", query),
   get: (id: string) => api.get<Order>(`/orders/${id}`),
+  stages: (includeArchived = false) => api.get<OrderStageDefinition[]>("/orders/stages", { includeArchived: includeArchived || undefined }),
+  createStage: (data: Partial<OrderStageDefinition> & { name: string }) => api.post<OrderStageDefinition>("/orders/stages", data),
+  updateStage: (id: string, data: Partial<OrderStageDefinition>) => api.patch<OrderStageDefinition>(`/orders/stages/${id}`, data),
+  reorderStages: (stageIds: string[]) => api.post<OrderStageDefinition[]>("/orders/stages/reorder", { stageIds }),
+  update: (id: string, data: Partial<Order>) => api.patch<Order>(`/orders/${id}`, data),
   timeline: (id: string) => api.get<Activity[]>(`/orders/${id}/timeline`),
 };
 

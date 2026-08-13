@@ -704,6 +704,16 @@ export interface Order {
   companyId?: string | null;
   company?: Company | null;
   dealId?: string | null;
+  deal?: { id: string; name: string; leadSequence?: number | null; pipelineId: string } | null;
+  operationalStageId?: string | null;
+  operationalStage?: OrderStageDefinition | null;
+  operationalAssigneeId?: string | null;
+  operationalAssignee?: UserRef | null;
+  operationalPriority?: string;
+  operationalDueAt?: string | null;
+  operationalIssue?: boolean;
+  fulfillmentStatus?: string | null;
+  currentLocation?: string | null;
   status: OrderStatus;
   total?: number;
   grossValue?: number | string;
@@ -756,6 +766,11 @@ export interface Order {
   shipments?: OrderShipment[];
   attributions?: OrderAttribution[];
   events?: OrderEvent[];
+}
+
+export interface OrderStageDefinition {
+  id: string; code: string; name: string; translations?: Record<string, string>; color: string;
+  position: number; category: "OPEN" | "IN_PROGRESS" | "DONE" | "ISSUE"; isInitial: boolean; isFinal: boolean; active: boolean; archived: boolean;
 }
 
 export interface OrderItem {

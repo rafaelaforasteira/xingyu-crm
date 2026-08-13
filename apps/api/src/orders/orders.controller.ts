@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   Query,
+  ForbiddenException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiHeader } from "@nestjs/swagger";
 import { OrdersService } from "./orders.service";
@@ -18,6 +19,9 @@ import {
   QueryOrdersDto,
   CreatePaymentDto,
   CreateShipmentDto,
+  CreateOrderStageDto,
+  UpdateOrderStageDto,
+  ReorderOrderStagesDto,
 } from "./dto/order.dto";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
@@ -28,6 +32,25 @@ import { PipelineAccessService } from "../pipelines/pipeline-access.service";
 @Controller("orders")
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService, private readonly access: PipelineAccessService) {}
+
+  @Get("stages")
+  stages(@OrganizationId() orgId: string, @Query("includeArchived") archived?: string) { return this.ordersService.stages(orgId, archived === "true"); }
+
+  @Post("stages")
+  createStage(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Body() dto: CreateOrderStageDto) {
+    if (user.role !== "ADMIN") throw new ForbiddenException();
+    return this.ordersService.createStage(orgId, dto);
+  }
+  @Patch("stages/:stageId")
+  updateStage(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("stageId") id: string, @Body() dto: UpdateOrderStageDto) {
+    if (user.role !== "ADMIN") throw new ForbiddenException();
+    return this.ordersService.updateStage(orgId, id, dto);
+  }
+  @Post("stages/reorder")
+  reorderStages(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Body() dto: ReorderOrderStagesDto) {
+    if (user.role !== "ADMIN") throw new ForbiddenException();
+    return this.ordersService.reorderStages(orgId, dto.stageIds);
+  }
 
   @Get()
   @ApiOperation({ summary: "List orders" })

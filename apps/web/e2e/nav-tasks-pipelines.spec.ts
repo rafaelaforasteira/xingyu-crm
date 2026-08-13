@@ -11,9 +11,11 @@ test("sidebar exposes Pipelines and the global Tasks module", async ({ page }) =
   const dashboardIndex = labels.findIndex((label) => label.includes("Dashboard"));
   const tasksIndex = labels.findIndex((label) => label.includes("Tarefas"));
   const pipelinesIndex = labels.findIndex((label) => label.includes("Pipelines"));
+  const ordersIndex = labels.findIndex((label) => label.includes("Pedidos"));
   expect(dashboardIndex).toBeGreaterThanOrEqual(0);
   expect(dashboardIndex).toBeLessThan(tasksIndex);
   expect(tasksIndex).toBeLessThan(pipelinesIndex);
+  expect(pipelinesIndex).toBeLessThan(ordersIndex);
   await expect(page.getByText("Organize e acompanhe as atividades da operação.")).toBeVisible();
 });
 
