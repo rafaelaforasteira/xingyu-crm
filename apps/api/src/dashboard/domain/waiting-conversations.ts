@@ -25,17 +25,13 @@ export function classifyWaitingKind(hasPriorOutbound: boolean): WaitingKind {
 }
 
 export function waitingKindLabel(kind: WaitingKind): string {
-  return kind === "first_response"
-    ? "Aguardando primeira resposta"
-    : "Aguardando retorno";
+  return kind === "first_response" ? "Aguardando primeira resposta" : "Aguardando retorno";
 }
 
 /** Waiting duration in whole minutes from the client's last message. */
 export function waitingMinutesSince(lastClientMessageAt: Date | string, now = new Date()): number {
   const at =
-    typeof lastClientMessageAt === "string"
-      ? new Date(lastClientMessageAt)
-      : lastClientMessageAt;
+    typeof lastClientMessageAt === "string" ? new Date(lastClientMessageAt) : lastClientMessageAt;
   return Math.max(0, Math.floor((now.getTime() - at.getTime()) / 60_000));
 }
 

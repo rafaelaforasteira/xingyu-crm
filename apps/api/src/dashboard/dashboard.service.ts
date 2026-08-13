@@ -1,6 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { ForbiddenException, Injectable } from "@nestjs/common";
 import { Prisma } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
+import type { AuthenticatedUser } from "../auth/types";
 import { notDeleted } from "../common/utils/soft-delete";
 import {
   closedDealConversionDeltaPp,
@@ -23,6 +24,7 @@ import {
   waitingKindLabel,
   waitingMinutesSince,
 } from "./domain/waiting-conversations";
+import { responseEpisodes, responseSummary } from "./domain/response-episodes";
 
 type DashboardFilters = {
   ownerId?: string;
@@ -35,6 +37,10 @@ type DashboardFilters = {
   to?: string;
   channel?: string;
   source?: string;
+  channelId?: string;
+  allowedPipelineIds?: string[] | null;
+  viewerRole?: AuthenticatedUser["role"];
+  viewerId?: string;
 };
 
 /**
@@ -66,17 +72,15 @@ function resolvePeriod(period?: string, from?: string, to?: string) {
 
   if (label === "custom" && from && to) {
     let customStart = parseDayBound(from, false);
-    let customEnd = parseDayBound(to, true);
+    let customEnd = parseDayBound(to, false);
     if (customStart && customEnd) {
       if (customStart.getTime() > customEnd.getTime()) {
         const swap = customStart;
         customStart = parseDayBound(to, false)!;
-        customEnd = parseDayBound(from, true)!;
+        customEnd = parseDayBound(from, false)!;
       }
-      const durationMs = Math.max(
-        customEnd.getTime() - customStart.getTime(),
-        86_400_000,
-      );
+      customEnd.setUTCDate(customEnd.getUTCDate() + 1);
+      const durationMs = Math.max(customEnd.getTime() - customStart.getTime(), 86_400_000);
       return {
         start: customStart,
         end: customEnd,
@@ -98,6 +102,13 @@ function resolvePeriod(period?: string, from?: string, to?: string) {
       start.setUTCDate(1);
       start.setUTCHours(0, 0, 0, 0);
       break;
+    case "previous-month": {
+      end.setUTCDate(1);
+      end.setUTCHours(0, 0, 0, 0);
+      start.setTime(end.getTime());
+      start.setUTCMonth(start.getUTCMonth() - 1);
+      break;
+    }
     case "30d":
     default:
       start.setUTCDate(start.getUTCDate() - 30);
@@ -126,6 +137,9 @@ export class DashboardService {
       ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
       ...(filters.teamId ? { teamId: filters.teamId } : {}),
       ...(filters.pipelineId ? { pipelineId: filters.pipelineId } : {}),
+      ...(!filters.pipelineId && filters.allowedPipelineIds
+        ? { pipelineId: { in: filters.allowedPipelineIds } }
+        : {}),
       ...(channelOrSource
         ? {
             source: {
@@ -134,6 +148,178 @@ export class DashboardService {
             },
           }
         : {}),
+    };
+  }
+
+  async authorizeFilters(
+    organizationId: string,
+    user: AuthenticatedUser,
+    raw: Record<string, string | undefined>,
+    allowedPipelineIds: string[] | null,
+  ): Promise<DashboardFilters> {
+    if (raw.pipelineId && allowedPipelineIds && !allowedPipelineIds.includes(raw.pipelineId)) {
+      throw new ForbiddenException("Pipeline fora do seu escopo de análise.");
+    }
+    let ownerId = raw.ownerId;
+    let teamId = raw.teamId;
+    if (user.role !== "ADMIN") {
+      if (ownerId) {
+        const allowedOwner = await this.prisma.user.count({
+          where: {
+            id: ownerId,
+            organizationId,
+            deletedAt: null,
+            status: "ACTIVE",
+            ...(user.role === "CONSULTANT"
+              ? { id: user.id }
+              : { teamId: user.teamId ?? "__none__" }),
+          },
+        });
+        if (!allowedOwner) throw new ForbiddenException("Pessoa fora do seu escopo de análise.");
+      } else {
+        ownerId = user.id;
+      }
+      teamId = undefined;
+    } else if (ownerId || teamId) {
+      const [ownerOk, teamOk] = await Promise.all([
+        ownerId
+          ? this.prisma.user.count({ where: { id: ownerId, organizationId, deletedAt: null } })
+          : 1,
+        teamId
+          ? this.prisma.team.count({ where: { id: teamId, organizationId, deletedAt: null } })
+          : 1,
+      ]);
+      if (!ownerOk || !teamOk) throw new ForbiddenException("Filtro fora da organização.");
+    }
+    let channelId: string | undefined;
+    if (raw.channel) {
+      const channelAccess: Prisma.ChannelWhereInput =
+        user.role === "ADMIN"
+          ? {}
+          : {
+              OR: [
+                { accessMode: "ORGANIZATION" },
+                { accessMode: "PERSONAL", ownerUserId: user.id },
+                {
+                  accessMode: "PIPELINE",
+                  pipelineConnections: {
+                    some: {
+                      active: true,
+                      deletedAt: null,
+                      pipelineId: { in: allowedPipelineIds ?? [] },
+                    },
+                  },
+                },
+              ],
+            };
+      const channel = await this.prisma.channel.findFirst({
+        where: {
+          organizationId,
+          deletedAt: null,
+          AND: [
+            { OR: [{ id: raw.channel }, { name: raw.channel }, { displayName: raw.channel }] },
+            channelAccess,
+          ],
+        },
+        select: { id: true, name: true },
+      });
+      if (!channel) throw new ForbiddenException("Canal fora do seu escopo de análise.");
+      channelId = channel.id;
+    }
+    return {
+      ownerId,
+      teamId,
+      pipelineId: raw.pipelineId,
+      period: raw.period,
+      from: raw.from,
+      to: raw.to,
+      channel: raw.channel,
+      source: raw.source,
+      channelId,
+      allowedPipelineIds,
+      viewerRole: user.role,
+      viewerId: user.id,
+    };
+  }
+
+  async filterOptions(
+    organizationId: string,
+    user: AuthenticatedUser,
+    allowedPromise: Promise<string[] | null>,
+  ) {
+    const allowed = await allowedPromise;
+    const [pipelines, teams, users, channels, organization] = await Promise.all([
+      this.prisma.pipeline.findMany({
+        where: {
+          organizationId,
+          deletedAt: null,
+          archived: false,
+          ...(allowed ? { id: { in: allowed } } : {}),
+        },
+        select: { id: true, name: true },
+        orderBy: { position: "asc" },
+      }),
+      user.role === "ADMIN"
+        ? this.prisma.team.findMany({
+            where: { organizationId, deletedAt: null },
+            select: { id: true, name: true },
+            orderBy: { name: "asc" },
+          })
+        : user.teamId
+          ? this.prisma.team.findMany({
+              where: { id: user.teamId, organizationId, deletedAt: null },
+              select: { id: true, name: true },
+            })
+          : [],
+      this.prisma.user.findMany({
+        where: {
+          organizationId,
+          deletedAt: null,
+          status: "ACTIVE",
+          ...(user.role === "ADMIN"
+            ? {}
+            : user.role === "MANAGER" && user.teamId
+              ? { teamId: user.teamId }
+              : { id: user.id }),
+        },
+        select: { id: true, name: true, teamId: true },
+        orderBy: { name: "asc" },
+      }),
+      this.prisma.channel.findMany({
+        where: {
+          organizationId,
+          deletedAt: null,
+          isActive: true,
+          ...(user.role === "ADMIN"
+            ? {}
+            : {
+                OR: [
+                  { accessMode: "ORGANIZATION" },
+                  { accessMode: "PERSONAL", ownerUserId: user.id },
+                  {
+                    accessMode: "PIPELINE",
+                    pipelineConnections: {
+                      some: { active: true, deletedAt: null, pipelineId: { in: allowed ?? [] } },
+                    },
+                  },
+                ],
+              }),
+        },
+        select: { id: true, name: true, displayName: true, accessMode: true },
+        orderBy: { name: "asc" },
+      }),
+      this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { timezone: true, currency: true },
+      }),
+    ]);
+    return {
+      pipelines,
+      teams,
+      users,
+      channels,
+      timezone: organization?.timezone ?? "UTC",
+      currency: organization?.currency ?? "BRL",
     };
   }
 
@@ -174,9 +360,7 @@ export class DashboardService {
       ...(filters.teamId ? { teamId: filters.teamId } : {}),
     };
 
-    const staleTrackingBefore = new Date(
-      Date.now() - TRACKING_STALE_DAYS * 86_400_000,
-    );
+    const staleTrackingBefore = new Date(Date.now() - TRACKING_STALE_DAYS * 86_400_000);
 
     const [
       openDeals,
@@ -576,10 +760,7 @@ export class DashboardService {
       take: 500,
     });
 
-    const channelMap = new Map<
-      string,
-      { revenue: number; sales: number; leads: number }
-    >();
+    const channelMap = new Map<string, { revenue: number; sales: number; leads: number }>();
     for (const order of orders) {
       const key = order.channel || "Outros";
       const current = channelMap.get(key) ?? { revenue: 0, sales: 0, leads: 0 };
@@ -843,20 +1024,13 @@ export class DashboardService {
       recentDeals,
       dealsRequiringAction: actionDeals.map((deal) => {
         const reference = deal.lastInteractionAt ?? deal.updatedAt;
-        const idleDays = Math.max(
-          0,
-          Math.floor((Date.now() - reference.getTime()) / 86_400_000),
-        );
+        const idleDays = Math.max(0, Math.floor((Date.now() - reference.getTime()) / 86_400_000));
         let reason = "Sem próxima atividade";
         if (deal.unreadMessages > 0) reason = "Cliente aguardando retorno";
         else if (idleDays >= 3) reason = `Parado há ${idleDays} dias`;
         else if (!deal.nextTaskAt) reason = "Sem próxima tarefa";
         const priority =
-          idleDays >= 5 || Number(deal.value) >= 5000
-            ? "HIGH"
-            : idleDays >= 3
-              ? "MEDIUM"
-              : "LOW";
+          idleDays >= 5 || Number(deal.value) >= 5000 ? "HIGH" : idleDays >= 3 ? "MEDIUM" : "LOW";
         return {
           ...deal,
           idleDays,
@@ -870,10 +1044,201 @@ export class DashboardService {
     };
   }
 
-  private async buildJourneySummaries(organizationId: string) {
-    const staleTrackingBefore = new Date(
-      Date.now() - TRACKING_STALE_DAYS * 86_400_000,
+  async overview(organizationId: string, filters: DashboardFilters) {
+    const [metrics, charts, lists] = await Promise.all([
+      this.metrics(organizationId, filters),
+      this.charts(organizationId, filters),
+      this.lists(organizationId, filters),
+    ]);
+    return {
+      metrics,
+      pipelines: charts.pipelineByStage,
+      topSellers: charts.performanceByOwner.slice(0, 3),
+      lists,
+    };
+  }
+
+  async commercial(organizationId: string, filters: DashboardFilters) {
+    const [metrics, charts] = await Promise.all([
+      this.metrics(organizationId, filters),
+      this.charts(organizationId, filters),
+    ]);
+    return {
+      metrics,
+      funnel: charts.funnel,
+      funnelStats: charts.funnelStats,
+      revenueByPeriod: charts.revenueByPeriod,
+      availability: {
+        stageEntries: "READY",
+        stageConversion: "TRACKING_FROM_NOW",
+        historicalSellerAttribution: "NOT_SUPPORTED",
+        postSaleRate: "TRACKING_FROM_NOW",
+      },
+    };
+  }
+
+  async attendance(organizationId: string, filters: DashboardFilters) {
+    const { start, end } = resolvePeriod(filters.period, filters.from, filters.to);
+    const conversations = await this.prisma.conversation.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        createdAt: { gte: start, lt: end },
+        ...(filters.ownerId ? { assigneeId: filters.ownerId } : {}),
+        ...(filters.channelId ? { channelId: filters.channelId } : {}),
+        ...(filters.pipelineId
+          ? { deal: { pipelineId: filters.pipelineId } }
+          : filters.allowedPipelineIds
+            ? { OR: [{ deal: { pipelineId: { in: filters.allowedPipelineIds } } }, { deal: null }] }
+            : {}),
+      },
+      select: {
+        id: true,
+        status: true,
+        unreadCount: true,
+        messages: {
+          where: { deletedAt: null, isInternal: false, sentAt: { gte: start, lt: end } },
+          orderBy: { sentAt: "asc" },
+          select: { direction: true, sentAt: true },
+        },
+      },
+      take: 2000,
+    });
+    const episodes = conversations.flatMap((conversation) =>
+      responseEpisodes(conversation.messages),
     );
+    const response = responseSummary(episodes);
+    const initiatedByTeam = conversations.filter(
+      (item) => item.messages[0]?.direction === "OUTBOUND",
+    ).length;
+    const initiatedByCustomer = conversations.filter(
+      (item) => item.messages[0]?.direction === "INBOUND",
+    ).length;
+    const waitingOurResponse = conversations.filter(
+      (item) => item.status === "OPEN" && item.messages.at(-1)?.direction === "INBOUND",
+    ).length;
+    const waitingCustomer = conversations.filter(
+      (item) => item.status === "OPEN" && item.messages.at(-1)?.direction === "OUTBOUND",
+    ).length;
+    return {
+      conversations: conversations.length,
+      waitingOurResponse,
+      waitingCustomer,
+      unread: conversations.reduce((sum, item) => sum + item.unreadCount, 0),
+      initiatedByTeam,
+      initiatedByCustomer,
+      ...response,
+      sla: {
+        under5: episodes.filter((value) => value <= 5).length,
+        under15: episodes.filter((value) => value > 5 && value <= 15).length,
+        under60: episodes.filter((value) => value > 15 && value <= 60).length,
+        over60: episodes.filter((value) => value > 60).length,
+      },
+      availability: {
+        providerDeliverySla: "BLOCKED_PROVIDER",
+        approachConversion: "TRACKING_FROM_NOW",
+      },
+    };
+  }
+
+  async team(organizationId: string, filters: DashboardFilters) {
+    const charts = await this.charts(organizationId, filters);
+    const allowed = charts.performanceByOwner
+      .filter((row) => !filters.ownerId || row.id === filters.ownerId)
+      .sort((a, b) => b.revenue - a.revenue || a.name.localeCompare(b.name));
+    return {
+      podium: allowed.slice(0, 3),
+      ranking: allowed,
+      attribution: "Deal.ownerId at query time",
+      availability: { historicalResponsible: "NOT_SUPPORTED", goals: "READY" },
+    };
+  }
+
+  async customers(organizationId: string, filters: DashboardFilters) {
+    const { start, end } = resolvePeriod(filters.period, filters.from, filters.to);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        orderedAt: { gte: start, lt: end },
+        status: { in: ["PAYMENT_APPROVED", "DELIVERED", "COMPLETED", "NATIONAL_TRANSPORT"] },
+        ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
+        ...(filters.pipelineId
+          ? { deal: { pipelineId: filters.pipelineId } }
+          : filters.allowedPipelineIds
+            ? {
+                OR: [
+                  { deal: { pipelineId: { in: filters.allowedPipelineIds } } },
+                  { dealId: null },
+                ],
+              }
+            : {}),
+      },
+      select: {
+        id: true,
+        finalValue: true,
+        isFirstPurchase: true,
+        purchaseOrdinal: true,
+        contact: {
+          select: { tags: { select: { tag: { select: { id: true, name: true, color: true } } } } },
+        },
+      },
+      take: 5000,
+    });
+    const first = orders.filter(
+      (order) => order.isFirstPurchase === true || order.purchaseOrdinal === 1,
+    );
+    const recurring = orders.filter(
+      (order) => order.isFirstPurchase === false || (order.purchaseOrdinal ?? 0) > 1,
+    );
+    const sum = (rows: typeof orders) =>
+      rows.reduce((total, order) => total + decimal(order.finalValue), 0);
+    const tags = new Map<
+      string,
+      { id: string; name: string; color: string; orders: number; revenue: number }
+    >();
+    for (const order of orders)
+      for (const relation of order.contact?.tags ?? []) {
+        const tag = relation.tag;
+        const current = tags.get(tag.id) ?? { ...tag, orders: 0, revenue: 0 };
+        current.orders += 1;
+        current.revenue += decimal(order.finalValue);
+        tags.set(tag.id, current);
+      }
+    return {
+      newCustomers: first.length,
+      recurringCustomers: recurring.length,
+      newRevenue: sum(first),
+      recurringRevenue: sum(recurring),
+      newTicket: first.length ? sum(first) / first.length : null,
+      recurringTicket: recurring.length ? sum(recurring) / recurring.length : null,
+      tags: [...tags.values()].sort((a, b) => b.revenue - a.revenue),
+      availability: { customerClassification: "READY", averagePurchaseInterval: "NOT_SUPPORTED" },
+    };
+  }
+
+  async channels(organizationId: string, filters: DashboardFilters) {
+    const charts = await this.charts(organizationId, filters);
+    const attendance = await this.attendance(organizationId, filters);
+    return {
+      ranking:
+        filters.viewerRole === "ADMIN"
+          ? charts.channelPerformance
+          : filters.channel
+            ? charts.channelPerformance.filter((row) => row.label === filters.channel)
+            : [],
+      selectedChannelAttendance: filters.channel ? attendance : null,
+      availability: {
+        conversationChannel: "READY",
+        orderChannelSnapshot: "READY",
+        firstTouchAttribution: "TRACKING_FROM_NOW",
+        providerCampaignDelivery: "BLOCKED_PROVIDER",
+      },
+    };
+  }
+
+  private async buildJourneySummaries(organizationId: string) {
+    const staleTrackingBefore = new Date(Date.now() - TRACKING_STALE_DAYS * 86_400_000);
     const [
       repurchaseReady,
       inactive,
@@ -1099,9 +1464,7 @@ export class DashboardService {
         });
         const hasPriorOutbound = messages.some((message) => message.direction === "OUTBOUND");
         const waitingKind = classifyWaitingKind(hasPriorOutbound);
-        const waitingMinutes = last?.sentAt
-          ? waitingMinutesSince(last.sentAt)
-          : 0;
+        const waitingMinutes = last?.sentAt ? waitingMinutesSince(last.sentAt) : 0;
         return {
           ...conversation,
           lastMessagePreview: last?.body ?? null,

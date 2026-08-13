@@ -1,370 +1,524 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { dashboardApi, pipelinesApi, settingsApi } from "@/lib/api";
-import { queryKeys } from "@/lib/query-keys";
-import { useAuth } from "@/components/auth/auth-provider";
-import { useUiStore } from "@/stores/ui";
-import { ErrorBanner } from "@/components/crm/page-header";
-import { DashboardHeader } from "@/components/crm/dashboard/dashboard-header";
 import {
-  DashboardFilters,
-  DEFAULT_DASHBOARD_FILTERS,
-  type DashboardFilterState,
-} from "@/components/crm/dashboard/dashboard-filters";
-import { KpiCard, formatKpiMoney } from "@/components/crm/dashboard/kpi-card";
-import { AttentionPanel } from "@/components/crm/dashboard/attention-panel";
-import { CommercialFunnel } from "@/components/crm/dashboard/commercial-funnel";
-import {
-  ChannelPerformance,
-  RevenueChart,
-} from "@/components/crm/dashboard/revenue-and-channels";
-import {
-  DealsRequiringAction,
-  TeamPerformance,
-  TodayTasks,
-  WaitingConversations,
-} from "@/components/crm/dashboard/operational-lists";
-import { JourneySummaryCards } from "@/components/crm/dashboard/journey-summary-cards";
+  AlertTriangle,
+  BarChart3,
+  Clock3,
+  MessagesSquare,
+  ShoppingBag,
+  TrendingUp,
+  UsersRound,
+  WalletCards,
+} from "lucide-react";
+import { dashboardApi } from "@/lib/api";
+import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { Label, Select } from "@/components/ui/form-controls";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-function awaitingPaymentHref(metrics?: {
-  awaitingPaymentPipelineId?: string | null;
-  awaitingPaymentStageId?: string | null;
-  pipelineId?: string;
+type Tab = "overview" | "commercial" | "attendance" | "team" | "customers" | "channels";
+const TABS: Array<{ value: Tab; label: string }> = [
+  { value: "overview", label: "Visão geral" },
+  { value: "commercial", label: "Comercial" },
+  { value: "attendance", label: "Atendimento" },
+  { value: "team", label: "Equipe" },
+  { value: "customers", label: "Clientes" },
+  { value: "channels", label: "Canais" },
+];
+const money = (value: unknown) =>
+  typeof value === "number"
+    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+    : "—";
+const number = (value: unknown) =>
+  typeof value === "number" ? new Intl.NumberFormat("pt-BR").format(value) : "—";
+const minutes = (value: unknown) =>
+  typeof value === "number"
+    ? value < 60
+      ? `${Math.round(value)} min`
+      : `${(value / 60).toFixed(1)} h`
+    : "—";
+
+function Metric({
+  label,
+  value,
+  note,
+  icon: Icon,
+}: {
+  label: string;
+  value: React.ReactNode;
+  note?: string;
+  icon?: React.ComponentType<{ className?: string }>;
 }) {
-  if (metrics?.awaitingPaymentPipelineId && metrics.awaitingPaymentStageId) {
-    return `/pipelines/${metrics.awaitingPaymentPipelineId}?stageId=${metrics.awaitingPaymentStageId}`;
-  }
-  if (metrics?.pipelineId) {
-    return `/pipelines/${metrics.pipelineId}`;
-  }
-  return "/pipelines";
+  return (
+    <Card className="min-w-0">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          {Icon ? <Icon className="h-4 w-4 text-primary" /> : null}
+        </div>
+        <p className="mt-2 truncate text-2xl font-semibold tracking-tight">{value}</p>
+        {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
+      </CardContent>
+    </Card>
+  );
 }
 
-function stalledDealsHref(pipelineId?: string) {
-  if (pipelineId) return `/pipelines/${pipelineId}?idleDays=3`;
-  return "/pipelines?idleDays=3";
+function Availability({ value }: { value?: string }) {
+  if (!value || value === "READY") return null;
+  const labels: Record<string, string> = {
+    TRACKING_FROM_NOW: "Rastreando a partir de agora",
+    BLOCKED_PROVIDER: "Aguardando integração do provedor",
+    NOT_SUPPORTED: "Histórico indisponível",
+  };
+  return (
+    <Badge variant="outline" title={labels[value] ?? value}>
+      {labels[value] ?? value}
+    </Badge>
+  );
+}
+
+function Ranking({
+  rows,
+  metric = "revenue",
+}: {
+  rows: Array<Record<string, unknown>>;
+  metric?: string;
+}) {
+  if (!rows.length) return <EmptyState icon={UsersRound} title="Sem dados para o ranking" />;
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border bg-card">
+      <table className="w-full text-sm">
+        <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
+          <tr>
+            <th className="px-4 py-3 text-left">Posição</th>
+            <th className="px-4 py-3 text-left">Pessoa</th>
+            <th className="px-4 py-3 text-right">Receita</th>
+            <th className="px-4 py-3 text-right">Conversão</th>
+            <th className="px-4 py-3 text-right">Negócios abertos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={String(row.id ?? index)} className="border-b last:border-0">
+              <td className="px-4 py-3 font-semibold">
+                {index < 3 ? ["🥇", "🥈", "🥉"][index] : `${index + 1}º`}
+              </td>
+              <td className="px-4 py-3 font-medium">{String(row.name ?? "—")}</td>
+              <td className="px-4 py-3 text-right">
+                {metric === "revenue" ? money(row.revenue) : number(row[metric])}
+              </td>
+              <td className="px-4 py-3 text-right">
+                {typeof row.conversionRate === "number" ? `${row.conversionRate}%` : "—"}
+              </td>
+              <td className="px-4 py-3 text-right">{number(row.openDeals)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function DashboardPage() {
-  const { user } = useAuth();
-  const selectedTeamId = useUiStore((s) => s.selectedTeamId);
-  const canSeeTeam = user?.role === "ADMIN" || user?.role === "MANAGER";
-
-  // Keep SSR/client first paint identical — role defaults apply after mount.
-  const [filters, setFilters] = React.useState<DashboardFilterState>(
-    DEFAULT_DASHBOARD_FILTERS,
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const requestedTab = params.get("tab") as Tab | null;
+  const tab = TABS.some((item) => item.value === requestedTab) ? requestedTab! : "overview";
+  const period = params.get("period") || "30d";
+  const pipelineId = params.get("pipeline") || "";
+  const teamId = params.get("team") || "";
+  const ownerId = params.get("responsible") || "";
+  const channel = params.get("channel") || "";
+  const from = params.get("start") || "";
+  const to = params.get("end") || "";
+  const replace = React.useCallback(
+    (changes: Record<string, string | null>) => {
+      const next = new URLSearchParams(params.toString());
+      Object.entries(changes).forEach(([key, value]) =>
+        value ? next.set(key, value) : next.delete(key),
+      );
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [params, pathname, router],
   );
-
-  React.useEffect(() => {
-    if (!user) return;
-    if (user.role === "CONSULTANT") {
-      setFilters((current) => ({
-        ...current,
-        scope: "me",
-        ownerId: user.id,
-      }));
-      return;
-    }
-    setFilters((current) =>
-      current.scope === "me" && !current.ownerId
-        ? { ...current, scope: "company", ownerId: "" }
-        : current,
-    );
-  }, [user?.id, user?.role]);
-
-  const customReady =
-    filters.period !== "custom" ||
-    (Boolean(filters.from) &&
-      Boolean(filters.to) &&
-      filters.from <= filters.to);
-
-  const queryParams = React.useMemo(() => {
-    const params: Record<string, string> = { period: filters.period };
-    if (filters.period === "custom" && filters.from && filters.to) {
-      params.from = filters.from;
-      params.to = filters.to;
-    }
-    if (filters.pipelineId) params.pipelineId = filters.pipelineId;
-    if (filters.ownerId) params.ownerId = filters.ownerId;
-    else if (filters.scope === "me" && user?.id) params.ownerId = user.id;
-    if (filters.scope === "team" && selectedTeamId) params.teamId = selectedTeamId;
-    if (filters.channel) params.channel = filters.channel;
-    return params;
-  }, [filters, selectedTeamId, user?.id]);
-
-  const metrics = useQuery({
-    queryKey: queryKeys.dashboard.metrics(queryParams),
-    queryFn: () => dashboardApi.metrics(queryParams),
-    enabled: customReady,
-    retry: false,
-    placeholderData: (previous) => previous,
-  });
-  const charts = useQuery({
-    queryKey: queryKeys.dashboard.charts(queryParams),
-    queryFn: () => dashboardApi.charts(queryParams),
-    enabled: customReady,
-    retry: false,
-    placeholderData: (previous) => previous,
-  });
-  const lists = useQuery({
-    queryKey: queryKeys.dashboard.lists(queryParams),
-    queryFn: () => dashboardApi.lists(queryParams),
-    enabled: customReady,
-    retry: false,
-    placeholderData: (previous) => previous,
-  });
-  const pipelines = useQuery({
-    queryKey: queryKeys.pipelines.navigation,
-    queryFn: () => pipelinesApi.navigation(),
-    staleTime: 3 * 60_000,
-  });
-  const settings = useQuery({
-    queryKey: queryKeys.settings,
-    queryFn: () => settingsApi.overview(),
+  const options = useQuery({
+    queryKey: ["dashboard", "filter-options"],
+    queryFn: dashboardApi.filters,
     staleTime: 60_000,
   });
-
-  const m = metrics.data;
-
-  const channelOptions = React.useMemo(() => {
-    const fromCharts = (charts.data?.channelPerformance ?? []).map((c) => c.label);
-    const fromSettings = (settings.data?.channels ?? [])
-      .map((c) => c.name)
-      .filter(Boolean);
-    return [...new Set([...fromCharts, ...fromSettings])].filter(
-      (label) => label !== "Outros",
-    );
-  }, [charts.data?.channelPerformance, settings.data?.channels]);
-
-  const error =
-    metrics.error || charts.error || lists.error
-      ? "Não foi possível carregar parte dos dados da dashboard. Verifique a API e tente novamente."
-      : null;
-
-  const revenueDelta = m?.confirmedRevenueDeltaPct;
-  const conversionDelta = m?.conversionDeltaPp;
-  const paymentHref = awaitingPaymentHref({
-    awaitingPaymentPipelineId: m?.awaitingPaymentPipelineId,
-    awaitingPaymentStageId: m?.awaitingPaymentStageId,
-    pipelineId: filters.pipelineId || undefined,
+  const query = {
+    period,
+    pipelineId: pipelineId || undefined,
+    teamId: teamId || undefined,
+    ownerId: ownerId || undefined,
+    channel: channel || undefined,
+    from: from || undefined,
+    to: to || undefined,
+  };
+  const area = useQuery({
+    queryKey: ["dashboard", "intelligence", tab, query],
+    queryFn: () => dashboardApi.area(tab, query),
+    retry: false,
+    placeholderData: (previous) => previous,
   });
-  const negotiatingHref = filters.pipelineId
-    ? `/pipelines/${filters.pipelineId}`
-    : "/pipelines";
+  const data = area.data ?? {};
+  const metrics = (data.metrics ?? {}) as Record<string, unknown>;
 
   return (
     <div
-      className="mx-auto w-full max-w-7xl space-y-4"
-      data-testid="dashboard-page"
-      data-period={filters.period}
+      className="mx-auto w-full max-w-[1500px] space-y-5"
+      data-testid="dashboard-intelligence-center"
     >
-      <DashboardHeader />
-      {error ? <ErrorBanner message={error} /> : null}
-
-      <DashboardFilters
-        value={filters}
-        onChange={(next) => {
-          if (!canSeeTeam) {
-            setFilters({
-              ...next,
-              scope: "me",
-              ownerId: user?.id ?? next.ownerId,
-            });
-            return;
-          }
-          if (next.scope === "me" && !next.ownerId && user?.id) {
-            setFilters({ ...next, ownerId: user.id });
-            return;
-          }
-          if (next.scope !== "me" && filters.scope === "me") {
-            setFilters({ ...next, ownerId: next.ownerId === user?.id ? "" : next.ownerId });
-            return;
-          }
-          setFilters(next);
-        }}
-        pipelines={(pipelines.data ?? []).map((p) => ({ id: p.id, name: p.name }))}
-        users={(settings.data?.users ?? []).map((u) => ({ id: u.id, name: u.name }))}
-        channels={channelOptions}
-        canSeeTeam={canSeeTeam}
-      />
-
-      <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard
-          label="Receita confirmada"
-          value={formatKpiMoney(m?.confirmedRevenue ?? m?.revenue)}
-          hint={
-            (m?.confirmedRevenue ?? m?.revenue) === 0
-              ? "Ainda não existem vendas confirmadas no período selecionado."
-              : "comparado ao período anterior"
-          }
-          delta={revenueDelta}
-          deltaTone={
-            revenueDelta == null ? "neutral" : revenueDelta >= 0 ? "up" : "down"
-          }
-          icon="R$"
-          href="/orders"
-          loading={metrics.isLoading && !m}
-        />
-        <KpiCard
-          label="Em negociação"
-          value={formatKpiMoney(m?.negotiatingValue ?? m?.pipelineValue)}
-          hint={
-            m?.openDeals != null ? (
-              <strong>{m.openDeals} negócios abertos</strong>
+      <PageHeader title="Dashboard" description="Visão geral da operação." />
+      <Tabs
+        value={tab}
+        onValueChange={(value) => replace({ tab: value === "overview" ? null : value })}
+      >
+        <TabsList className="h-auto max-w-full flex-wrap justify-start">
+          {TABS.map((item) => (
+            <TabsTrigger key={item.value} value={item.value}>
+              {item.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      <section className="rounded-xl border border-border bg-card p-3 shadow-soft">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div>
+            <Label>Período</Label>
+            <Select
+              value={period}
+              onChange={(event) =>
+                replace({
+                  period: event.target.value === "30d" ? null : event.target.value,
+                  start: null,
+                  end: null,
+                })
+              }
+            >
+              <option value="today">Hoje</option>
+              <option value="7d">Últimos 7 dias</option>
+              <option value="30d">Últimos 30 dias</option>
+              <option value="month">Este mês</option>
+              <option value="previous-month">Mês anterior</option>
+              <option value="custom">Personalizado</option>
+            </Select>
+          </div>
+          <div>
+            <Label>Pipeline</Label>
+            <Select
+              value={pipelineId}
+              onChange={(event) => replace({ pipeline: event.target.value || null })}
+            >
+              <option value="">Todos acessíveis</option>
+              {(options.data?.pipelines ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label>Equipe</Label>
+            <Select
+              value={teamId}
+              onChange={(event) => replace({ team: event.target.value || null, responsible: null })}
+            >
+              <option value="">Todas permitidas</option>
+              {(options.data?.teams ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label>Responsável</Label>
+            <Select
+              value={ownerId}
+              onChange={(event) => replace({ responsible: event.target.value || null })}
+            >
+              <option value="">Todos permitidos</option>
+              {(options.data?.users ?? [])
+                .filter((item) => !teamId || item.teamId === teamId)
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+            </Select>
+          </div>
+          <div>
+            <Label>Canal</Label>
+            <Select
+              value={channel}
+              onChange={(event) => replace({ channel: event.target.value || null })}
+            >
+              <option value="">Todos permitidos</option>
+              {(options.data?.channels ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.displayName || item.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        {period === "custom" ? (
+          <div className="mt-3 grid max-w-lg gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Início</Label>
+              <Input
+                type="date"
+                value={from}
+                onChange={(event) => replace({ start: event.target.value || null })}
+              />
+            </div>
+            <div>
+              <Label>Fim</Label>
+              <Input
+                type="date"
+                value={to}
+                onChange={(event) => replace({ end: event.target.value || null })}
+              />
+            </div>
+          </div>
+        ) : null}
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Timezone: {options.data?.timezone ?? "—"} · filtros persistem entre as áreas
+        </p>
+      </section>
+      {area.error ? <ErrorBanner message={(area.error as Error).message} /> : null}
+      {area.isLoading && !area.data ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <Skeleton key={index} className="h-28" />
+          ))}
+        </div>
+      ) : null}
+      {tab === "overview" && area.data ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric
+              label="Valor em aberto"
+              value={money(metrics.negotiatingValue)}
+              icon={WalletCards}
+            />
+            <Metric label="Valor ganho" value={money(metrics.confirmedRevenue)} icon={TrendingUp} />
+            <Metric label="Leads abertos" value={number(metrics.openDeals)} icon={BarChart3} />
+            <Metric label="Pedidos" value={number(metrics.salesCount)} icon={ShoppingBag} />
+            <Metric
+              label="Aguardando resposta"
+              value={number(metrics.waitingConversations)}
+              icon={MessagesSquare}
+            />
+            <Metric
+              label="Tarefas atrasadas"
+              value={number(metrics.overdueTasks)}
+              icon={AlertTriangle}
+            />
+            <Metric label="Clientes em recompra" value={number(metrics.repurchaseReady)} />
+            <Metric
+              label="Conversão"
+              value={
+                typeof metrics.conversionRate === "number" ? `${metrics.conversionRate}%` : "—"
+              }
+            />
+          </div>
+          <Ranking rows={(data.topSellers as Array<Record<string, unknown>>) ?? []} />
+        </>
+      ) : null}
+      {tab === "commercial" && area.data ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Valor aberto" value={money(metrics.negotiatingValue)} />
+            <Metric label="Receita confirmada" value={money(metrics.confirmedRevenue)} />
+            <Metric label="Ticket médio" value={money(metrics.averageTicket)} />
+            <Metric
+              label="Ganhos / Perdidos"
+              value={`${number(metrics.wonInPeriod)} / ${number(metrics.lostInPeriod)}`}
+            />
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Funil comercial</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {((data.funnel as Array<Record<string, unknown>>) ?? []).map((stage) => (
+                <div key={String(stage.id)}>
+                  <div className="mb-1 flex justify-between text-sm">
+                    <span>{String(stage.label)}</span>
+                    <span>
+                      {number(stage.count)} · {money(stage.value)}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted">
+                    <div
+                      className="h-2 rounded-full bg-primary"
+                      style={{ width: `${Number(stage.barWidthPct ?? 0)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                {Object.entries((data.availability ?? {}) as Record<string, string>).map(
+                  ([key, value]) => (
+                    <Availability key={key} value={value} />
+                  ),
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
+      {tab === "attendance" && area.data ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Conversas iniciadas" value={number(data.conversations)} />
+            <Metric label="Aguardando nossa resposta" value={number(data.waitingOurResponse)} />
+            <Metric label="Aguardando cliente" value={number(data.waitingCustomer)} />
+            <Metric label="Não lidas" value={number(data.unread)} />
+            <Metric
+              label="Tempo médio de resposta"
+              value={minutes(data.averageMinutes)}
+              icon={Clock3}
+            />
+            <Metric label="Mediana de resposta" value={minutes(data.medianMinutes)} />
+            <Metric label="Iniciadas pela equipe" value={number(data.initiatedByTeam)} />
+            <Metric label="Iniciadas pelo cliente" value={number(data.initiatedByCustomer)} />
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>SLA de resposta</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-4">
+              <Metric
+                label="Até 5 min"
+                value={number((data.sla as Record<string, unknown>)?.under5)}
+              />
+              <Metric
+                label="6–15 min"
+                value={number((data.sla as Record<string, unknown>)?.under15)}
+              />
+              <Metric
+                label="16–60 min"
+                value={number((data.sla as Record<string, unknown>)?.under60)}
+              />
+              <Metric
+                label="Acima de 60 min"
+                value={number((data.sla as Record<string, unknown>)?.over60)}
+              />
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
+      {tab === "team" && area.data ? (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Pódio comercial</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-3">
+              {((data.podium as Array<Record<string, unknown>>) ?? []).map((row, index) => (
+                <Metric
+                  key={String(row.id)}
+                  label={`${index + 1}º · ${String(row.name)}`}
+                  value={money(row.revenue)}
+                  note={
+                    typeof row.conversionRate === "number"
+                      ? `${row.conversionRate}% de conversão`
+                      : "Sem base de conversão"
+                  }
+                />
+              ))}
+            </CardContent>
+          </Card>
+          <Ranking rows={(data.ranking as Array<Record<string, unknown>>) ?? []} />
+        </>
+      ) : null}
+      {tab === "customers" && area.data ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Clientes novos" value={number(data.newCustomers)} />
+            <Metric label="Clientes recorrentes" value={number(data.recurringCustomers)} />
+            <Metric label="Receita de novos" value={money(data.newRevenue)} />
+            <Metric label="Receita recorrente" value={money(data.recurringRevenue)} />
+            <Metric label="Ticket novos" value={money(data.newTicket)} />
+            <Metric label="Ticket recorrentes" value={money(data.recurringTicket)} />
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Segmentos por tags</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {((data.tags as Array<Record<string, unknown>>) ?? []).length ? (
+                (data.tags as Array<Record<string, unknown>>).map((tag) => (
+                  <div
+                    key={String(tag.id)}
+                    className="flex items-center justify-between rounded-lg border p-3 text-sm"
+                  >
+                    <span className="font-medium">{String(tag.name)}</span>
+                    <span>
+                      {number(tag.orders)} pedidos · {money(tag.revenue)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <EmptyState title="Sem tags associadas a compradores no período" />
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
+      {tab === "channels" && area.data ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance por canal</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {((data.ranking as Array<Record<string, unknown>>) ?? []).length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="py-2 text-left">Canal</th>
+                      <th className="text-right">Leads</th>
+                      <th className="text-right">Pedidos</th>
+                      <th className="text-right">Receita</th>
+                      <th className="text-right">Conversão</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.ranking as Array<Record<string, unknown>>).map((row) => (
+                      <tr key={String(row.label)} className="border-b">
+                        <td className="py-3 font-medium">{String(row.label)}</td>
+                        <td className="text-right">{number(row.leads)}</td>
+                        <td className="text-right">{number(row.sales)}</td>
+                        <td className="text-right">{money(row.revenue)}</td>
+                        <td className="text-right">
+                          {typeof row.conversionRate === "number" ? `${row.conversionRate}%` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
-              "ativos no pipeline"
-            )
-          }
-          icon="R$"
-          href={negotiatingHref}
-          loading={metrics.isLoading && !m}
-        />
-        <KpiCard
-          label="Aguardando pagamento"
-          value={formatKpiMoney(m?.awaitingPaymentValue)}
-          hint={
-            m?.awaitingPaymentCount != null ? (
-              <>
-                <strong>{m.awaitingPaymentCount} clientes</strong> precisam de acompanhamento
-              </>
-            ) : (
-              "negócios na etapa de pagamento"
-            )
-          }
-          icon="R$"
-          href={paymentHref}
-          loading={metrics.isLoading && !m}
-        />
-        <KpiCard
-          label="Taxa de conversão"
-          value={
-            m?.conversionRate != null
-              ? `${m.conversionRate}%`
-              : "Dados indisponíveis"
-          }
-          hint={
-            m?.conversionRate != null
-              ? `${m.wonInPeriod ?? 0} ganhos de ${m.conversionDenominator ?? 0} negócios encerrados (ganhos + perdidos)`
-              : "Sem negócios encerrados no período para calcular a conversão."
-          }
-          delta={conversionDelta}
-          deltaTone={
-            conversionDelta == null ? "neutral" : conversionDelta >= 0 ? "up" : "down"
-          }
-          icon="%"
-          href="/reports"
-          loading={metrics.isLoading && !m}
-        />
-        <KpiCard
-          label="Meta mensal"
-          value={
-            m?.monthlyGoal != null && m.monthlyGoalProgress != null
-              ? `${m.monthlyGoalProgress}%`
-              : "Não configurada"
-          }
-          hint={
-            m?.monthlyGoal != null
-              ? `${formatKpiMoney(m.confirmedRevenue ?? m.revenue)} de ${formatKpiMoney(m.monthlyGoal)}`
-              : canSeeTeam
-                ? "Defina metas em Configurações → Usuários."
-                : "Nenhuma meta mensal foi configurada."
-          }
-          progress={m?.monthlyGoalProgress}
-          icon="◎"
-          href={m?.monthlyGoal != null ? "/reports" : "/settings/users"}
-          loading={metrics.isLoading && !m}
-        />
-      </div>
-
-      <AttentionPanel
-        loading={metrics.isLoading && !m}
-        alerts={[
-          {
-            id: "overdue",
-            count: m?.overdueTasks ?? 0,
-            label: "tarefas atrasadas",
-            href: "/tasks?overdue=1",
-            tone: "danger",
-          },
-          {
-            id: "stalled",
-            count: m?.stalledDeals ?? 0,
-            label: "negócios parados há +3 dias",
-            href: stalledDealsHref(filters.pipelineId || undefined),
-            tone: "warning",
-          },
-          {
-            id: "waiting",
-            count: m?.waitingConversations ?? m?.unansweredLeads ?? 0,
-            label: "clientes aguardando resposta",
-            href: "/inbox?awaitingReply=1",
-            tone: "info",
-          },
-          {
-            id: "repurchase",
-            count: m?.repurchaseReady ?? 0,
-            label: "clientes prontos para recompra",
-            href: "/repurchase",
-            tone: "success",
-          },
-          {
-            id: "aftersales",
-            count: m?.afterSalesCritical ?? 0,
-            label: "casos críticos de pós-venda",
-            href: "/after-sales",
-            tone: "danger",
-          },
-        ]}
-      />
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.1fr)_minmax(0,0.95fr)]">
-        <CommercialFunnel
-          stages={charts.data?.funnel ?? []}
-          stats={charts.data?.funnelStats}
-          loading={charts.isLoading && !charts.data}
-          pipelineHref={
-            filters.pipelineId ? `/pipelines/${filters.pipelineId}` : "/pipelines"
-          }
-        />
-        <RevenueChart
-          data={charts.data?.revenueByPeriod ?? charts.data?.revenueTrend ?? []}
-          loading={charts.isLoading && !charts.data}
-        />
-        <ChannelPerformance
-          data={charts.data?.channelPerformance ?? []}
-          loading={charts.isLoading && !charts.data}
-        />
-      </div>
-
-      <DealsRequiringAction
-        items={lists.data?.dealsRequiringAction ?? lists.data?.recentDeals ?? []}
-        loading={lists.isLoading && !lists.data}
-      />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TodayTasks
-          today={lists.data?.tasksToday ?? []}
-          overdue={lists.data?.overdueTasks ?? []}
-          loading={lists.isLoading && !lists.data}
-        />
-        <WaitingConversations
-          items={lists.data?.waitingConversations ?? lists.data?.unread ?? []}
-          loading={lists.isLoading && !lists.data}
-        />
-      </div>
-
-      <TeamPerformance
-        items={charts.data?.performanceByOwner ?? []}
-        loading={charts.isLoading && !charts.data}
-        visible={canSeeTeam}
-      />
-
-      <JourneySummaryCards
-        journeys={lists.data?.journeys}
-        loading={lists.isLoading && !lists.data}
-      />
+              <EmptyState
+                title="Selecione um canal permitido para analisar"
+                description="Canais pessoais e de pipeline respeitam a matriz de acesso."
+              />
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

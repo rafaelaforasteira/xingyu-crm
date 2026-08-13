@@ -97,6 +97,7 @@ export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
     id: "beta",
     label: "Principal",
     items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       {
         href: "/pipelines",
         label: "Pipelines",

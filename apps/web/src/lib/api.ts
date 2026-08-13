@@ -242,6 +242,24 @@ export const healthApi = {
 };
 
 export const dashboardApi = {
+  filters: () =>
+    api.get<{
+      pipelines: Array<{ id: string; name: string }>;
+      teams: Array<{ id: string; name: string }>;
+      users: Array<{ id: string; name: string; teamId?: string | null }>;
+      channels: Array<{
+        id: string;
+        name: string;
+        displayName?: string | null;
+        accessMode: string;
+      }>;
+      timezone: string;
+      currency: string;
+    }>("/dashboard/filters"),
+  area: (
+    area: "overview" | "commercial" | "attendance" | "team" | "customers" | "channels",
+    query?: Record<string, QueryValue>,
+  ) => api.get<Record<string, any>>(`/dashboard/${area}`, query),
   metrics: (query?: Record<string, QueryValue>) =>
     api.get<DashboardMetrics>("/dashboard/metrics", query),
   charts: (query?: Record<string, QueryValue>) =>
@@ -313,7 +331,10 @@ export const companiesApi = {
 
 export const pipelinesApi = {
   accessOverview: () => api.get<PipelineAccessOverview>("/pipelines/access"),
-  updateAccess: (id: string, data: { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] }) => api.put<PipelineAccessOverview>(`/pipelines/access/${id}`, data),
+  updateAccess: (
+    id: string,
+    data: { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] },
+  ) => api.put<PipelineAccessOverview>(`/pipelines/access/${id}`, data),
   eligibleUsers: (id: string) => api.get<UserRef[]>(`/pipelines/access/${id}/eligible-users`),
   navigation: () => api.get<PipelineNavigationItem[]>("/pipelines/navigation"),
   list: async (query?: PipelineListQuery): Promise<PaginatedResponse<Pipeline>> => {
@@ -652,15 +673,36 @@ export const settingsApi = {
 };
 
 export const usersApi = {
-  list: (query?: { page?: number; pageSize?: number; search?: string; status?: string }) => api.get<PaginatedResponse<ManagedUser>>("/users", query),
-  invite: (data: { name: string; email: string; phone?: string; role: "ADMIN" | "MANAGER" | "CONSULTANT"; teamId?: string }) => api.post<{ user: ManagedUser; inviteUrl: string; expiresAt: string }>("/users/invite", data),
-  resendInvite: (id: string) => api.post<{ inviteUrl: string; expiresAt: string }>(`/users/${id}/resend-invite`),
-  update: (id: string, data: Partial<{ name: string; phone: string; role: "ADMIN" | "MANAGER" | "CONSULTANT"; teamId: string | null }>) => api.patch<ManagedUser>(`/users/${id}`, data),
+  list: (query?: { page?: number; pageSize?: number; search?: string; status?: string }) =>
+    api.get<PaginatedResponse<ManagedUser>>("/users", query),
+  invite: (data: {
+    name: string;
+    email: string;
+    phone?: string;
+    role: "ADMIN" | "MANAGER" | "CONSULTANT";
+    teamId?: string;
+  }) =>
+    api.post<{ user: ManagedUser; inviteUrl: string; expiresAt: string }>("/users/invite", data),
+  resendInvite: (id: string) =>
+    api.post<{ inviteUrl: string; expiresAt: string }>(`/users/${id}/resend-invite`),
+  update: (
+    id: string,
+    data: Partial<{
+      name: string;
+      phone: string;
+      role: "ADMIN" | "MANAGER" | "CONSULTANT";
+      teamId: string | null;
+    }>,
+  ) => api.patch<ManagedUser>(`/users/${id}`, data),
   deactivate: (id: string) => api.post(`/users/${id}/deactivate`),
   reactivate: (id: string) => api.post(`/users/${id}/reactivate`),
   revokeSessions: (id: string) => api.post<{ revoked: number }>(`/users/${id}/revoke-sessions`),
-  inspectInvite: (token: string) => api.get<{ name: string; email: string; expiresAt: string }>(`/users/invites/${encodeURIComponent(token)}`),
-  acceptInvite: (token: string, data: { password: string; confirmPassword: string }) => api.post<{ ok: true }>(`/users/invites/${encodeURIComponent(token)}/accept`, data),
+  inspectInvite: (token: string) =>
+    api.get<{ name: string; email: string; expiresAt: string }>(
+      `/users/invites/${encodeURIComponent(token)}`,
+    ),
+  acceptInvite: (token: string, data: { password: string; confirmPassword: string }) =>
+    api.post<{ ok: true }>(`/users/invites/${encodeURIComponent(token)}/accept`, data),
 };
 
 export const activitiesApi = {

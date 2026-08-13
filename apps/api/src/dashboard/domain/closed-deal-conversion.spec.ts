@@ -1,7 +1,4 @@
-import {
-  closedDealConversionDeltaPp,
-  closedDealConversionRate,
-} from "./closed-deal-conversion";
+import { closedDealConversionDeltaPp, closedDealConversionRate } from "./closed-deal-conversion";
 
 describe("closedDealConversionRate", () => {
   it("computes WON / (WON + LOST)", () => {
