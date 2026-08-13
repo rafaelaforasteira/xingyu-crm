@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PIPELINE_ICON_OPTIONS,
   formatPipelineNavLabel,
   resolvePipelineIcon,
 } from "./pipeline-icons";
@@ -19,6 +20,12 @@ describe("pipeline nav formatting", () => {
   it("resolves known icons and falls back to Kanban", () => {
     expect(resolvePipelineIcon("ShoppingBag").displayName || resolvePipelineIcon("ShoppingBag").name).toBeTruthy();
     expect(resolvePipelineIcon("unknown").name || "Kanban").toBeTruthy();
+  });
+
+  it("offers a focused CRM registry and resolves new persisted keys", () => {
+    expect(PIPELINE_ICON_OPTIONS.length).toBeGreaterThanOrEqual(12);
+    expect(PIPELINE_ICON_OPTIONS.length).toBeLessThanOrEqual(20);
+    expect(resolvePipelineIcon("target")).toBe(PIPELINE_ICON_OPTIONS.find((item) => item.key === "target")?.icon);
   });
 });
 

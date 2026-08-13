@@ -71,6 +71,7 @@ export class PipelinesController {
   }
 
   @Post()
+  @Roles(AuthRole.ADMIN)
   @ApiOperation({ summary: "Create a pipeline and its initial open stage" })
   create(
     @OrganizationId() orgId: string,
@@ -81,6 +82,7 @@ export class PipelinesController {
   }
 
   @Patch(":id")
+  @Roles(AuthRole.ADMIN)
   @ApiOperation({ summary: "Update a pipeline" })
   update(
     @OrganizationId() orgId: string,
@@ -92,6 +94,7 @@ export class PipelinesController {
   }
 
   @Post(":id/duplicate")
+  @Roles(AuthRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Duplicate a pipeline and its stages" })
   duplicate(
@@ -104,6 +107,7 @@ export class PipelinesController {
   }
 
   @Post(":id/archive")
+  @Roles(AuthRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Archive a pipeline" })
   archive(
@@ -115,6 +119,7 @@ export class PipelinesController {
   }
 
   @Post(":id/restore")
+  @Roles(AuthRole.ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: "Restore an archived pipeline" })
   restore(
@@ -126,6 +131,7 @@ export class PipelinesController {
   }
 
   @Delete(":id")
+  @Roles(AuthRole.ADMIN)
   @ApiOperation({ summary: "Soft-delete an empty, non-default pipeline" })
   remove(@OrganizationId() orgId: string, @DemoUser() user: DemoUserType, @Param("id") id: string) {
     return this.pipelinesService.remove(orgId, id, user.id);

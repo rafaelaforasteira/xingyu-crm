@@ -429,7 +429,10 @@ export class PipelinesService {
     const existing = await this.findOne(organizationId, id);
     const name = dto.name === undefined ? undefined : this.normalizeName(dto.name);
     if (name) await this.ensurePipelineNameAvailable(organizationId, name, id);
-    await this.validateDefaults(organizationId, dto.defaultTeamId, dto.defaultOwnerId);
+    await this.validateDefaults(organizationId, dto.defaultTeamId, dto.defaultOwnerId, id, {
+      teamId: existing.defaultTeamId,
+      ownerId: existing.defaultOwnerId,
+    });
 
     return this.prisma.$transaction(async (tx) => {
       if (dto.isDefault) {
@@ -1045,6 +1048,8 @@ export class PipelinesService {
     organizationId: string,
     teamId?: string | null,
     ownerId?: string | null,
+    pipelineId?: string,
+    existing?: { teamId?: string | null; ownerId?: string | null },
   ) {
     if (teamId) {
       const team = await this.prisma.team.findFirst({
@@ -1059,6 +1064,19 @@ export class PipelinesService {
         select: { id: true },
       });
       if (!owner) throw new BadRequestException("Default owner is invalid");
+    }
+    if (!pipelineId || (!teamId && !ownerId)) return;
+    const pipeline = await this.prisma.pipeline.findFirst({
+      where: { id: pipelineId, organizationId, deletedAt: null },
+      select: { accessMode: true, teamAccesses: { select: { teamId: true } }, userAccesses: { select: { userId: true } } },
+    });
+    if (!pipeline || pipeline.accessMode !== "RESTRICTED") return;
+    const eligibleTeamIds = new Set(pipeline.teamAccesses.map((access) => access.teamId));
+    if (teamId && teamId !== existing?.teamId && !eligibleTeamIds.has(teamId)) throw new BadRequestException("Default team does not have access to this pipeline");
+    if (ownerId && ownerId !== existing?.ownerId) {
+      const direct = pipeline.userAccesses.some((access) => access.userId === ownerId);
+      const owner = await this.prisma.user.findFirst({ where: { id: ownerId, organizationId, deletedAt: null }, select: { teamId: true } });
+      if (!direct && (!owner?.teamId || !eligibleTeamIds.has(owner.teamId))) throw new BadRequestException("Default owner does not have access to this pipeline");
     }
   }
 
