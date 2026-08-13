@@ -248,6 +248,7 @@ enum NotificationType {
   REPURCHASE_READY
   AUTOMATION_ERROR
   SYSTEM
+  TASK_MENTION
 }
 
 enum CustomFieldType {
@@ -354,6 +355,9 @@ model Organization {
   leadFiles                  LeadFile[]
   userInvites                UserInvite[]
   goals                      Goal[]
+  taskComments               TaskComment[]
+  taskCommentMentions        TaskCommentMention[]
+  taskCommentAttachments     TaskCommentAttachment[]
 }
 
 model Role {
@@ -429,6 +433,8 @@ model User {
   ownedDeals                 Deal[]                      @relation("DealOwner")
   assignedTasks              Task[]                      @relation("TaskAssignee")
   createdTasks               Task[]                      @relation("TaskCreator")
+  taskComments               TaskComment[]               @relation("TaskCommentAuthor")
+  taskCommentMentions        TaskCommentMention[]
   assignedConversations      Conversation[]              @relation("ConversationAssignee")
   sentMessages               Message[]                   @relation("MessageSender")
   ownedOrders                Order[]                     @relation("OrderOwner")
@@ -880,6 +886,7 @@ model Task {
   sourceNote       Note?                 @relation(fields: [sourceNoteId], references: [id], onDelete: SetNull)
   team             Team?                 @relation(fields: [teamId], references: [id])
   activities       Activity[]
+  comments         TaskComment[]
 
   @@index([organizationId])
   @@index([assigneeId])
@@ -892,6 +899,57 @@ model Task {
   @@index([pipelineId])
   @@index([stageId])
   @@index([createdAt])
+}
+
+model TaskComment {
+  id             String   @id @default(cuid())
+  organizationId String
+  taskId         String
+  authorId       String
+  body           String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization            @relation(fields: [organizationId], references: [id])
+  task         Task                    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author       User                    @relation("TaskCommentAuthor", fields: [authorId], references: [id])
+  mentions     TaskCommentMention[]
+  attachments TaskCommentAttachment[]
+
+  @@index([organizationId, taskId, createdAt])
+}
+
+model TaskCommentMention {
+  id             String   @id @default(cuid())
+  organizationId String
+  commentId      String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  comment      TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([organizationId, userId, createdAt])
+}
+
+model TaskCommentAttachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  commentId      String
+  fileName       String
+  mimeType       String?
+  fileSize       Int?
+  url            String
+  kind           String   @default("file")
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  comment      TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, commentId])
 }
 
 model Activity {

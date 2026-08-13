@@ -7,10 +7,10 @@ describe("beta navigation", () => {
     const items = BETA_SINGLE_PIPELINE_NAV_GROUPS.flatMap((group) => group.items);
     expect(items).toHaveLength(3);
     expect(items[0]).toMatchObject({ href: "/dashboard", label: "Dashboard" });
-    expect(items[1]?.href).toBe("/pipelines");
-    expect(items[1]?.label).toBe("Pipelines");
-    expect(items[1]?.expandablePipelines).toBe(true);
-    expect(items[2]).toMatchObject({ href: "/tasks", label: "Tarefas" });
+    expect(items[1]).toMatchObject({ href: "/tasks", label: "Tarefas" });
+    expect(items[2]?.href).toBe("/pipelines");
+    expect(items[2]?.label).toBe("Pipelines");
+    expect(items[2]?.expandablePipelines).toBe(true);
     expect(items.some((item) => item.href === "/settings")).toBe(false);
     expect(items.some((item) => item.href === "/dashboard")).toBe(true);
   });
@@ -18,6 +18,6 @@ describe("beta navigation", () => {
   it("uses beta nav when beta mode is enabled", () => {
     if (!BETA_SINGLE_PIPELINE_MODE) return;
     const hrefs = NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href);
-    expect(hrefs).toEqual(["/dashboard", "/pipelines", "/tasks"]);
+    expect(hrefs).toEqual(["/dashboard", "/tasks", "/pipelines"]);
   });
 });

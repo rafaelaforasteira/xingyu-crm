@@ -7,10 +7,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Filter,
-  ListChecks,
   Plus,
   Search,
 } from "lucide-react";
@@ -31,6 +31,7 @@ import { pipelinesApi, pipelineStagesApi, settingsApi, tasksApi } from "@/lib/ap
 import { queryKeys } from "@/lib/query-keys";
 import type { Task, TaskStatusDefinition } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { TaskWorkspace } from "@/components/crm/task-workspace";
 
 type Scope = "mine" | "team" | "all";
 type State = "open" | "completed";
@@ -76,11 +77,17 @@ function TaskRow({
   statuses,
   pending,
   onStatus,
+  onOpen,
+  users,
+  onUpdate,
 }: {
   task: Task;
   statuses: TaskStatusDefinition[];
   pending: boolean;
   onStatus: (status: TaskStatusDefinition) => void;
+  onOpen: () => void;
+  users: Array<{ id: string; name: string }>;
+  onUpdate: (data: Partial<Task>) => void;
 }) {
   const dealHref =
     task.dealId && task.pipelineId ? `/pipelines/${task.pipelineId}/deals/${task.dealId}` : null;
@@ -90,8 +97,10 @@ function TaskRow({
     [task.contact?.firstName, task.contact?.lastName].filter(Boolean).join(" ");
   const overdue = dueBucket(task) === "overdue" && task.statusDefinition?.category !== "DONE";
   return (
-    <div className="grid min-w-0 grid-cols-[32px_minmax(0,1fr)] gap-2 border-b border-border/60 px-3 py-3 last:border-0 sm:grid-cols-[32px_minmax(0,1fr)_minmax(110px,0.5fr)_120px] sm:items-center lg:px-4">
-      <TaskStatusButton task={task} statuses={statuses} pending={pending} onChange={onStatus} />
+    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter") onOpen(); }} className="grid min-w-0 cursor-pointer grid-cols-[32px_minmax(0,1fr)] gap-2 border-b border-border/60 px-3 py-3 transition hover:bg-muted/30 last:border-0 sm:grid-cols-[32px_minmax(0,1fr)_minmax(110px,0.5fr)_120px] sm:items-center lg:px-4">
+      <div onClick={(event) => event.stopPropagation()}>
+        <TaskStatusButton task={task} statuses={statuses} pending={pending} onChange={onStatus} />
+      </div>
       <div className="min-w-0">
         <p className="truncate text-sm font-medium" title={task.title}>
           {task.title}
@@ -124,16 +133,15 @@ function TaskRow({
           ) : null}
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
         <Avatar name={task.assignee?.name ?? "?"} src={task.assignee?.avatarUrl} size="sm" />
-        <span className="truncate text-xs">{task.assignee?.name ?? "Sem responsável"}</span>
+        <Select aria-label={`Responsável de ${task.title}`} className="h-8 text-xs" value={task.assigneeId ?? ""} onChange={(event) => onUpdate({ assigneeId: event.target.value })}>
+          {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+        </Select>
       </div>
-      <time
-        dateTime={task.dueAt ?? undefined}
-        className={cn("text-xs text-muted-foreground", overdue && "font-medium text-destructive")}
-      >
-        {dueLabel(task)}
-      </time>
+      <div onClick={(event) => event.stopPropagation()}>
+        <Input aria-label={`Data de ${task.title}`} className={cn("h-8 text-xs", overdue && "text-destructive")} type="datetime-local" value={task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : ""} title={dueLabel(task)} onChange={(event) => onUpdate({ dueAt: event.target.value ? new Date(event.target.value).toISOString() : null })} />
+      </div>
     </div>
   );
 }
@@ -157,6 +165,8 @@ export function TasksPage() {
   const [debouncedSearch, setDebouncedSearch] = React.useState(search);
   const [filtersOpen, setFiltersOpen] = React.useState(false);
   const [createOpen, setCreateOpen] = React.useState(params.get("new") === "1");
+  const [selectedTask, setSelectedTask] = React.useState<Task | null>(null);
+  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
   const replace = React.useCallback(
     (changes: Record<string, string | null>) => {
       const next = new URLSearchParams(params.toString());
@@ -264,32 +274,35 @@ export function TasksPage() {
     },
     onSettled: refresh,
   });
+  const inlineMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Task> }) => tasksApi.update(id, data),
+    onError: (error: Error) => toast.error(error.message),
+    onSuccess: refresh,
+  });
   const tasks = taskQuery.data?.data ?? [];
-  const groups =
-    state === "completed"
-      ? [{ key: "completed", label: "Concluídas", tasks }]
-      : [
-          {
-            key: "overdue",
-            label: "Atrasadas",
-            tasks: tasks.filter((task) => dueBucket(task) === "overdue"),
-          },
-          {
-            key: "today",
-            label: "Hoje",
-            tasks: tasks.filter((task) => dueBucket(task) === "today"),
-          },
-          {
-            key: "upcoming",
-            label: "Próximas",
-            tasks: tasks.filter((task) => dueBucket(task) === "upcoming"),
-          },
-          {
-            key: "no-date",
-            label: "Sem data",
-            tasks: tasks.filter((task) => dueBucket(task) === "no-date"),
-          },
-        ];
+  React.useEffect(() => {
+    const taskId = params.get("task");
+    if (taskId && !selectedTask) {
+      const match = tasks.find((task) => task.id === taskId);
+      if (match) setSelectedTask(match);
+    }
+  }, [params, selectedTask, tasks]);
+  const visibleStatuses = statuses.filter((status) =>
+    state === "completed" ? status.category === "DONE" : status.category !== "DONE",
+  );
+  const legacyCategory = (task: Task) =>
+    task.status === "COMPLETED" || task.status === "DONE" || task.status === "CANCELLED"
+      ? "DONE"
+      : task.status === "IN_PROGRESS" ? "IN_PROGRESS" : "OPEN";
+  const groups = visibleStatuses.map((status) => ({
+    key: status.id,
+    label: status.name,
+    color: status.color,
+    tasks: tasks.filter((task) =>
+      task.statusDefinitionId === status.id ||
+      (!task.statusDefinitionId && legacyCategory(task) === status.category),
+    ),
+  }));
   const activeFilters = [pipelineId, stageId, assigneeId, statusId, priority].filter(
     Boolean,
   ).length;
@@ -497,12 +510,12 @@ export function TasksPage() {
               key={group.key}
               className="overflow-hidden rounded-xl border border-border bg-card shadow-soft"
             >
-              <header className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2.5">
-                <ListChecks className="h-4 w-4 text-muted-foreground" />
+              <button type="button" className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-left" onClick={() => setCollapsed((value) => ({ ...value, [group.key]: !value[group.key] }))}>
+                <ChevronDown className={cn("h-4 w-4 transition-transform", collapsed[group.key] && "-rotate-90")} style={{ color: group.color }} />
                 <h2 className="text-xs font-bold uppercase tracking-wide">{group.label}</h2>
                 <Badge variant="outline">{group.tasks.length}</Badge>
-              </header>
-              {group.tasks.map((task) => (
+              </button>
+              {!collapsed[group.key] ? group.tasks.map((task) => (
                 <TaskRow
                   key={task.id}
                   task={task}
@@ -511,8 +524,11 @@ export function TasksPage() {
                   onStatus={(status) =>
                     statusMutation.mutate({ id: task.id, statusDefinitionId: status.id })
                   }
+                  onOpen={() => setSelectedTask(task)}
+                  users={usersQuery.data ?? []}
+                  onUpdate={(data) => inlineMutation.mutate({ id: task.id, data })}
                 />
-              ))}
+              )) : null}
             </section>
           ))}
         {(taskQuery.data?.meta.totalPages ?? 1) > 1 ? (
@@ -558,6 +574,14 @@ export function TasksPage() {
           refresh();
           toast.success("Tarefa criada");
         }}
+      />
+      <TaskWorkspace
+        task={selectedTask}
+        open={Boolean(selectedTask)}
+        onOpenChange={(value) => { if (!value) setSelectedTask(null); }}
+        statuses={statuses}
+        users={usersQuery.data ?? []}
+        onChanged={refresh}
       />
     </div>
   );

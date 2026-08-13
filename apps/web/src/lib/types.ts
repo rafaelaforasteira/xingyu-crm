@@ -667,6 +667,20 @@ export interface TaskBoardGroup {
   count: number;
 }
 
+export interface TaskCommentAttachment {
+  id: string; fileName: string; mimeType?: string | null; fileSize?: number | null; url: string; kind: string;
+}
+export interface TaskComment {
+  id: string; body: string; createdAt: string; author: UserRef;
+  mentions: Array<{ user: UserRef }>;
+  attachments: TaskCommentAttachment[];
+}
+export interface TaskWorkspaceData {
+  task: Task;
+  comments: TaskComment[];
+  activity: Activity[];
+}
+
 export type OrderStatus =
   | "ORDER_PLACED"
   | "AWAITING_PAYMENT"

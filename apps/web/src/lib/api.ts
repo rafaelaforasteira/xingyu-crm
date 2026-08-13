@@ -46,6 +46,8 @@ import type {
   Task,
   TaskBoardGroup,
   TaskStatusDefinition,
+  TaskComment,
+  TaskWorkspaceData,
   Team,
   UserRef,
   ManagedUser,
@@ -588,9 +590,11 @@ export const tasksApi = {
   reorderStatuses: (statusIds: string[]) =>
     api.post<TaskStatusDefinition[]>("/tasks/statuses/reorder", { statusIds }),
   get: (id: string) => api.get<Task>(`/tasks/${id}`),
+  workspace: (id: string) => api.get<TaskWorkspaceData>(`/tasks/${id}/workspace`),
+  comment: (id: string, data: FormData) => api.post<TaskComment>(`/tasks/${id}/comments`, data),
   create: (data: Partial<Task> & { title: string; statusDefinitionId?: string }) =>
     api.post<Task>("/tasks", data),
-  update: (id: string, data: Partial<Task> & { statusDefinitionId?: string }) =>
+  update: (id: string, data: Partial<Task>) =>
     api.patch<Task>(`/tasks/${id}`, data),
   complete: (id: string) => api.post<Task>(`/tasks/${id}/complete`),
   reopen: (id: string) => api.post<Task>(`/tasks/${id}/reopen`),

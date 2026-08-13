@@ -11,7 +11,9 @@ import {
   RescheduleTaskDto,
   CreateTaskStatusDto,
   UpdateTaskStatusDto,
+  CreateTaskCommentDto,
 } from "./dto/task.dto";
+import { validateAndSaveUpload } from "../common/upload/upload.util";
 
 const TASK_INCLUDE = {
   assignee: { select: { id: true, name: true, avatarUrl: true } },
@@ -288,17 +290,17 @@ export class TasksService {
     return paginate(data.map(mapTask), total, page, pageSize);
   }
 
-  async board(organizationId: string, query: QueryTasksDto, allowedPipelineIds?: string[] | null) {
+  async board(organizationId: string, query: QueryTasksDto, user: AuthenticatedUser, allowedPipelineIds?: string[] | null) {
     await this.ensureDefaultStatuses(organizationId);
     const statuses = await this.listStatuses(organizationId);
-    const where = this.withPipelineScope(
+    const where = this.withUserScope(this.withPipelineScope(
       this.buildWhere(organizationId, {
         ...query,
         status: undefined,
         statusDefinitionId: undefined,
       }),
       allowedPipelineIds,
-    );
+    ), query.scope ?? "mine", user);
 
     const tasks = await this.prisma.task.findMany({
       where,
@@ -441,6 +443,56 @@ export class TasksService {
     });
     if (!task) throw new NotFoundException(`Task ${id} not found`);
     return mapTask(task);
+  }
+
+  async workspace(organizationId: string, id: string) {
+    const task = await this.findOne(organizationId, id);
+    const [comments, activity] = await Promise.all([
+      this.prisma.taskComment.findMany({
+        where: { organizationId, taskId: id, deletedAt: null },
+        orderBy: { createdAt: "asc" },
+        include: {
+          author: { select: { id: true, name: true, avatarUrl: true } },
+          mentions: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } },
+          attachments: true,
+        },
+      }),
+      this.prisma.activity.findMany({
+        where: { organizationId, taskId: id },
+        orderBy: { createdAt: "desc" },
+        include: { actor: { select: { id: true, name: true, avatarUrl: true } } },
+      }),
+    ]);
+    return { task, comments, activity };
+  }
+
+  async createComment(organizationId: string, taskId: string, authorId: string, dto: CreateTaskCommentDto, files: Express.Multer.File[]) {
+    await this.findOne(organizationId, taskId);
+    const body = dto.body?.trim() ?? "";
+    if (!body && files.length === 0) throw new BadRequestException("Escreva um comentário ou anexe um arquivo.");
+    let mentionIds: string[] = [];
+    if (dto.mentionIds) {
+      try { mentionIds = JSON.parse(dto.mentionIds); } catch { throw new BadRequestException("Menções inválidas."); }
+    }
+    mentionIds = [...new Set(mentionIds)].filter((id) => id !== authorId);
+    const validUsers = mentionIds.length ? await this.prisma.user.findMany({
+      where: { id: { in: mentionIds }, organizationId, status: "ACTIVE", deletedAt: null }, select: { id: true },
+    }) : [];
+    if (validUsers.length !== mentionIds.length) throw new BadRequestException("Usuário mencionado inválido.");
+    const uploads = files.map(validateAndSaveUpload);
+    return this.prisma.$transaction(async (tx) => {
+      const comment = await tx.taskComment.create({
+        data: {
+          organizationId, taskId, authorId, body,
+          mentions: { create: mentionIds.map((userId) => ({ organizationId, userId })) },
+          attachments: { create: uploads.map((file) => ({ organizationId, fileName: file.originalName, mimeType: file.mimeType, fileSize: file.fileSize, url: file.url, kind: file.kind })) },
+        },
+        include: { author: { select: { id: true, name: true, avatarUrl: true } }, mentions: { include: { user: { select: { id: true, name: true, avatarUrl: true } } } }, attachments: true },
+      });
+      if (mentionIds.length) await tx.notification.createMany({ data: mentionIds.map((userId) => ({ organizationId, userId, type: "TASK_MENTION", title: "Você foi mencionado em uma tarefa", body: body.slice(0, 180) || "Novo anexo", href: `/tasks?task=${taskId}`, entityType: "TASK", entityId: taskId })) });
+      await tx.activity.create({ data: { organizationId, type: "OTHER", title: "Comentário adicionado", taskId, actorId: authorId, metadata: { commentId: comment.id, attachments: uploads.length, mentions: mentionIds.length } } });
+      return comment;
+    });
   }
 
   async today(organizationId: string, allowedPipelineIds?: string[] | null) {

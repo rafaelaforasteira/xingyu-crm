@@ -170,6 +170,19 @@ export class RescheduleTaskDto {
   dueAt!: string;
 }
 
+export class CreateTaskCommentDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  body?: string;
+
+  @ApiPropertyOptional({ description: "JSON array of real user ids" })
+  @IsOptional()
+  @IsString()
+  mentionIds?: string;
+}
+
 export class CreateTaskStatusDto {
   @ApiProperty()
   @IsString()

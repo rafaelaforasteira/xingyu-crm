@@ -98,6 +98,7 @@ export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
     label: "Principal",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/tasks", label: "Tarefas", icon: CheckSquare },
       {
         href: "/pipelines",
         label: "Pipelines",
@@ -105,7 +106,6 @@ export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
         exact: true,
         expandablePipelines: true,
       },
-      { href: "/tasks", label: "Tarefas", icon: CheckSquare },
     ],
   },
 ];

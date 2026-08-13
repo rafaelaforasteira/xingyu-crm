@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiHeader } from "@nestjs/swagger";
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UploadedFiles, UseInterceptors } from "@nestjs/common";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
+import { ApiTags, ApiOperation, ApiHeader, ApiConsumes } from "@nestjs/swagger";
 import { TasksService } from "./tasks.service";
 import { OrganizationId } from "../common/decorators/organization.decorator";
 import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/demo-user.decorator";
@@ -14,7 +16,9 @@ import {
   CreateTaskStatusDto,
   UpdateTaskStatusDto,
   ReorderTaskStatusesDto,
+  CreateTaskCommentDto,
 } from "./dto/task.dto";
+import { uploadMaxBytes } from "../common/upload/upload.util";
 
 @ApiTags("tasks")
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
@@ -47,7 +51,7 @@ export class TasksController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryTasksDto,
   ) {
-    return this.tasksService.board(orgId, query, await this.access.accessiblePipelineIds(user));
+    return this.tasksService.board(orgId, query, user, await this.access.accessiblePipelineIds(user));
   }
 
   @Get("statuses")
@@ -96,6 +100,27 @@ export class TasksController {
   ) {
     await this.access.assertTaskAccess(user, id);
     return this.tasksService.findOne(orgId, id);
+  }
+
+  @Get(":id/workspace")
+  @ApiOperation({ summary: "Get collaborative task workspace" })
+  async workspace(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    await this.access.assertTaskAccess(user, id);
+    return this.tasksService.workspace(orgId, id);
+  }
+
+  @Post(":id/comments")
+  @ApiConsumes("application/json", "multipart/form-data")
+  @UseInterceptors(FilesInterceptor("files", 10, { storage: memoryStorage(), limits: { fileSize: uploadMaxBytes(), files: 10 } }))
+  async comment(
+    @OrganizationId() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Body() dto: CreateTaskCommentDto,
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    await this.access.assertTaskAccess(user, id);
+    return this.tasksService.createComment(orgId, id, user.id, dto, files ?? []);
   }
 
   @Post()
