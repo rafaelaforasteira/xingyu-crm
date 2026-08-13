@@ -1,5 +1,14 @@
 # Matriz de fontes do Dashboard
 
+| Área nova                   | Fonte                            | Disponibilidade       |
+| --------------------------- | -------------------------------- | --------------------- |
+| Meta configurada            | Goal histórico                   | READY                 |
+| Realizado da meta           | Order + classificação de compra  | READY                 |
+| Curva esperada              | Goal target/período              | READY, não é forecast |
+| Shopify financeiro avançado | contrato Shopify futuro          | BLOCKED_PROVIDER      |
+| Visitor/session/events      | contrato Tracking futuro         | TRACKING_FROM_NOW     |
+| First/last touch completo   | identity/attribution fact futuro | TRACKING_FROM_NOW     |
+
 | Domínio                    | Campos confiáveis                                                         | Uso                         | Restrição                                    |
 | -------------------------- | ------------------------------------------------------------------------- | --------------------------- | -------------------------------------------- |
 | Organization               | timezone, currency                                                        | limites e formatação        | timezone aplicado pelo ambiente atual da API |

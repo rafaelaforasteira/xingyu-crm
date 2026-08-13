@@ -1,5 +1,16 @@
 # Catálogo de métricas do Dashboard
 
+## Metas históricas
+
+| Métrica               | Fórmula do realizado                                    | Unidade  | Estado |
+| --------------------- | ------------------------------------------------------- | -------- | ------ |
+| Goal revenue          | soma de `Order.finalValue` confirmado no período/escopo | currency | READY  |
+| Goal orders           | contagem de pedidos confirmados no período/escopo       | count    | READY  |
+| Goal new customers    | contatos distintos com primeira compra válida           | count    | READY  |
+| Goal repeat customers | contatos distintos com ordinal maior que 1              | count    | READY  |
+
+Progresso = actual / target. Remaining não fica negativo; excedente é separado. A curva esperada distribui linearmente o target e não é forecast.
+
 | Métrica                         | Área                | Tipo     | Fórmula e fonte                                | Timestamp           | ACL                  | Cobertura                | Disponibilidade   |
 | ------------------------------- | ------------------- | -------- | ---------------------------------------------- | ------------------- | -------------------- | ------------------------ | ----------------- |
 | Valor em aberto                 | Overview/Commercial | SNAPSHOT | SUM Deal.value onde status OPEN                | atual               | Deal/Pipeline        | completa atual           | READY             |

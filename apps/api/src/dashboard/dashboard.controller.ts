@@ -169,4 +169,18 @@ export class DashboardController {
   ) {
     return this.service.channels(orgId, await this.filters(orgId, user, query));
   }
+
+  @Get("explore")
+  async explore(
+    @OrganizationId() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    return this.service.explore(
+      orgId,
+      await this.filters(orgId, user, query),
+      query.metric,
+      query.dimension,
+    );
+  }
 }

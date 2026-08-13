@@ -241,6 +241,31 @@ export const healthApi = {
   check: () => api.get<{ status: string }>("/health"),
 };
 
+export type DashboardGoalAnalytics = {
+  id: string;
+  metric: string;
+  scope: string;
+  teamId?: string | null;
+  userId?: string | null;
+  pipelineId?: string | null;
+  targetValue: number;
+  target: number;
+  actual: number;
+  progressPct: number;
+  remaining: number;
+  exceeded: number;
+  expectedToDate: number;
+  requiredPerDay: number | null;
+  daysElapsed: number;
+  daysRemaining: number;
+  pace: string;
+  periodStart: string;
+  periodEnd: string;
+  team?: { id: string; name: string } | null;
+  user?: { id: string; name: string } | null;
+  curve: Array<{ date: string; actual: number; expected: number }>;
+};
+
 export const dashboardApi = {
   filters: () =>
     api.get<{
@@ -276,6 +301,22 @@ export const dashboardApi = {
       pendingPayments?: unknown[];
       journeys?: DashboardJourneySummaries;
     }>("/dashboard/lists", query),
+  goals: (query?: Record<string, QueryValue>) =>
+    api.get<{ goals: DashboardGoalAnalytics[]; registry: Record<string, unknown> }>(
+      "/dashboard/goals/analytics",
+      query,
+    ),
+  createGoal: (data: Record<string, unknown>) =>
+    api.post<Record<string, unknown>>("/dashboard/goals", data),
+  updateGoal: (id: string, data: Record<string, unknown>) =>
+    api.patch<Record<string, unknown>>(`/dashboard/goals/${id}`, data),
+  archiveGoal: (id: string) => api.delete<Record<string, unknown>>(`/dashboard/goals/${id}`),
+  explore: (query?: Record<string, QueryValue>) =>
+    api.get<{
+      metric: string;
+      dimension: string;
+      rows: Array<{ label: string; value: number | null }>;
+    }>("/dashboard/explore", query),
 };
 
 export const contactsApi = {

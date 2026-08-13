@@ -1054,6 +1054,8 @@ export class DashboardService {
       metrics,
       pipelines: charts.pipelineByStage,
       topSellers: charts.performanceByOwner.slice(0, 3),
+      revenueByPeriod: charts.revenueByPeriod,
+      channelPerformance: charts.channelPerformance,
       lists,
     };
   }
@@ -1235,6 +1237,66 @@ export class DashboardService {
         providerCampaignDelivery: "BLOCKED_PROVIDER",
       },
     };
+  }
+
+  async explore(
+    organizationId: string,
+    filters: DashboardFilters,
+    metric = "revenue",
+    dimension = "seller",
+  ) {
+    const matrix: Record<string, string[]> = {
+      revenue: ["seller", "channel", "pipeline", "tag", "customer_type"],
+      orders: ["channel", "tag", "customer_type"],
+      leads: ["channel", "pipeline"],
+      conversion: ["seller", "channel"],
+    };
+    if (!matrix[metric]?.includes(dimension)) {
+      throw new ForbiddenException("Combinação de métrica e dimensão não permitida.");
+    }
+    const [charts, customers] = await Promise.all([
+      this.charts(organizationId, filters),
+      dimension === "tag" || dimension === "customer_type"
+        ? this.customers(organizationId, filters)
+        : null,
+    ]);
+    let rows: Array<{ label: string; value: number | null }> = [];
+    if (dimension === "seller")
+      rows = charts.performanceByOwner.map((row) => ({
+        label: row.name,
+        value: metric === "conversion" ? row.conversionRate : row.revenue,
+      }));
+    if (dimension === "channel")
+      rows = charts.channelPerformance.map((row) => ({
+        label: row.label,
+        value:
+          metric === "orders"
+            ? row.sales
+            : metric === "leads"
+              ? row.leads
+              : metric === "conversion"
+                ? row.conversionRate
+                : row.revenue,
+      }));
+    if (dimension === "pipeline")
+      rows = charts.pipelineByStage.map((row) => ({ label: row.label, value: row.value }));
+    if (dimension === "tag")
+      rows = (customers?.tags ?? []).map((row) => ({
+        label: row.name,
+        value: metric === "orders" ? row.orders : row.revenue,
+      }));
+    if (dimension === "customer_type" && customers)
+      rows = [
+        {
+          label: "Novos",
+          value: metric === "orders" ? customers.newCustomers : customers.newRevenue,
+        },
+        {
+          label: "Recorrentes",
+          value: metric === "orders" ? customers.recurringCustomers : customers.recurringRevenue,
+        },
+      ];
+    return { metric, dimension, rows, matrix, availability: "READY" };
   }
 
   private async buildJourneySummaries(organizationId: string) {

@@ -1,10 +1,20 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Dashboard intelligence center", () => {
-  test("renders all six areas and keeps filters in the URL", async ({ page }) => {
+  test("renders all seven areas and keeps filters in the URL", async ({ page }) => {
     await page.goto("/dashboard");
-    await expect(page.getByTestId("dashboard-intelligence-center")).toBeVisible({ timeout: 30_000 });
-    for (const label of ["Visão geral", "Comercial", "Atendimento", "Equipe", "Clientes", "Canais"]) {
+    await expect(page.getByTestId("dashboard-intelligence-center")).toBeVisible({
+      timeout: 30_000,
+    });
+    for (const label of [
+      "Visão geral",
+      "Comercial",
+      "Atendimento",
+      "Equipe",
+      "Metas",
+      "Clientes",
+      "Canais",
+    ]) {
       await expect(page.getByRole("button", { name: label })).toBeVisible();
     }
     await page.getByRole("button", { name: "Atendimento" }).click();

@@ -24,8 +24,7 @@ export const DEFAULT_DASHBOARD_FILTERS: DashboardFilterState = {
   scope: "company",
 };
 
-const filterFieldClass =
-  "flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground";
+const filterFieldClass = "flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground";
 
 export function DashboardFilters({
   value,
@@ -45,8 +44,7 @@ export function DashboardFilters({
   scopeLabel?: string;
 }) {
   const customInvalid =
-    value.period === "custom" &&
-    Boolean(value.from && value.to && value.from > value.to);
+    value.period === "custom" && Boolean(value.from && value.to && value.from > value.to);
 
   const hasActiveFilters =
     value.period !== "30d" ||
@@ -169,11 +167,7 @@ export function DashboardFilters({
 
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
         {canSeeTeam ? (
-          <div
-            className="flex flex-wrap gap-1.5"
-            role="group"
-            aria-label="Escopo da operação"
-          >
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Escopo da operação">
             {(
               [
                 ["me", "Minha operação"],

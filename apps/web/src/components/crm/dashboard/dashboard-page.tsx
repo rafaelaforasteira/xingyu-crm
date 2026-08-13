@@ -22,13 +22,17 @@ import { Input } from "@/components/ui/input";
 import { Label, Select } from "@/components/ui/form-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AnalyticsChart } from "./analytics-charts";
+import { GoalsPanel } from "./goals-panel";
+import { DimensionExplorer } from "./dimension-explorer";
 
-type Tab = "overview" | "commercial" | "attendance" | "team" | "customers" | "channels";
+type Tab = "overview" | "commercial" | "attendance" | "team" | "goals" | "customers" | "channels";
 const TABS: Array<{ value: Tab; label: string }> = [
   { value: "overview", label: "Visão geral" },
   { value: "commercial", label: "Comercial" },
   { value: "attendance", label: "Atendimento" },
   { value: "team", label: "Equipe" },
+  { value: "goals", label: "Metas" },
   { value: "customers", label: "Clientes" },
   { value: "channels", label: "Canais" },
 ];
@@ -44,6 +48,28 @@ const minutes = (value: unknown) =>
       ? `${Math.round(value)} min`
       : `${(value / 60).toFixed(1)} h`
     : "—";
+
+function goalPeriod(period: string, from: string, to: string) {
+  if (period === "custom" && from && to) {
+    const end = new Date(`${to}T00:00:00.000Z`);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { from: `${from}T00:00:00.000Z`, to: end.toISOString() };
+  }
+  const end = new Date();
+  const start = new Date(end);
+  if (period === "today") start.setUTCHours(0, 0, 0, 0);
+  else if (period === "7d") start.setUTCDate(start.getUTCDate() - 7);
+  else if (period === "month") {
+    start.setUTCDate(1);
+    start.setUTCHours(0, 0, 0, 0);
+  } else if (period === "previous-month") {
+    end.setUTCDate(1);
+    end.setUTCHours(0, 0, 0, 0);
+    start.setTime(end.getTime());
+    start.setUTCMonth(start.getUTCMonth() - 1);
+  } else start.setUTCDate(start.getUTCDate() - 30);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
 
 function Metric({
   label,
@@ -107,9 +133,7 @@ function Ranking({
         <tbody>
           {rows.map((row, index) => (
             <tr key={String(row.id ?? index)} className="border-b last:border-0">
-              <td className="px-4 py-3 font-semibold">
-                {index < 3 ? ["🥇", "🥈", "🥉"][index] : `${index + 1}º`}
-              </td>
+              <td className="px-4 py-3 font-semibold">{`${index + 1}º`}</td>
               <td className="px-4 py-3 font-medium">{String(row.name ?? "—")}</td>
               <td className="px-4 py-3 text-right">
                 {metric === "revenue" ? money(row.revenue) : number(row[metric])}
@@ -165,9 +189,22 @@ export function DashboardPage() {
   };
   const area = useQuery({
     queryKey: ["dashboard", "intelligence", tab, query],
-    queryFn: () => dashboardApi.area(tab, query),
+    queryFn: () => dashboardApi.area(tab as Exclude<Tab, "goals">, query),
+    enabled: tab !== "goals",
     retry: false,
     placeholderData: (previous) => previous,
+  });
+  const goals = useQuery({
+    queryKey: ["dashboard", "goals", query],
+    queryFn: () =>
+      dashboardApi.goals({
+        ...goalPeriod(period, from, to),
+        pipelineId: query.pipelineId,
+        teamId: query.teamId,
+        userId: query.ownerId,
+      }),
+    enabled: tab === "goals",
+    retry: false,
   });
   const data = area.data ?? {};
   const metrics = (data.metrics ?? {}) as Record<string, unknown>;
@@ -291,9 +328,7 @@ export function DashboardPage() {
             </div>
           </div>
         ) : null}
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Timezone: {options.data?.timezone ?? "—"} · filtros persistem entre as áreas
-        </p>
+        <p className="mt-2 text-[11px] text-muted-foreground">Filtros persistem entre as áreas.</p>
       </section>
       {area.error ? <ErrorBanner message={(area.error as Error).message} /> : null}
       {area.isLoading && !area.data ? (
@@ -332,7 +367,23 @@ export function DashboardPage() {
               }
             />
           </div>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <AnalyticsChart
+              title="Receita no período"
+              kind="line"
+              data={(data.revenueByPeriod as Array<Record<string, unknown>>) ?? []}
+              valueFormatter={money}
+            />
+            <AnalyticsChart
+              title="Receita por canal"
+              data={((data.channelPerformance as Array<Record<string, unknown>>) ?? []).map(
+                (row) => ({ label: row.label, value: row.revenue }),
+              )}
+              valueFormatter={money}
+            />
+          </div>
           <Ranking rows={(data.topSellers as Array<Record<string, unknown>>) ?? []} />
+          <DimensionExplorer query={query} />
         </>
       ) : null}
       {tab === "commercial" && area.data ? (
@@ -346,6 +397,12 @@ export function DashboardPage() {
               value={`${number(metrics.wonInPeriod)} / ${number(metrics.lostInPeriod)}`}
             />
           </div>
+          <AnalyticsChart
+            title="Evolução da receita"
+            kind="line"
+            data={(data.revenueByPeriod as Array<Record<string, unknown>>) ?? []}
+            valueFormatter={money}
+          />
           <Card>
             <CardHeader>
               <CardTitle>Funil comercial</CardTitle>
@@ -394,6 +451,13 @@ export function DashboardPage() {
             <Metric label="Iniciadas pela equipe" value={number(data.initiatedByTeam)} />
             <Metric label="Iniciadas pelo cliente" value={number(data.initiatedByCustomer)} />
           </div>
+          <AnalyticsChart
+            title="Distribuição do SLA"
+            kind="donut"
+            data={Object.entries((data.sla as Record<string, number>) ?? {}).map(
+              ([label, value]) => ({ label, value }),
+            )}
+          />
           <Card>
             <CardHeader>
               <CardTitle>SLA de resposta</CardTitle>
@@ -440,9 +504,18 @@ export function DashboardPage() {
               ))}
             </CardContent>
           </Card>
+          <AnalyticsChart
+            title="Receita por pessoa"
+            data={((data.ranking as Array<Record<string, unknown>>) ?? []).map((row) => ({
+              label: row.name,
+              value: row.revenue,
+            }))}
+            valueFormatter={money}
+          />
           <Ranking rows={(data.ranking as Array<Record<string, unknown>>) ?? []} />
         </>
       ) : null}
+      {tab === "goals" ? <GoalsPanel data={goals.data} options={options.data} /> : null}
       {tab === "customers" && area.data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -452,6 +525,24 @@ export function DashboardPage() {
             <Metric label="Receita recorrente" value={money(data.recurringRevenue)} />
             <Metric label="Ticket novos" value={money(data.newTicket)} />
             <Metric label="Ticket recorrentes" value={money(data.recurringTicket)} />
+          </div>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <AnalyticsChart
+              title="Clientes novos × recorrentes"
+              kind="donut"
+              data={[
+                { label: "Novos", value: data.newCustomers },
+                { label: "Recorrentes", value: data.recurringCustomers },
+              ]}
+            />
+            <AnalyticsChart
+              title="Receita nova × recorrente"
+              data={[
+                { label: "Novos", value: data.newRevenue },
+                { label: "Recorrentes", value: data.recurringRevenue },
+              ]}
+              valueFormatter={money}
+            />
           </div>
           <Card>
             <CardHeader>
@@ -478,46 +569,58 @@ export function DashboardPage() {
         </>
       ) : null}
       {tab === "channels" && area.data ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance por canal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {((data.ranking as Array<Record<string, unknown>>) ?? []).length ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="py-2 text-left">Canal</th>
-                      <th className="text-right">Leads</th>
-                      <th className="text-right">Pedidos</th>
-                      <th className="text-right">Receita</th>
-                      <th className="text-right">Conversão</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data.ranking as Array<Record<string, unknown>>).map((row) => (
-                      <tr key={String(row.label)} className="border-b">
-                        <td className="py-3 font-medium">{String(row.label)}</td>
-                        <td className="text-right">{number(row.leads)}</td>
-                        <td className="text-right">{number(row.sales)}</td>
-                        <td className="text-right">{money(row.revenue)}</td>
-                        <td className="text-right">
-                          {typeof row.conversionRate === "number" ? `${row.conversionRate}%` : "—"}
-                        </td>
+        <>
+          <AnalyticsChart
+            title="Performance por canal"
+            data={((data.ranking as Array<Record<string, unknown>>) ?? []).map((row) => ({
+              label: row.label,
+              value: row.revenue,
+            }))}
+            valueFormatter={money}
+          />
+          <Card>
+            <CardHeader>
+              <CardTitle>Performance por canal</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {((data.ranking as Array<Record<string, unknown>>) ?? []).length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="py-2 text-left">Canal</th>
+                        <th className="text-right">Leads</th>
+                        <th className="text-right">Pedidos</th>
+                        <th className="text-right">Receita</th>
+                        <th className="text-right">Conversão</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <EmptyState
-                title="Selecione um canal permitido para analisar"
-                description="Canais pessoais e de pipeline respeitam a matriz de acesso."
-              />
-            )}
-          </CardContent>
-        </Card>
+                    </thead>
+                    <tbody>
+                      {(data.ranking as Array<Record<string, unknown>>).map((row) => (
+                        <tr key={String(row.label)} className="border-b">
+                          <td className="py-3 font-medium">{String(row.label)}</td>
+                          <td className="text-right">{number(row.leads)}</td>
+                          <td className="text-right">{number(row.sales)}</td>
+                          <td className="text-right">{money(row.revenue)}</td>
+                          <td className="text-right">
+                            {typeof row.conversionRate === "number"
+                              ? `${row.conversionRate}%`
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyState
+                  title="Selecione um canal permitido para analisar"
+                  description="Canais pessoais e de pipeline respeitam a matriz de acesso."
+                />
+              )}
+            </CardContent>
+          </Card>
+        </>
       ) : null}
     </div>
   );

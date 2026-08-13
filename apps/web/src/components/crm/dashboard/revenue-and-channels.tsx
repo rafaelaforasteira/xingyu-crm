@@ -13,13 +13,7 @@ const SimpleLineChart = dynamic(
   { loading: () => <Skeleton className="h-56 w-full" />, ssr: false },
 );
 
-export function RevenueChart({
-  data,
-  loading,
-}: {
-  data: ChartPoint[];
-  loading?: boolean;
-}) {
+export function RevenueChart({ data, loading }: { data: ChartPoint[]; loading?: boolean }) {
   if (loading) {
     return (
       <Card className="rounded-2xl shadow-soft">
@@ -85,7 +79,8 @@ export function ChannelPerformance({
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Receita no período: <strong className="text-foreground">{formatCurrency(total)}</strong>
+              Receita no período:{" "}
+              <strong className="text-foreground">{formatCurrency(total)}</strong>
             </p>
             {data.slice(0, 6).map((channel) => (
               <div key={channel.label} className="space-y-1.5">
