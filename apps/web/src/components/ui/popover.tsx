@@ -102,6 +102,13 @@ export function Popover({
   }, [open, updatePosition]);
 
   React.useEffect(() => {
+    if (!open || !contentRef.current || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => updatePosition());
+    observer.observe(contentRef.current);
+    return () => observer.disconnect();
+  }, [open, updatePosition]);
+
+  React.useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
