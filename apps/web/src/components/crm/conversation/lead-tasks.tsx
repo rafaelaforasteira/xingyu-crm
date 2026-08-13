@@ -11,7 +11,7 @@ import { Label, Select } from "@/components/ui/form-controls";
 import { Popover } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { settingsApi, tasksApi } from "@/lib/api";
+import { pipelinesApi, settingsApi, tasksApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Task, TaskStatusDefinition, UserRef } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -362,8 +362,8 @@ export function LeadTasks({
     staleTime: 300_000,
   });
   const usersQuery = useQuery({
-    queryKey: [...queryKeys.settings, "users"],
-    queryFn: settingsApi.users,
+    queryKey: links.pipelineId ? queryKeys.pipelines.eligibleUsers(links.pipelineId) : [...queryKeys.settings, "users"],
+    queryFn: () => links.pipelineId ? pipelinesApi.eligibleUsers(links.pipelineId) : settingsApi.users(),
     staleTime: 300_000,
   });
   const tasks = tasksQuery.data?.data ?? [];

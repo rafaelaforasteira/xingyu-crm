@@ -70,7 +70,7 @@ const dealMutationSelect = {
 export class DealsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: QueryDealsDto) {
+  async findAll(organizationId: string, query: QueryDealsDto, allowedPipelineIds?: string[] | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
@@ -86,6 +86,7 @@ export class DealsService {
     const where: Prisma.DealWhereInput = {
       organizationId,
       ...notDeleted,
+      ...(allowedPipelineIds ? { pipelineId: { in: allowedPipelineIds } } : {}),
       ...(query.pipelineId ? { pipelineId: query.pipelineId } : {}),
       ...(query.stageId ? { stageId: query.stageId } : {}),
       ...(query.ownerId ? { ownerId: query.ownerId } : {}),
@@ -202,7 +203,7 @@ export class DealsService {
     });
   }
 
-  async lookupManualLead(organizationId: string, dto: LookupManualLeadDto) {
+  async lookupManualLead(organizationId: string, dto: LookupManualLeadDto, allowedPipelineIds?: string[] | null) {
     const phone = dto.phone?.trim() ? normalizePhone(dto.phone) : null;
     const email = dto.email?.trim().toLowerCase() || null;
     const contact = phone
@@ -214,7 +215,7 @@ export class DealsService {
           },
           include: {
             deals: {
-              where: { deletedAt: null },
+              where: { deletedAt: null, ...(allowedPipelineIds ? { pipelineId: { in: allowedPipelineIds } } : {}) },
               orderBy: { updatedAt: "desc" },
               include: {
                 stage: { select: { id: true, name: true, type: true } },

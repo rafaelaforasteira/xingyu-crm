@@ -7,7 +7,7 @@ import { GlobalSearchDto } from "./dto/search.dto";
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async global(organizationId: string, query: GlobalSearchDto) {
+  async global(organizationId: string, query: GlobalSearchDto, allowedPipelineIds?: string[] | null) {
     const q = query.q.trim();
     const take = Math.min(Number(query.limit ?? 8), 20);
     const mode = "insensitive" as const;
@@ -44,6 +44,7 @@ export class SearchService {
         where: {
           organizationId,
           ...notDeleted,
+          ...(allowedPipelineIds ? { pipelineId: { in: allowedPipelineIds } } : {}),
           name: { contains: q, mode },
         },
         take,
@@ -53,6 +54,7 @@ export class SearchService {
         where: {
           organizationId,
           ...notDeleted,
+          ...(allowedPipelineIds ? { OR: [{ dealId: null }, { deal: { pipelineId: { in: allowedPipelineIds } } }] } : {}),
           number: { contains: q, mode },
         },
         take,
@@ -74,6 +76,7 @@ export class SearchService {
         where: {
           organizationId,
           ...notDeleted,
+          ...(allowedPipelineIds ? { OR: [{ AND: [{ dealId: null }, { pipelineId: null }] }, { pipelineId: { in: allowedPipelineIds } }, { deal: { pipelineId: { in: allowedPipelineIds } } }] } : {}),
           title: { contains: q, mode },
         },
         take,

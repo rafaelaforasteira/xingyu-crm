@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { contactsApi, dealsApi, pipelinesApi, settingsApi } from "@/lib/api";
+import { contactsApi, dealsApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, Pipeline, PipelineStage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -48,8 +48,8 @@ export function CreateDealDialog({
     retry: false,
   });
   const users = useQuery({
-    queryKey: [...queryKeys.settings, "deal-dialog-users"],
-    queryFn: () => settingsApi.users(),
+    queryKey: queryKeys.pipelines.eligibleUsers(pipeline.id),
+    queryFn: () => pipelinesApi.eligibleUsers(pipeline.id),
     enabled: open,
     retry: false,
   });

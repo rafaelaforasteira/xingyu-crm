@@ -29,6 +29,7 @@ import type {
   PipelineChannelTestResult,
   PipelineLeadSimulationInput,
   PipelineLeadSimulationResult,
+  PipelineAccessOverview,
   PipelineInput,
   PipelineListQuery,
   PipelineNavigationItem,
@@ -310,6 +311,9 @@ export const companiesApi = {
 };
 
 export const pipelinesApi = {
+  accessOverview: () => api.get<PipelineAccessOverview>("/pipelines/access"),
+  updateAccess: (id: string, data: { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] }) => api.put<PipelineAccessOverview>(`/pipelines/access/${id}`, data),
+  eligibleUsers: (id: string) => api.get<UserRef[]>(`/pipelines/access/${id}/eligible-users`),
   navigation: () => api.get<PipelineNavigationItem[]>("/pipelines/navigation"),
   list: async (query?: PipelineListQuery): Promise<PaginatedResponse<Pipeline>> => {
     const res = await api.get<Pipeline[] | PaginatedResponse<Pipeline>>("/pipelines", {

@@ -1124,6 +1124,13 @@ export interface DealActionItem extends Deal {
 export interface Team {
   id: string;
   name: string;
+  members?: UserRef[];
+}
+
+export interface PipelineAccessOverview {
+  pipelines: Array<Pick<Pipeline, "id" | "name" | "position"> & { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] }>;
+  teams: Team[];
+  users: Array<UserRef & { team?: Team | null }>;
 }
 
 export interface SettingsOverview {

@@ -8,5 +8,8 @@ test("pipelines page and API are available in multi-pipeline mode", async ({ pag
   const list = await request.get("/api/pipelines?pageSize=5");
   expect(list.ok(), await list.text()).toBeTruthy();
   const body = await list.json();
-  expect(body.data.length).toBeGreaterThanOrEqual(3);
+  expect(body.data.map((pipeline: { name: string }) => pipeline.name)).toEqual([
+    "COMERCIAL PRINCIPAL",
+    "PÓS-VENDA",
+  ]);
 });

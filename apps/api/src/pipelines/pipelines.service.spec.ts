@@ -89,6 +89,7 @@ function pipelineResult() {
     favorite: false,
     position: 0,
     archived: false,
+    accessMode: "ORGANIZATION" as const,
     defaultTeamId: null,
     defaultOwnerId: null,
     createdById: userId,

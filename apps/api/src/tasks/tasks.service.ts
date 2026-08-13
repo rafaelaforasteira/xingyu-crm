@@ -57,6 +57,15 @@ function mapTask(task: Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>) 
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async pipelineIdForDeal(organizationId: string, dealId: string) {
+    return (await this.prisma.deal.findFirst({ where: { id: dealId, organizationId, deletedAt: null }, select: { pipelineId: true } }))?.pipelineId ?? null;
+  }
+
+  async pipelineIdForTask(organizationId: string, taskId: string) {
+    const task = await this.prisma.task.findFirst({ where: { id: taskId, organizationId, deletedAt: null }, select: { pipelineId: true, deal: { select: { pipelineId: true } } } });
+    return task?.deal?.pipelineId ?? task?.pipelineId ?? null;
+  }
+
   private async ensureDefaultStatuses(organizationId: string) {
     const count = await this.prisma.taskStatusDefinition.count({
       where: { organizationId, deletedAt: null },
@@ -228,11 +237,11 @@ export class TasksService {
     if (!assignee) throw new BadRequestException("Responsável inválido");
   }
 
-  async findAll(organizationId: string, query: QueryTasksDto) {
+  async findAll(organizationId: string, query: QueryTasksDto, allowedPipelineIds?: string[] | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 50;
     const { skip, take } = paginationArgs(page, pageSize);
-    const where = this.buildWhere(organizationId, query);
+    const where = this.withPipelineScope(this.buildWhere(organizationId, query), allowedPipelineIds);
     const [data, total] = await Promise.all([
       this.prisma.task.findMany({
         where,
@@ -246,14 +255,14 @@ export class TasksService {
     return paginate(data.map(mapTask), total, page, pageSize);
   }
 
-  async board(organizationId: string, query: QueryTasksDto) {
+  async board(organizationId: string, query: QueryTasksDto, allowedPipelineIds?: string[] | null) {
     await this.ensureDefaultStatuses(organizationId);
     const statuses = await this.listStatuses(organizationId);
-    const where = this.buildWhere(organizationId, {
+    const where = this.withPipelineScope(this.buildWhere(organizationId, {
       ...query,
       status: undefined,
       statusDefinitionId: undefined,
-    });
+    }), allowedPipelineIds);
 
     const tasks = await this.prisma.task.findMany({
       where,
@@ -313,6 +322,10 @@ export class TasksService {
     };
   }
 
+  private withPipelineScope(where: Prisma.TaskWhereInput, allowed?: string[] | null): Prisma.TaskWhereInput {
+    return allowed ? { AND: [where, { OR: [{ deal: { pipelineId: { in: allowed } } }, { pipelineId: { in: allowed } }, { AND: [{ dealId: null }, { pipelineId: null }] }] }] } : where;
+  }
+
   async findOne(organizationId: string, id: string) {
     const task = await this.prisma.task.findFirst({
       where: { id, organizationId, ...notDeleted },
@@ -322,19 +335,19 @@ export class TasksService {
     return mapTask(task);
   }
 
-  async today(organizationId: string) {
+  async today(organizationId: string, allowedPipelineIds?: string[] | null) {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
 
     const data = await this.prisma.task.findMany({
-      where: {
+      where: this.withPipelineScope({
         organizationId,
         ...notDeleted,
         dueAt: { gte: start, lt: end },
         status: { not: "COMPLETED" },
-      },
+      }, allowedPipelineIds),
       orderBy: { dueAt: "asc" },
       include: TASK_INCLUDE,
     });

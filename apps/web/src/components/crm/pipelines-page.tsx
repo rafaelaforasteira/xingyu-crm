@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   Trash2,
   Users,
+  UsersRound,
   Wifi,
   type LucideIcon,
 } from "lucide-react";
@@ -42,7 +43,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -416,10 +417,10 @@ export function PipelinesListPage() {
         title="Pipelines"
         description="Crie, organize e acompanhe todos os funis da operação."
         actions={
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4" />
-            Criar pipeline
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Link className={buttonVariants({ variant: "outline" })} href="/pipelines/access"><UsersRound className="h-4 w-4" />Equipes e acessos</Link>
+            <Button onClick={openCreateDialog}><Plus className="h-4 w-4" />Criar pipeline</Button>
+          </div>
         }
       />
 

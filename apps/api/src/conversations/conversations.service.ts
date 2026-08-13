@@ -381,9 +381,10 @@ export class ConversationsService {
     return { AND: [where, cursorFilter] };
   }
 
-  async findAll(organizationId: string, query: QueryConversationsDto) {
+  async findAll(organizationId: string, query: QueryConversationsDto, allowedPipelineIds?: string[] | null) {
     const pageSize = query.pageSize ?? 20;
     let where = this.buildListWhere(organizationId, query);
+    if (allowedPipelineIds) where = { AND: [where, { OR: [{ deal: { is: null } }, { deal: { pipelineId: { in: allowedPipelineIds } } }] }] };
 
     const replyStatus = query.replyStatus ?? (query.awaitingReply ? ("mine" as const) : undefined);
     if (replyStatus === "mine" || replyStatus === "customer") {

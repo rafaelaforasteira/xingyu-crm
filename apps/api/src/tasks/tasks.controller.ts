@@ -12,6 +12,9 @@ import { ApiTags, ApiOperation, ApiHeader } from "@nestjs/swagger";
 import { TasksService } from "./tasks.service";
 import { OrganizationId } from "../common/decorators/organization.decorator";
 import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/demo-user.decorator";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../auth/types";
+import { PipelineAccessService } from "../pipelines/pipeline-access.service";
 import {
   CreateTaskDto,
   UpdateTaskDto,
@@ -26,18 +29,18 @@ import {
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
 @Controller("tasks")
 export class TasksController {
-  constructor(private readonly tasksService: TasksService) {}
+  constructor(private readonly tasksService: TasksService, private readonly access: PipelineAccessService) {}
 
   @Get()
   @ApiOperation({ summary: "List tasks" })
-  findAll(@OrganizationId() orgId: string, @Query() query: QueryTasksDto) {
-    return this.tasksService.findAll(orgId, query);
+  async findAll(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryTasksDto) {
+    return this.tasksService.findAll(orgId, query, await this.access.accessiblePipelineIds(user));
   }
 
   @Get("board")
   @ApiOperation({ summary: "Task board grouped by custom status" })
-  board(@OrganizationId() orgId: string, @Query() query: QueryTasksDto) {
-    return this.tasksService.board(orgId, query);
+  async board(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryTasksDto) {
+    return this.tasksService.board(orgId, query, await this.access.accessiblePipelineIds(user));
   }
 
   @Get("statuses")
@@ -79,70 +82,91 @@ export class TasksController {
 
   @Get("today")
   @ApiOperation({ summary: "List tasks due today" })
-  today(@OrganizationId() orgId: string) {
-    return this.tasksService.today(orgId);
+  async today(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.tasksService.today(orgId, await this.access.accessiblePipelineIds(user));
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get task" })
-  findOne(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async findOne(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    await this.access.assertTaskAccess(user, id);
     return this.tasksService.findOne(orgId, id);
   }
 
   @Post()
   @ApiOperation({ summary: "Create task" })
-  create(
+  async create(
     @OrganizationId() orgId: string,
     @DemoUser() user: DemoUserType,
     @Body() dto: CreateTaskDto,
+    @CurrentUser() authUser: AuthenticatedUser,
   ) {
+    if (dto.dealId) await this.access.assertDealAccess(authUser, dto.dealId);
+    else if (dto.pipelineId) await this.access.assertAccess(authUser, dto.pipelineId);
+    const taskPipelineId = dto.pipelineId ?? (dto.dealId ? (await this.tasksService.pipelineIdForDeal(orgId, dto.dealId)) : null);
+    if (taskPipelineId) await this.access.assertEligibleUser(authUser, taskPipelineId, dto.assigneeId ?? authUser.id);
     return this.tasksService.create(orgId, dto, user.id);
   }
 
   @Patch(":id")
   @ApiOperation({ summary: "Update task" })
-  update(
+  async update(
     @OrganizationId() orgId: string,
     @DemoUser() user: DemoUserType,
     @Param("id") id: string,
     @Body() dto: UpdateTaskDto,
+    @CurrentUser() authUser: AuthenticatedUser,
   ) {
+    await this.access.assertTaskAccess(authUser, id);
+    if (dto.dealId) await this.access.assertDealAccess(authUser, dto.dealId);
+    else if (dto.pipelineId) await this.access.assertAccess(authUser, dto.pipelineId);
+    if (dto.assigneeId !== undefined) {
+      const taskPipelineId = dto.pipelineId ?? (dto.dealId ? await this.tasksService.pipelineIdForDeal(orgId, dto.dealId) : await this.tasksService.pipelineIdForTask(orgId, id));
+      if (taskPipelineId) await this.access.assertEligibleUser(authUser, taskPipelineId, dto.assigneeId);
+    }
     return this.tasksService.update(orgId, id, dto, user.id);
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Soft-delete task" })
-  remove(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async remove(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    await this.access.assertTaskAccess(user, id);
     return this.tasksService.remove(orgId, id);
   }
 
   @Post(":id/complete")
   @ApiOperation({ summary: "Complete task" })
-  complete(
+  async complete(
     @OrganizationId() orgId: string,
     @DemoUser() user: DemoUserType,
     @Param("id") id: string,
+    @CurrentUser() authUser: AuthenticatedUser,
   ) {
+    await this.access.assertTaskAccess(authUser, id);
     return this.tasksService.complete(orgId, id, user.id);
   }
 
   @Post(":id/reopen")
   @ApiOperation({ summary: "Reopen task" })
-  reopen(
+  async reopen(
     @OrganizationId() orgId: string,
     @DemoUser() user: DemoUserType,
     @Param("id") id: string,
+    @CurrentUser() authUser: AuthenticatedUser,
   ) {
+    await this.access.assertTaskAccess(authUser, id);
     return this.tasksService.reopen(orgId, id, user.id);
   }
 
   @Post(":id/reschedule")
   @ApiOperation({ summary: "Reschedule task" })
-  reschedule(
+  async reschedule(
     @OrganizationId() orgId: string,
     @Param("id") id: string,
     @Body() dto: RescheduleTaskDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    await this.access.assertTaskAccess(user, id);
     return this.tasksService.reschedule(orgId, id, dto);
   }
 }

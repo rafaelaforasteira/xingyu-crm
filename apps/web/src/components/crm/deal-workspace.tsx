@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, FileText, Flag, FolderOpen, History, MessageSquare, NotebookPen, ShoppingBag, UserRound, X } from "lucide-react";
-import { conversationsApi, dealsApi, settingsApi } from "@/lib/api";
+import { conversationsApi, dealsApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { cn, formatCurrency } from "@/lib/utils";
 import { formatPrimaryPhoneForDisplay } from "@/lib/format-phone-display";
@@ -45,7 +45,7 @@ function DealHeaderControls({ deal, conversationId }: { deal: Deal; conversation
   const queryClient = useQueryClient();
   const [ownerOpen, setOwnerOpen] = React.useState(false);
   const [priorityOpen, setPriorityOpen] = React.useState(false);
-  const users = useQuery({ queryKey: [...queryKeys.settings, "users"], queryFn: settingsApi.users, staleTime: 300_000 });
+  const users = useQuery({ queryKey: queryKeys.pipelines.eligibleUsers(deal.pipelineId), queryFn: () => pipelinesApi.eligibleUsers(deal.pipelineId), staleTime: 300_000 });
   const update = useMutation({
     mutationFn: (patch: { ownerId?: string | null; priority?: DealPriority }) => dealsApi.update(deal.id, patch),
     onSuccess: () => {

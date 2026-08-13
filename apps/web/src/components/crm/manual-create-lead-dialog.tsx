@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { dealsApi, settingsApi } from "@/lib/api";
+import { dealsApi, pipelinesApi } from "@/lib/api";
 import { formatPhoneForDisplay, normalizePhoneForLookup } from "@/lib/format-phone-display";
 import { formatLeadCode } from "@/components/crm/conversation/conversation-list-utils";
 import { queryKeys } from "@/lib/query-keys";
@@ -102,8 +102,8 @@ export function ManualCreateLeadDialog({
     setEmail(lookup.data.contact.email ?? "");
   }, [lookup.data?.contact]);
   const users = useQuery({
-    queryKey: [...queryKeys.settings, "create-lead-users"],
-    queryFn: () => settingsApi.users(),
+    queryKey: queryKeys.pipelines.eligibleUsers(pipeline.id),
+    queryFn: () => pipelinesApi.eligibleUsers(pipeline.id),
     enabled: open,
     retry: false,
   });

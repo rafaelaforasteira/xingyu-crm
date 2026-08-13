@@ -17,7 +17,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { dealsApi, settingsApi } from "@/lib/api";
+import { dealsApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Deal, DealPriority, Pipeline, PipelineStage, UserRef } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -808,8 +808,8 @@ export function KanbanBoard({
   const [activeDeal, setActiveDeal] = React.useState<Deal | null>(null);
   const [dealToMove, setDealToMove] = React.useState<Deal | null>(null);
   const membersQuery = useQuery({
-    queryKey: [...queryKeys.settings, "users"],
-    queryFn: settingsApi.users,
+    queryKey: queryKeys.pipelines.eligibleUsers(pipeline.id),
+    queryFn: () => pipelinesApi.eligibleUsers(pipeline.id),
     staleTime: 300_000,
   });
 

@@ -44,7 +44,7 @@ type DbClient = Prisma.TransactionClient | PrismaService;
 export class PipelinesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: QueryPipelinesDto) {
+  async findAll(organizationId: string, query: QueryPipelinesDto, allowedIds?: string[] | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
@@ -52,6 +52,7 @@ export class PipelinesService {
       organizationId,
       deletedAt: null,
       archived: query.archived ?? false,
+      ...(allowedIds === null || allowedIds === undefined ? {} : { id: { in: allowedIds } }),
       ...(query.favorite === undefined ? {} : { favorite: query.favorite }),
       ...(query.search ? { name: { contains: query.search.trim(), mode: "insensitive" } } : {}),
     };
@@ -126,12 +127,13 @@ export class PipelinesService {
     );
   }
 
-  async navigation(organizationId: string) {
+  async navigation(organizationId: string, allowedIds?: string[] | null) {
     const pipelines = await this.prisma.pipeline.findMany({
       where: {
         organizationId,
         deletedAt: null,
         archived: false,
+        ...(allowedIds === null || allowedIds === undefined ? {} : { id: { in: allowedIds } }),
       },
       orderBy: [{ position: "asc" }, { name: "asc" }, { id: "asc" }],
       select: {

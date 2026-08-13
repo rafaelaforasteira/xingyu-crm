@@ -3,22 +3,24 @@ import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { softDeleteData, notDeleted } from "../common/utils/soft-delete";
 import { CreateNoteDto, UpdateNoteDto, QueryNotesDto } from "./dto/note.dto";
+import { Prisma } from "@xingyu/database";
 
 @Injectable()
 export class NotesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(organizationId: string, query: QueryNotesDto) {
+  async findAll(organizationId: string, query: QueryNotesDto, allowedPipelineIds?: string[] | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
-    const where: Record<string, unknown> = {
+    const where: Prisma.NoteWhereInput = {
       organizationId,
       ...notDeleted,
       ...(query.contactId ? { contactId: query.contactId } : {}),
       ...(query.companyId ? { companyId: query.companyId } : {}),
       ...(query.dealId ? { dealId: query.dealId } : {}),
       ...(query.orderId ? { orderId: query.orderId } : {}),
+      ...(allowedPipelineIds ? { OR: [{ dealId: null }, { deal: { pipelineId: { in: allowedPipelineIds } } }] } : {}),
     };
     const [data, total] = await Promise.all([
       this.prisma.note.findMany({

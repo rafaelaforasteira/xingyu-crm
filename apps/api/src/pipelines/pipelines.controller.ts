@@ -27,40 +27,46 @@ import {
   UpdateStageDto,
 } from "./dto/pipeline.dto";
 import { PipelinesService } from "./pipelines.service";
+import { PipelineAccessService } from "./pipeline-access.service";
+import { CurrentUser } from "../auth/decorators/current-user.decorator";
+import type { AuthenticatedUser } from "../auth/types";
 
 @ApiTags("pipelines")
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
 @Controller("pipelines")
 export class PipelinesController {
-  constructor(private readonly pipelinesService: PipelinesService) {}
+  constructor(private readonly pipelinesService: PipelinesService, private readonly access: PipelineAccessService) {}
 
   @Get()
   @ApiOperation({ summary: "List pipelines with stages, deal metrics, and defaults" })
-  findAll(@OrganizationId() orgId: string, @Query() query: QueryPipelinesDto) {
-    return this.pipelinesService.findAll(orgId, query);
+  async findAll(@OrganizationId() orgId: string, @Query() query: QueryPipelinesDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.pipelinesService.findAll(orgId, query, await this.access.accessiblePipelineIds(user));
   }
 
   @Get("navigation")
   @ApiOperation({ summary: "Lightweight pipeline list for sidebar navigation" })
-  navigation(@OrganizationId() orgId: string) {
-    return this.pipelinesService.navigation(orgId);
+  async navigation(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.pipelinesService.navigation(orgId, await this.access.accessiblePipelineIds(user));
   }
 
   @Get(":id/board")
   @ApiOperation({ summary: "Kanban board for one pipeline" })
-  board(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async board(@OrganizationId() orgId: string, @Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
+    await this.access.assertAccess(user, id);
     return this.pipelinesService.board(orgId, id);
   }
 
   @Get(":id/stages")
   @ApiOperation({ summary: "List stages for one pipeline" })
-  stages(@OrganizationId() orgId: string, @Param("id") id: string, @Query() query: QueryStagesDto) {
+  async stages(@OrganizationId() orgId: string, @Param("id") id: string, @Query() query: QueryStagesDto, @CurrentUser() user: AuthenticatedUser) {
+    await this.access.assertAccess(user, id);
     return this.pipelinesService.getStages(orgId, id, query);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get a pipeline with stages and metrics" })
-  findOne(@OrganizationId() orgId: string, @Param("id") id: string) {
+  async findOne(@OrganizationId() orgId: string, @Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
+    await this.access.assertAccess(user, id);
     return this.pipelinesService.findOne(orgId, id);
   }
 

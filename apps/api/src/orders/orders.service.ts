@@ -53,7 +53,7 @@ export class OrdersService {
     if (invalid) throw new BadRequestException(`${invalid} inválido`);
   }
 
-  async findAll(organizationId: string, query: QueryOrdersDto) {
+  async findAll(organizationId: string, query: QueryOrdersDto, allowedPipelineIds?: string[] | null) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const { skip, take } = paginationArgs(page, pageSize);
@@ -65,6 +65,7 @@ export class OrdersService {
       ...(query.companyId ? { companyId: query.companyId } : {}),
       ...(query.ownerId ? { ownerId: query.ownerId } : {}),
       ...(query.dealId ? { dealId: query.dealId } : {}),
+      ...(allowedPipelineIds ? { AND: [{ OR: [{ dealId: null }, { deal: { pipelineId: { in: allowedPipelineIds } } }] }] } : {}),
       ...(query.search
         ? {
             OR: [

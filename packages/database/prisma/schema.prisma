@@ -57,6 +57,11 @@ enum PipelineStageType {
   LOST
 }
 
+enum PipelineAccessMode {
+  ORGANIZATION
+  RESTRICTED
+}
+
 enum TaskStatus {
   PENDING
   IN_PROGRESS
@@ -313,6 +318,8 @@ model Organization {
   conversations              Conversation[]
   channels                   Channel[]
   pipelineChannelConnections PipelineChannelConnection[]
+  pipelineTeamAccesses       PipelineTeamAccess[]
+  pipelineUserAccesses       PipelineUserAccess[]
   orders                     Order[]
   products                   Product[]
   collections                ProductCollection[]
@@ -362,6 +369,7 @@ model Team {
   tasks                      Task[]
   defaultPipelines           Pipeline[]                  @relation("PipelineDefaultTeam")
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultTeam")
+  pipelineAccesses           PipelineTeamAccess[]
 
   @@index([organizationId])
 }
@@ -411,6 +419,7 @@ model User {
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultOwner")
   lifecycleActions           LifecycleAction[]           @relation("LifecycleActionActor")
   savedLeadFiles             LeadFile[]                   @relation("LeadFileSavedBy")
+  pipelineAccesses           PipelineUserAccess[]
 
   @@unique([organizationId, email])
   @@index([organizationId])
@@ -560,6 +569,7 @@ model Pipeline {
   favorite       Boolean   @default(false)
   position       Int       @default(0)
   archived       Boolean   @default(false)
+  accessMode     PipelineAccessMode @default(ORGANIZATION)
   defaultTeamId  String?
   defaultOwnerId String?
   createdById    String?
@@ -575,12 +585,46 @@ model Pipeline {
   deals              Deal[]
   tasks              Task[]
   channelConnections PipelineChannelConnection[]
+  teamAccesses       PipelineTeamAccess[]
+  userAccesses       PipelineUserAccess[]
 
   @@index([organizationId])
   @@index([archived])
   @@index([defaultTeamId])
   @@index([defaultOwnerId])
   @@index([organizationId, deletedAt, archived, favorite])
+}
+
+model PipelineTeamAccess {
+  id             String   @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  teamId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, teamId])
+  @@index([organizationId, teamId])
+  @@index([organizationId, pipelineId])
+}
+
+model PipelineUserAccess {
+  id             String   @id @default(cuid())
+  organizationId String
+  pipelineId     String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, userId])
+  @@index([organizationId, userId])
+  @@index([organizationId, pipelineId])
 }
 
 model PipelineStage {
