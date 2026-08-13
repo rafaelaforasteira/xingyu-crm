@@ -24,7 +24,7 @@ export type LeadLinks = {
   stageId?: string;
 };
 
-function StatusButton({
+export function TaskStatusButton({
   task,
   statuses,
   onChange,
@@ -120,7 +120,7 @@ function TaskRow({
       className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)_24px_auto] items-center gap-2 py-1"
       data-testid="lead-task-row"
     >
-      <StatusButton
+      <TaskStatusButton
         task={task}
         statuses={statuses}
         pending={pending}
@@ -174,6 +174,7 @@ export function CreateTaskDialog({
   onCreated,
   initialDescription = "",
   sourceNoteId,
+  description = "Vinculada ao lead atual.",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -184,6 +185,7 @@ export function CreateTaskDialog({
   onCreated: (task: Task) => void;
   initialDescription?: string;
   sourceNoteId?: string;
+  description?: string;
 }) {
   const defaultStatus = statuses.find((status) => status.category === "OPEN") ?? statuses[0];
   const [form, setForm] = React.useState({
@@ -231,12 +233,7 @@ export function CreateTaskDialog({
       setError(value instanceof Error ? value.message : "Não foi possível criar a tarefa."),
   });
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Nova tarefa"
-      description="Vinculada ao lead atual."
-    >
+    <Dialog open={open} onOpenChange={onOpenChange} title="Nova tarefa" description={description}>
       <form
         className="space-y-3"
         onSubmit={(event) => {
@@ -362,8 +359,11 @@ export function LeadTasks({
     staleTime: 300_000,
   });
   const usersQuery = useQuery({
-    queryKey: links.pipelineId ? queryKeys.pipelines.eligibleUsers(links.pipelineId) : [...queryKeys.settings, "users"],
-    queryFn: () => links.pipelineId ? pipelinesApi.eligibleUsers(links.pipelineId) : settingsApi.users(),
+    queryKey: links.pipelineId
+      ? queryKeys.pipelines.eligibleUsers(links.pipelineId)
+      : [...queryKeys.settings, "users"],
+    queryFn: () =>
+      links.pipelineId ? pipelinesApi.eligibleUsers(links.pipelineId) : settingsApi.users(),
     staleTime: 300_000,
   });
   const tasks = tasksQuery.data?.data ?? [];

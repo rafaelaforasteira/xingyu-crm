@@ -93,6 +93,15 @@ export class CreateTaskDto {
 export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
 
 export class QueryTasksDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ enum: ["mine", "team", "all"] })
+  @IsOptional()
+  @IsString()
+  scope?: "mine" | "team" | "all";
+
+  @ApiPropertyOptional({ enum: ["open", "completed"] })
+  @IsOptional()
+  @IsString()
+  state?: "open" | "completed";
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -138,10 +147,15 @@ export class QueryTasksDto extends PaginationQueryDto {
   @IsString()
   priority?: string;
 
-  @ApiPropertyOptional({ description: "today | week" })
+  @ApiPropertyOptional({ description: "overdue | today | upcoming | no-date | week" })
   @IsOptional()
   @IsString()
   due?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  override search?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

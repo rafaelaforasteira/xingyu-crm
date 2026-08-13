@@ -113,7 +113,7 @@ describe("PipelineAccessService security boundary", () => {
 
   it("keeps a task without Deal or Pipeline organization-scoped", async () => {
     const prisma = prismaMock();
-    prisma.task.findFirst.mockResolvedValue({ pipelineId: null, deal: null });
+    prisma.task.findFirst.mockResolvedValue({ assigneeId: user.id, pipelineId: null, deal: null });
     const service = new PipelineAccessService(prisma);
     await expect(service.assertTaskAccess(user, "task-free")).resolves.toBeUndefined();
   });

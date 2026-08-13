@@ -104,6 +104,7 @@ export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
         exact: true,
         expandablePipelines: true,
       },
+      { href: "/tasks", label: "Tarefas", icon: CheckSquare },
     ],
   },
 ];

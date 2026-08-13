@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { Prisma, TaskStatus, TaskStatusCategory } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
+import type { AuthenticatedUser } from "../auth/types";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
 import {
@@ -17,7 +18,17 @@ const TASK_INCLUDE = {
   contact: {
     select: { id: true, firstName: true, lastName: true, email: true, phone: true },
   },
-  deal: { select: { id: true, name: true, value: true, pipelineId: true, stageId: true } },
+  deal: {
+    select: {
+      id: true,
+      name: true,
+      value: true,
+      leadSequence: true,
+      ownerId: true,
+      pipelineId: true,
+      stageId: true,
+    },
+  },
   pipeline: { select: { id: true, name: true, color: true } },
   stage: { select: { id: true, name: true, color: true } },
   statusDefinition: true,
@@ -58,11 +69,21 @@ export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
   async pipelineIdForDeal(organizationId: string, dealId: string) {
-    return (await this.prisma.deal.findFirst({ where: { id: dealId, organizationId, deletedAt: null }, select: { pipelineId: true } }))?.pipelineId ?? null;
+    return (
+      (
+        await this.prisma.deal.findFirst({
+          where: { id: dealId, organizationId, deletedAt: null },
+          select: { pipelineId: true },
+        })
+      )?.pipelineId ?? null
+    );
   }
 
   async pipelineIdForTask(organizationId: string, taskId: string) {
-    const task = await this.prisma.task.findFirst({ where: { id: taskId, organizationId, deletedAt: null }, select: { pipelineId: true, deal: { select: { pipelineId: true } } } });
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId, deletedAt: null },
+      select: { pipelineId: true, deal: { select: { pipelineId: true } } },
+    });
     return task?.deal?.pipelineId ?? task?.pipelineId ?? null;
   }
 
@@ -237,17 +258,29 @@ export class TasksService {
     if (!assignee) throw new BadRequestException("Responsável inválido");
   }
 
-  async findAll(organizationId: string, query: QueryTasksDto, allowedPipelineIds?: string[] | null) {
+  async findAll(
+    organizationId: string,
+    query: QueryTasksDto,
+    user: AuthenticatedUser,
+    allowedPipelineIds?: string[] | null,
+  ) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 50;
     const { skip, take } = paginationArgs(page, pageSize);
-    const where = this.withPipelineScope(this.buildWhere(organizationId, query), allowedPipelineIds);
+    const where = this.withUserScope(
+      this.withPipelineScope(this.buildWhere(organizationId, query), allowedPipelineIds),
+      query.scope ?? "mine",
+      user,
+    );
     const [data, total] = await Promise.all([
       this.prisma.task.findMany({
         where,
         skip,
         take,
-        orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }],
+        orderBy:
+          query.state === "completed"
+            ? [{ completedAt: "desc" }, { updatedAt: "desc" }]
+            : [{ dueAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
         include: TASK_INCLUDE,
       }),
       this.prisma.task.count({ where }),
@@ -258,11 +291,14 @@ export class TasksService {
   async board(organizationId: string, query: QueryTasksDto, allowedPipelineIds?: string[] | null) {
     await this.ensureDefaultStatuses(organizationId);
     const statuses = await this.listStatuses(organizationId);
-    const where = this.withPipelineScope(this.buildWhere(organizationId, {
-      ...query,
-      status: undefined,
-      statusDefinitionId: undefined,
-    }), allowedPipelineIds);
+    const where = this.withPipelineScope(
+      this.buildWhere(organizationId, {
+        ...query,
+        status: undefined,
+        statusDefinitionId: undefined,
+      }),
+      allowedPipelineIds,
+    );
 
     const tasks = await this.prisma.task.findMany({
       where,
@@ -288,8 +324,7 @@ export class TasksService {
   }
 
   private buildWhere(organizationId: string, query: QueryTasksDto): Prisma.TaskWhereInput {
-    const now = new Date();
-    const startOfDay = new Date(now);
+    const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(startOfDay);
     endOfDay.setDate(endOfDay.getDate() + 1);
@@ -304,10 +339,54 @@ export class TasksService {
       statusFilter = { status: normalized };
     }
 
+    const finalState: Prisma.TaskWhereInput =
+      query.state === "completed"
+        ? {
+            OR: [
+              { statusDefinition: { category: "DONE" } },
+              { statusDefinitionId: null, status: "COMPLETED" },
+            ],
+          }
+        : query.state === "open"
+          ? {
+              NOT: {
+                OR: [
+                  { statusDefinition: { category: "DONE" } },
+                  { statusDefinitionId: null, status: "COMPLETED" },
+                ],
+              },
+            }
+          : {};
+    const dueState: Prisma.TaskWhereInput = query.due
+      ? {
+          AND: [
+            {
+              NOT: {
+                OR: [
+                  { statusDefinition: { category: "DONE" } },
+                  { statusDefinitionId: null, status: "COMPLETED" },
+                ],
+              },
+            },
+            query.due === "overdue"
+              ? { dueAt: { lt: startOfDay } }
+              : query.due === "today"
+                ? { dueAt: { gte: startOfDay, lt: endOfDay } }
+                : query.due === "upcoming"
+                  ? { dueAt: { gte: endOfDay } }
+                  : query.due === "no-date"
+                    ? { dueAt: null }
+                    : query.due === "week"
+                      ? { dueAt: { gte: startOfDay, lt: endOfWeek } }
+                      : {},
+          ],
+        }
+      : {};
+
     return {
       organizationId,
       ...notDeleted,
-      ...statusFilter,
+      AND: [statusFilter, finalState, dueState],
       ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
       ...(query.type ? { type: query.type as never } : {}),
       ...(query.contactId ? { contactId: query.contactId } : {}),
@@ -315,15 +394,44 @@ export class TasksService {
       ...(query.pipelineId ? { pipelineId: query.pipelineId } : {}),
       ...(query.stageId ? { stageId: query.stageId } : {}),
       ...(query.priority ? { priority: query.priority as never } : {}),
-      ...(query.overdue ? { dueAt: { lt: now }, status: { not: "COMPLETED" } } : {}),
-      ...(query.due === "today" ? { dueAt: { gte: startOfDay, lt: endOfDay } } : {}),
-      ...(query.due === "week" ? { dueAt: { gte: startOfDay, lt: endOfWeek } } : {}),
+      ...(query.overdue ? { dueAt: { lt: startOfDay } } : {}),
       ...(query.search ? { title: { contains: query.search, mode: "insensitive" } } : {}),
     };
   }
 
-  private withPipelineScope(where: Prisma.TaskWhereInput, allowed?: string[] | null): Prisma.TaskWhereInput {
-    return allowed ? { AND: [where, { OR: [{ deal: { pipelineId: { in: allowed } } }, { pipelineId: { in: allowed } }, { AND: [{ dealId: null }, { pipelineId: null }] }] }] } : where;
+  private withUserScope(
+    where: Prisma.TaskWhereInput,
+    scope: "mine" | "team" | "all",
+    user: AuthenticatedUser,
+  ): Prisma.TaskWhereInput {
+    if (scope === "mine") return { AND: [where, { assigneeId: user.id }] };
+    if (scope === "team" && user.teamId && (user.role === "ADMIN" || user.role === "MANAGER")) {
+      return {
+        AND: [where, { assignee: { teamId: user.teamId, status: "ACTIVE", deletedAt: null } }],
+      };
+    }
+    if (user.role === "ADMIN") return where;
+    return { AND: [where, { OR: [{ assigneeId: user.id }, { deal: { ownerId: user.id } }] }] };
+  }
+
+  private withPipelineScope(
+    where: Prisma.TaskWhereInput,
+    allowed?: string[] | null,
+  ): Prisma.TaskWhereInput {
+    return allowed
+      ? {
+          AND: [
+            where,
+            {
+              OR: [
+                { deal: { pipelineId: { in: allowed } } },
+                { pipelineId: { in: allowed } },
+                { AND: [{ dealId: null }, { pipelineId: null }] },
+              ],
+            },
+          ],
+        }
+      : where;
   }
 
   async findOne(organizationId: string, id: string) {
@@ -342,12 +450,15 @@ export class TasksService {
     end.setDate(end.getDate() + 1);
 
     const data = await this.prisma.task.findMany({
-      where: this.withPipelineScope({
-        organizationId,
-        ...notDeleted,
-        dueAt: { gte: start, lt: end },
-        status: { not: "COMPLETED" },
-      }, allowedPipelineIds),
+      where: this.withPipelineScope(
+        {
+          organizationId,
+          ...notDeleted,
+          dueAt: { gte: start, lt: end },
+          status: { not: "COMPLETED" },
+        },
+        allowedPipelineIds,
+      ),
       orderBy: { dueAt: "asc" },
       include: TASK_INCLUDE,
     });
@@ -374,38 +485,39 @@ export class TasksService {
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.task.create({
         data: {
-        organizationId,
-        title: dto.title,
-        description: dto.description,
-        type: (dto.type as never) ?? "FOLLOW_UP",
-        status: categoryToLegacyStatus(statusDef.category),
-        statusDefinitionId: statusDef.id,
-        priority: (dto.priority as never) ?? "MEDIUM",
-        assigneeId: dto.assigneeId ?? userId,
-        contactId,
-        companyId: dto.companyId,
-        dealId: dto.dealId,
-        pipelineId,
-        stageId,
-        orderId: dto.orderId,
-        sourceNoteId: dto.sourceNoteId,
-        dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
-        createdById: userId,
-      },
+          organizationId,
+          title: dto.title,
+          description: dto.description,
+          type: (dto.type as never) ?? "FOLLOW_UP",
+          status: categoryToLegacyStatus(statusDef.category),
+          statusDefinitionId: statusDef.id,
+          priority: (dto.priority as never) ?? "MEDIUM",
+          assigneeId: dto.assigneeId ?? userId,
+          contactId,
+          companyId: dto.companyId,
+          dealId: dto.dealId,
+          pipelineId,
+          stageId,
+          orderId: dto.orderId,
+          sourceNoteId: dto.sourceNoteId,
+          dueAt: dto.dueAt ? new Date(dto.dueAt) : undefined,
+          createdById: userId,
+        },
         include: TASK_INCLUDE,
       });
 
-      if (created.dealId) await tx.activity.create({
-        data: {
-        organizationId,
-        type: "TASK_CREATED",
-        title: "Task created",
-        taskId: created.id,
-        contactId: created.contactId,
-        dealId: created.dealId,
-        actorId: userId,
-        },
-      });
+      if (created.dealId)
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: "TASK_CREATED",
+            title: "Task created",
+            taskId: created.id,
+            contactId: created.contactId,
+            dealId: created.dealId,
+            actorId: userId,
+          },
+        });
 
       return mapTask(created);
     });
@@ -429,39 +541,39 @@ export class TasksService {
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.task.update({
-      where: { id },
-      data: {
-        ...(dto.title ? { title: dto.title } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
-        ...(dto.type ? { type: dto.type as never } : {}),
-        ...(legacyStatus ? { status: legacyStatus as TaskStatus } : {}),
-        ...(statusDefId ? { statusDefinitionId: statusDefId } : {}),
-        ...(dto.priority ? { priority: dto.priority as never } : {}),
-        ...(dto.assigneeId !== undefined ? { assigneeId: dto.assigneeId } : {}),
-        ...(dto.contactId !== undefined
-          ? { contactId: dto.contactId }
-          : dealLinks?.contactId
-            ? { contactId: dealLinks.contactId }
-            : {}),
-        ...(dto.dealId !== undefined ? { dealId: dto.dealId } : {}),
-        ...(dto.pipelineId !== undefined
-          ? { pipelineId: dto.pipelineId }
-          : dealLinks
-            ? { pipelineId: dealLinks.pipelineId }
-            : {}),
-        ...(dto.stageId !== undefined
-          ? { stageId: dto.stageId }
-          : dealLinks
-            ? { stageId: dealLinks.stageId }
-            : {}),
-        ...(dto.dueAt !== undefined ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null } : {}),
-        ...(legacyStatus === "COMPLETED"
-          ? { completedAt: new Date() }
-          : legacyStatus
-            ? { completedAt: null }
-            : {}),
-      },
-      include: TASK_INCLUDE,
+        where: { id },
+        data: {
+          ...(dto.title ? { title: dto.title } : {}),
+          ...(dto.description !== undefined ? { description: dto.description } : {}),
+          ...(dto.type ? { type: dto.type as never } : {}),
+          ...(legacyStatus ? { status: legacyStatus as TaskStatus } : {}),
+          ...(statusDefId ? { statusDefinitionId: statusDefId } : {}),
+          ...(dto.priority ? { priority: dto.priority as never } : {}),
+          ...(dto.assigneeId !== undefined ? { assigneeId: dto.assigneeId } : {}),
+          ...(dto.contactId !== undefined
+            ? { contactId: dto.contactId }
+            : dealLinks?.contactId
+              ? { contactId: dealLinks.contactId }
+              : {}),
+          ...(dto.dealId !== undefined ? { dealId: dto.dealId } : {}),
+          ...(dto.pipelineId !== undefined
+            ? { pipelineId: dto.pipelineId }
+            : dealLinks
+              ? { pipelineId: dealLinks.pipelineId }
+              : {}),
+          ...(dto.stageId !== undefined
+            ? { stageId: dto.stageId }
+            : dealLinks
+              ? { stageId: dealLinks.stageId }
+              : {}),
+          ...(dto.dueAt !== undefined ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null } : {}),
+          ...(legacyStatus === "COMPLETED"
+            ? { completedAt: new Date() }
+            : legacyStatus
+              ? { completedAt: null }
+              : {}),
+        },
+        include: TASK_INCLUDE,
       });
       const wasDone = previous.status === "COMPLETED";
       const isDone = updated.status === "COMPLETED";
@@ -504,23 +616,24 @@ export class TasksService {
       const task = await tx.task.update({
         where: { id },
         data: {
-        status: "COMPLETED",
-        statusDefinitionId: done?.id,
-        completedAt: new Date(),
-      },
+          status: "COMPLETED",
+          statusDefinitionId: done?.id,
+          completedAt: new Date(),
+        },
         include: TASK_INCLUDE,
       });
-      if (task.dealId) await tx.activity.create({
-        data: {
-        organizationId,
-        type: "TASK_COMPLETED",
-        title: "Task completed",
-        taskId: id,
-        contactId: task.contactId,
-        dealId: task.dealId,
-        actorId: userId,
-        },
-      });
+      if (task.dealId)
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: "TASK_COMPLETED",
+            title: "Task completed",
+            taskId: id,
+            contactId: task.contactId,
+            dealId: task.dealId,
+            actorId: userId,
+          },
+        });
       return mapTask(task);
     });
   }
@@ -542,23 +655,24 @@ export class TasksService {
       const task = await tx.task.update({
         where: { id },
         data: {
-        status: "PENDING",
-        statusDefinitionId: open?.id,
-        completedAt: null,
-      },
+          status: "PENDING",
+          statusDefinitionId: open?.id,
+          completedAt: null,
+        },
         include: TASK_INCLUDE,
       });
-      if (task.dealId) await tx.activity.create({
-        data: {
-          organizationId,
-          type: "TASK_REOPENED",
-          title: "Task reopened",
-          taskId: id,
-          contactId: task.contactId,
-          dealId: task.dealId,
-          actorId: userId,
-        },
-      });
+      if (task.dealId)
+        await tx.activity.create({
+          data: {
+            organizationId,
+            type: "TASK_REOPENED",
+            title: "Task reopened",
+            taskId: id,
+            contactId: task.contactId,
+            dealId: task.dealId,
+            actorId: userId,
+          },
+        });
       return mapTask(task);
     });
   }

@@ -7,16 +7,16 @@ describe("task status grouping", () => {
     return "OPEN";
   }
 
-  function groupTasksByStatus<
-    T extends { statusDefinitionId?: string | null; status: string },
-  >(statuses: { id: string; category: string }[], tasks: T[]) {
+  function groupTasksByStatus<T extends { statusDefinitionId?: string | null; status: string }>(
+    statuses: { id: string; category: string }[],
+    tasks: T[],
+  ) {
     return statuses.map((status) => ({
       status,
       tasks: tasks.filter(
         (task) =>
           task.statusDefinitionId === status.id ||
-          (!task.statusDefinitionId &&
-            legacyStatusToCategory(task.status) === status.category),
+          (!task.statusDefinitionId && legacyStatusToCategory(task.status) === status.category),
       ),
     }));
   }

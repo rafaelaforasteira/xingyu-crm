@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  Query,
-} from "@nestjs/common";
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiHeader } from "@nestjs/swagger";
 import { TasksService } from "./tasks.service";
 import { OrganizationId } from "../common/decorators/organization.decorator";
@@ -29,17 +20,33 @@ import {
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
 @Controller("tasks")
 export class TasksController {
-  constructor(private readonly tasksService: TasksService, private readonly access: PipelineAccessService) {}
+  constructor(
+    private readonly tasksService: TasksService,
+    private readonly access: PipelineAccessService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "List tasks" })
-  async findAll(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryTasksDto) {
-    return this.tasksService.findAll(orgId, query, await this.access.accessiblePipelineIds(user));
+  async findAll(
+    @OrganizationId() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: QueryTasksDto,
+  ) {
+    return this.tasksService.findAll(
+      orgId,
+      query,
+      user,
+      await this.access.accessiblePipelineIds(user),
+    );
   }
 
   @Get("board")
   @ApiOperation({ summary: "Task board grouped by custom status" })
-  async board(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryTasksDto) {
+  async board(
+    @OrganizationId() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: QueryTasksDto,
+  ) {
     return this.tasksService.board(orgId, query, await this.access.accessiblePipelineIds(user));
   }
 
@@ -54,10 +61,7 @@ export class TasksController {
 
   @Post("statuses")
   @ApiOperation({ summary: "Create custom task status" })
-  createStatus(
-    @OrganizationId() orgId: string,
-    @Body() dto: CreateTaskStatusDto,
-  ) {
+  createStatus(@OrganizationId() orgId: string, @Body() dto: CreateTaskStatusDto) {
     return this.tasksService.createStatus(orgId, dto);
   }
 
@@ -73,10 +77,7 @@ export class TasksController {
 
   @Post("statuses/reorder")
   @ApiOperation({ summary: "Reorder custom task statuses" })
-  reorderStatuses(
-    @OrganizationId() orgId: string,
-    @Body() dto: ReorderTaskStatusesDto,
-  ) {
+  reorderStatuses(@OrganizationId() orgId: string, @Body() dto: ReorderTaskStatusesDto) {
     return this.tasksService.reorderStatuses(orgId, dto.statusIds);
   }
 
@@ -88,7 +89,11 @@ export class TasksController {
 
   @Get(":id")
   @ApiOperation({ summary: "Get task" })
-  async findOne(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+  async findOne(
+    @OrganizationId() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
     await this.access.assertTaskAccess(user, id);
     return this.tasksService.findOne(orgId, id);
   }
@@ -103,8 +108,11 @@ export class TasksController {
   ) {
     if (dto.dealId) await this.access.assertDealAccess(authUser, dto.dealId);
     else if (dto.pipelineId) await this.access.assertAccess(authUser, dto.pipelineId);
-    const taskPipelineId = dto.pipelineId ?? (dto.dealId ? (await this.tasksService.pipelineIdForDeal(orgId, dto.dealId)) : null);
-    if (taskPipelineId) await this.access.assertEligibleUser(authUser, taskPipelineId, dto.assigneeId ?? authUser.id);
+    const taskPipelineId =
+      dto.pipelineId ??
+      (dto.dealId ? await this.tasksService.pipelineIdForDeal(orgId, dto.dealId) : null);
+    if (taskPipelineId)
+      await this.access.assertEligibleUser(authUser, taskPipelineId, dto.assigneeId ?? authUser.id);
     return this.tasksService.create(orgId, dto, user.id);
   }
 
@@ -121,15 +129,24 @@ export class TasksController {
     if (dto.dealId) await this.access.assertDealAccess(authUser, dto.dealId);
     else if (dto.pipelineId) await this.access.assertAccess(authUser, dto.pipelineId);
     if (dto.assigneeId !== undefined) {
-      const taskPipelineId = dto.pipelineId ?? (dto.dealId ? await this.tasksService.pipelineIdForDeal(orgId, dto.dealId) : await this.tasksService.pipelineIdForTask(orgId, id));
-      if (taskPipelineId) await this.access.assertEligibleUser(authUser, taskPipelineId, dto.assigneeId);
+      const taskPipelineId =
+        dto.pipelineId ??
+        (dto.dealId
+          ? await this.tasksService.pipelineIdForDeal(orgId, dto.dealId)
+          : await this.tasksService.pipelineIdForTask(orgId, id));
+      if (taskPipelineId)
+        await this.access.assertEligibleUser(authUser, taskPipelineId, dto.assigneeId);
     }
     return this.tasksService.update(orgId, id, dto, user.id);
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Soft-delete task" })
-  async remove(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+  async remove(
+    @OrganizationId() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+  ) {
     await this.access.assertTaskAccess(user, id);
     return this.tasksService.remove(orgId, id);
   }

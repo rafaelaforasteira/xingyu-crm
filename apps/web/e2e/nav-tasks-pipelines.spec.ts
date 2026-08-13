@@ -1,21 +1,23 @@
 import { expect, test } from "@playwright/test";
 
-test("main menu uses beta single-pipeline navigation", async ({ page }) => {
-  await page.goto("/operacao");
-  await expect(page.getByTestId("beta-nav-operation")).toBeVisible({
-    timeout: 20_000,
-  });
-  const nav = page.getByTestId("beta-sidebar").locator("nav");
-  await expect(nav.getByRole("link", { name: "Operação" })).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Configurações" })).toHaveCount(0);
-  await expect(nav.getByRole("link", { name: "Dashboard" })).toHaveCount(0);
-  await expect(nav.getByRole("link", { name: "Conversas" })).toHaveCount(0);
-  await expect(nav.getByRole("link", { name: "Pipelines" })).toHaveCount(0);
+test("sidebar exposes Pipelines and the global Tasks module", async ({ page }) => {
+  await page.goto("/tasks");
+  const nav = page.getByTestId("sidebar-navigation");
+  await expect(nav.getByRole("link", { name: "Pipelines" })).toBeVisible({ timeout: 20_000 });
+  await expect(nav.getByRole("link", { name: "Tarefas" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Tarefas" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("heading", { name: "Tarefas" })).toBeVisible();
+  await expect(page.getByText("Organize e acompanhe as atividades da operação.")).toBeVisible();
 });
 
-test("legacy module routes redirect to operação in beta mode", async ({ page }) => {
-  await page.goto("/pipelines");
-  await expect(page).toHaveURL(/\/operacao/, { timeout: 15_000 });
-  await page.goto("/tasks");
-  await expect(page).toHaveURL(/\/operacao/, { timeout: 15_000 });
+test("global task center keeps operational filters shareable", async ({ page }) => {
+  await page.goto("/tasks?scope=mine&due=today");
+  await expect(page.getByRole("button", { name: "Minhas tarefas" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hoje" })).toBeVisible();
+  await page.getByLabel("Buscar tarefas").fill("pagamento");
+  await expect(page).toHaveURL(/q=pagamento/, { timeout: 3_000 });
+  await page.getByRole("button", { name: /Filtros/ }).click();
+  await expect(page.getByText("Pipeline", { exact: true })).toBeVisible();
+  await expect(page.getByText("Responsável", { exact: true })).toBeVisible();
+  await expect(page.getByText("Status", { exact: true })).toBeVisible();
 });
