@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -13,9 +14,10 @@ import { Type } from "class-transformer";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export class OrderItemDto {
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  productId!: string;
+  productId?: string;
 
   @ApiProperty()
   @IsNumber()
@@ -139,7 +141,24 @@ export class CreateOrderDto {
   @ApiPropertyOptional() @IsOptional() @IsString() externalId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() externalName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() externalUrl?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() financialStatus?: string;
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @IsIn([
+    "PENDING",
+    "AWAITING_PAYMENT",
+    "AUTHORIZED",
+    "PARTIALLY_PAID",
+    "PAID",
+    "PAYMENT_APPROVED",
+    "DECLINED",
+    "OVERDUE",
+    "PARTIALLY_REFUNDED",
+    "REFUNDED",
+    "VOIDED",
+    "CANCELLED",
+  ])
+  financialStatus?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() paymentGateway?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() coupon?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isFirstPurchase?: boolean;
@@ -214,7 +233,9 @@ export class UpdateOrderStageDto extends PartialType(CreateOrderStageDto) {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() archived?: boolean;
 }
-export class ReorderOrderStagesDto { @ApiProperty({ type: [String] }) @IsArray() @IsString({ each: true }) stageIds!: string[]; }
+export class ReorderOrderStagesDto {
+  @ApiProperty({ type: [String] }) @IsArray() @IsString({ each: true }) stageIds!: string[];
+}
 
 export class CreatePaymentDto {
   @ApiProperty()

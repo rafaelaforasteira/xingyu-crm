@@ -21,6 +21,8 @@ import type {
   NotificationItem,
   Occurrence,
   Order,
+  CreateOrderInput,
+  UpdateOrderInput,
   OrderStageDefinition,
   PaginatedResponse,
   Pipeline,
@@ -595,8 +597,7 @@ export const tasksApi = {
   comment: (id: string, data: FormData) => api.post<TaskComment>(`/tasks/${id}/comments`, data),
   create: (data: Partial<Task> & { title: string; statusDefinitionId?: string }) =>
     api.post<Task>("/tasks", data),
-  update: (id: string, data: Partial<Task>) =>
-    api.patch<Task>(`/tasks/${id}`, data),
+  update: (id: string, data: Partial<Task>) => api.patch<Task>(`/tasks/${id}`, data),
   complete: (id: string) => api.post<Task>(`/tasks/${id}/complete`),
   reopen: (id: string) => api.post<Task>(`/tasks/${id}/reopen`),
   today: () => api.get<Task[]>("/tasks/today"),
@@ -605,11 +606,18 @@ export const tasksApi = {
 export const ordersApi = {
   list: (query?: Record<string, QueryValue>) => api.get<PaginatedResponse<Order>>("/orders", query),
   get: (id: string) => api.get<Order>(`/orders/${id}`),
-  stages: (includeArchived = false) => api.get<OrderStageDefinition[]>("/orders/stages", { includeArchived: includeArchived || undefined }),
-  createStage: (data: Partial<OrderStageDefinition> & { name: string }) => api.post<OrderStageDefinition>("/orders/stages", data),
-  updateStage: (id: string, data: Partial<OrderStageDefinition>) => api.patch<OrderStageDefinition>(`/orders/stages/${id}`, data),
-  reorderStages: (stageIds: string[]) => api.post<OrderStageDefinition[]>("/orders/stages/reorder", { stageIds }),
-  update: (id: string, data: Partial<Order>) => api.patch<Order>(`/orders/${id}`, data),
+  stages: (includeArchived = false) =>
+    api.get<OrderStageDefinition[]>("/orders/stages", {
+      includeArchived: includeArchived || undefined,
+    }),
+  createStage: (data: Partial<OrderStageDefinition> & { name: string }) =>
+    api.post<OrderStageDefinition>("/orders/stages", data),
+  updateStage: (id: string, data: Partial<OrderStageDefinition>) =>
+    api.patch<OrderStageDefinition>(`/orders/stages/${id}`, data),
+  reorderStages: (stageIds: string[]) =>
+    api.post<OrderStageDefinition[]>("/orders/stages/reorder", { stageIds }),
+  create: (data: CreateOrderInput) => api.post<Order>("/orders", data),
+  update: (id: string, data: UpdateOrderInput) => api.patch<Order>(`/orders/${id}`, data),
   timeline: (id: string) => api.get<Activity[]>(`/orders/${id}/timeline`),
 };
 

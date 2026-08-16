@@ -58,6 +58,12 @@ export interface Contact {
   tags?: Tag[];
   source?: string | null;
   campaign?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  cpf?: string | null;
+  cnpj?: string | null;
+  firstPurchaseAt?: string | null;
   lastInteractionAt?: string | null;
   lastPurchaseAt?: string | null;
   totalPurchased?: number;
@@ -97,6 +103,11 @@ export interface Company {
   segment?: string | null;
   ownerId?: string | null;
   owner?: UserRef | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  totalPurchased?: number;
+  lastPurchaseAt?: string | null;
   contactsCount?: number;
   dealsCount?: number;
   createdAt: string;
@@ -360,6 +371,8 @@ export interface Deal {
   company?: Company | null;
   ownerId?: string | null;
   owner?: UserRef | null;
+  source?: string | null;
+  campaign?: string | null;
   leadSequence?: number | null;
   priority?: DealPriority;
   tags?: Tag[];
@@ -668,10 +681,18 @@ export interface TaskBoardGroup {
 }
 
 export interface TaskCommentAttachment {
-  id: string; fileName: string; mimeType?: string | null; fileSize?: number | null; url: string; kind: string;
+  id: string;
+  fileName: string;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  url: string;
+  kind: string;
 }
 export interface TaskComment {
-  id: string; body: string; createdAt: string; author: UserRef;
+  id: string;
+  body: string;
+  createdAt: string;
+  author: UserRef;
   mentions: Array<{ user: UserRef }>;
   attachments: TaskCommentAttachment[];
 }
@@ -703,8 +724,20 @@ export interface Order {
   contact?: Contact | null;
   companyId?: string | null;
   company?: Company | null;
+  ownerId?: string | null;
+  owner?: UserRef | null;
   dealId?: string | null;
-  deal?: { id: string; name: string; leadSequence?: number | null; pipelineId: string } | null;
+  deal?:
+    | (Deal & {
+        pipeline?: { id: string; name: string } | null;
+        stage?: { id: string; name: string; color?: string | null } | null;
+        conversation?: {
+          id: string;
+          status: string;
+          channel?: ConversationChannelSummary | null;
+        } | null;
+      })
+    | null;
   operationalStageId?: string | null;
   operationalStage?: OrderStageDefinition | null;
   operationalAssigneeId?: string | null;
@@ -714,6 +747,7 @@ export interface Order {
   operationalIssue?: boolean;
   fulfillmentStatus?: string | null;
   currentLocation?: string | null;
+  trackingCode?: string | null;
   status: OrderStatus;
   total?: number;
   grossValue?: number | string;
@@ -769,9 +803,66 @@ export interface Order {
 }
 
 export interface OrderStageDefinition {
-  id: string; code: string; name: string; translations?: Record<string, string>; color: string;
-  position: number; category: "OPEN" | "IN_PROGRESS" | "DONE" | "ISSUE"; isInitial: boolean; isFinal: boolean; active: boolean; archived: boolean;
+  id: string;
+  code: string;
+  name: string;
+  translations?: Record<string, string>;
+  color: string;
+  position: number;
+  category: "OPEN" | "IN_PROGRESS" | "DONE" | "ISSUE";
+  isInitial: boolean;
+  isFinal: boolean;
+  active: boolean;
+  archived: boolean;
+  _count?: { orders: number };
 }
+
+export interface CreateOrderInput {
+  number?: string;
+  orderedAt?: string;
+  contactId?: string;
+  companyId?: string;
+  dealId?: string;
+  operationalAssigneeId?: string;
+  operationalPriority?: string;
+  operationalDueAt?: string;
+  source?: string;
+  channel?: string;
+  status?: string;
+  financialStatus?: string;
+  currency?: string;
+  total?: number;
+  grossValue?: number;
+  discount?: number;
+  notes?: string;
+  customerSnapshot?: { name?: string; email?: string; phone?: string };
+  items?: Array<{
+    productId?: string;
+    productName?: string;
+    sku?: string;
+    quantity: number;
+    unitPrice?: number;
+    notes?: string;
+  }>;
+}
+
+export type UpdateOrderInput = Partial<Order> & {
+  customerSnapshot?: { name?: string; email?: string; phone?: string };
+  addressSnapshot?: {
+    recipientName?: string;
+    address1?: string;
+    address2?: string;
+    number?: string;
+    complement?: string;
+    neighborhood?: string;
+    city?: string;
+    province?: string;
+    postalCode?: string;
+    country?: string;
+    countryCode?: string;
+    formattedAddress?: string;
+  };
+};
 
 export interface OrderItem {
   id: string;
@@ -1174,7 +1265,13 @@ export interface Team {
 }
 
 export interface PipelineAccessOverview {
-  pipelines: Array<Pick<Pipeline, "id" | "name" | "position"> & { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] }>;
+  pipelines: Array<
+    Pick<Pipeline, "id" | "name" | "position"> & {
+      accessMode: "ORGANIZATION" | "RESTRICTED";
+      teamIds: string[];
+      userIds: string[];
+    }
+  >;
   teams: Team[];
   users: Array<UserRef & { team?: Team | null }>;
 }
