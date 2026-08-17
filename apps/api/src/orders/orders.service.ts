@@ -3,12 +3,15 @@ import { Prisma, OrderStageCategory } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
+import { validateAndSaveUpload } from "../common/upload/upload.util";
 import {
   CreateOrderDto,
   UpdateOrderDto,
   QueryOrdersDto,
   CreatePaymentDto,
   CreateShipmentDto,
+  UpdateShipmentDto,
+  CreateShipmentEventDto,
   CreateOrderStageDto,
   UpdateOrderStageDto,
 } from "./dto/order.dto";
@@ -182,7 +185,11 @@ export class OrdersService {
         },
         items: { include: { product: true } },
         payments: true,
-        shipments: { orderBy: { createdAt: "desc" } },
+        shipments: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "desc" },
+          include: { events: { orderBy: { occurredAt: "desc" } } },
+        },
         attributions: { orderBy: { createdAt: "asc" } },
         events: { orderBy: { occurredAt: "desc" } },
         owner: { select: { id: true, name: true, avatarUrl: true } },
@@ -469,6 +476,28 @@ export class OrdersService {
     });
   }
 
+  async updateItemSeparation(
+    organizationId: string,
+    orderId: string,
+    itemId: string,
+    isSeparated: boolean,
+  ) {
+    const item = await this.prisma.orderItem.findFirst({
+      where: {
+        id: itemId,
+        orderId,
+        order: { organizationId, ...notDeleted },
+      },
+      select: { id: true },
+    });
+    if (!item) throw new NotFoundException(`Order item ${itemId} not found in order ${orderId}`);
+    return this.prisma.orderItem.update({
+      where: { id: item.id },
+      data: { isSeparated, separatedAt: isSeparated ? new Date() : null },
+      include: { product: true },
+    });
+  }
+
   async remove(organizationId: string, id: string) {
     await this.findOne(organizationId, id);
     return this.prisma.order.update({ where: { id }, data: softDeleteData() });
@@ -489,6 +518,35 @@ export class OrdersService {
     });
   }
 
+  async uploadPaymentReceipt(
+    organizationId: string,
+    orderId: string,
+    paymentId: string,
+    file: Express.Multer.File,
+  ) {
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        id: paymentId,
+        orderId,
+        deletedAt: null,
+        order: { organizationId, ...notDeleted },
+      },
+    });
+    if (!payment) throw new NotFoundException("Pagamento não encontrado neste pedido.");
+    if (payment.receiptUrl) {
+      throw new BadRequestException("Este pagamento já possui um comprovante.");
+    }
+    const allowedMimeTypes = new Set(["application/pdf", "image/jpeg", "image/png"]);
+    if (!file || !allowedMimeTypes.has(file.mimetype.toLowerCase())) {
+      throw new BadRequestException("Envie um comprovante em PDF, JPG ou PNG.");
+    }
+    const saved = validateAndSaveUpload(file);
+    return this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { receiptUrl: saved.url },
+    });
+  }
+
   async addShipment(organizationId: string, orderId: string, dto: CreateShipmentDto) {
     await this.findOne(organizationId, orderId);
     return this.prisma.shipment.create({
@@ -496,11 +554,81 @@ export class OrdersService {
         orderId,
         carrier: dto.carrier,
         trackingCode: dto.trackingCode,
+        trackingIssuedAt: dto.trackingCode?.trim() ? new Date() : undefined,
         status: (dto.status as never) ?? "PENDING",
         notes: dto.notes,
         postedAt: dto.shippedAt ? new Date(dto.shippedAt) : undefined,
         expectedAt: dto.estimatedArrival ? new Date(dto.estimatedArrival) : undefined,
       } as never,
+    });
+  }
+
+  async updateShipment(
+    organizationId: string,
+    orderId: string,
+    shipmentId: string,
+    dto: UpdateShipmentDto,
+  ) {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orderId, deletedAt: null, order: { organizationId, ...notDeleted } },
+    });
+    if (!shipment)
+      throw new NotFoundException(`Shipment ${shipmentId} not found in order ${orderId}`);
+    const trackingCode = dto.trackingCode !== undefined ? dto.trackingCode.trim() : undefined;
+    return this.prisma.shipment.update({
+      where: { id: shipment.id },
+      data: {
+        ...(trackingCode !== undefined ? { trackingCode } : {}),
+        ...(trackingCode && !shipment.trackingIssuedAt ? { trackingIssuedAt: new Date() } : {}),
+        ...(dto.postedAt !== undefined
+          ? { postedAt: dto.postedAt ? new Date(dto.postedAt) : null }
+          : {}),
+      },
+      include: { events: { orderBy: { occurredAt: "desc" } } },
+    });
+  }
+
+  async addShipmentEvent(
+    organizationId: string,
+    orderId: string,
+    shipmentId: string,
+    dto: CreateShipmentEventDto,
+  ) {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orderId, deletedAt: null, order: { organizationId, ...notDeleted } },
+    });
+    if (!shipment)
+      throw new NotFoundException(`Shipment ${shipmentId} not found in order ${orderId}`);
+    if (dto.externalEventId) {
+      const existing = await this.prisma.shipmentEvent.findUnique({
+        where: { shipmentId_externalEventId: { shipmentId, externalEventId: dto.externalEventId } },
+      });
+      if (existing) return existing;
+    }
+    const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
+    const status = dto.status.trim().toUpperCase();
+    return this.prisma.$transaction(async (tx) => {
+      const event = await tx.shipmentEvent.create({
+        data: {
+          shipmentId,
+          status,
+          description: dto.description,
+          location: dto.location,
+          occurredAt,
+          source: dto.source?.trim().toUpperCase() || "MANUAL",
+          externalCode: dto.externalCode,
+          externalEventId: dto.externalEventId,
+        },
+      });
+      if (status === "DELIVERED" && !shipment.deliveredAt) {
+        await tx.shipment.update({
+          where: { id: shipmentId },
+          data: { deliveredAt: occurredAt, status: "DELIVERED" },
+        });
+      } else if (status === "POSTED" && !shipment.postedAt) {
+        await tx.shipment.update({ where: { id: shipmentId }, data: { postedAt: occurredAt } });
+      }
+      return event;
     });
   }
 

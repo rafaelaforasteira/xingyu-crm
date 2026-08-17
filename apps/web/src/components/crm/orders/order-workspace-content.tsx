@@ -1,10 +1,20 @@
-import { ExternalLink, Truck } from "lucide-react";
+"use client";
+
+import * as React from "react";
+import { Check, ClipboardCheck, ExternalLink, Flag, UserRound } from "lucide-react";
 import { OrderCustomerCard } from "@/components/crm/orders/order-customer-card";
+import { CustomerPurchaseContext } from "@/components/crm/orders/customer-purchase-context";
 import { OrderIdentificationCard } from "@/components/crm/orders/order-identification-card";
+import { OrderProductsSection } from "@/components/crm/orders/order-products-section";
+import { OrderShippingTrackingSection } from "@/components/crm/orders/order-shipping-tracking-section";
+import { OrderNotesPanel } from "@/components/crm/orders/order-notes-panel";
+import { OrderFinancialSection } from "@/components/crm/orders/order-financial-section";
 import { Input } from "@/components/ui/input";
 import { Label, Select } from "@/components/ui/form-controls";
+import { Avatar } from "@/components/ui/avatar";
+import { Popover } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
-  formatOrderCurrency,
   formatOrderDate,
   orderEnumLabel,
   orderText,
@@ -17,296 +27,62 @@ type Props = {
   order: Order;
   locale: OrderLocale;
   stages: OrderStageDefinition[];
-  users: Array<{ id: string; name: string }>;
+  users: Array<{ id: string; name: string; avatarUrl?: string | null }>;
   onUpdate: (data: Partial<Order>) => void;
 };
 
-const money = (value: number | string | null | undefined, order: Order, locale: OrderLocale) =>
-  formatOrderCurrency(Number(value ?? 0), order.currency, locale);
-
-function Section({
-  title,
-  children,
-  testId,
-}: {
-  title: string;
-  children: React.ReactNode;
-  testId?: string;
-}) {
-  return (
-    <section data-testid={testId} className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-foreground">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function DataRow({
-  label,
-  value,
-  strong = false,
-}: {
-  label: string;
-  value: React.ReactNode;
-  strong?: boolean;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-border/60 py-2 text-sm last:border-0">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span
-        className={strong ? "text-right font-semibold text-primary" : "text-right text-foreground"}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export function OrderWorkspaceContent({ order, locale, stages, users, onUpdate }: Props) {
   const t = orderText(locale);
-  const payment = order.payments?.[0];
-  const attribution = order.attributions?.at(-1);
-  const attributionRows = [
-    [t.utmSource, order.trackingSourceSnapshot || attribution?.source],
-    [t.utmMedium, order.trackingMediumSnapshot || attribution?.medium],
-    [t.utmCampaign, order.trackingCampaignSnapshot || attribution?.campaign],
-    [t.utmContent, order.trackingContentSnapshot || attribution?.content],
-    [t.utmTerm, order.trackingTermSnapshot || attribution?.term],
-    [t.landingPage, order.landingPageSnapshot || attribution?.page],
-    [t.referrer, order.referrerSnapshot],
-  ].filter((row): row is [string, string] => Boolean(row[1]));
-  const receiptUrl = order.payments?.find((item) => item.receiptUrl)?.receiptUrl;
-  const summary = [
-    [t.payment, orderEnumLabel(order.financialStatus || order.status, locale)],
-    order.fulfillmentStatus
-      ? [t.fulfillment, orderEnumLabel(order.fulfillmentStatus, locale)]
-      : null,
-    order.operationalAssignee?.name || order.owner?.name
-      ? [t.owner, order.operationalAssignee?.name || order.owner?.name]
-      : null,
-    order.source || order.channel
-      ? [t.source, orderEnumLabel(order.source || order.channel, locale)]
-      : null,
-    order.orderedAt || order.createdAt
-      ? [t.date, formatOrderDate(order.orderedAt || order.createdAt, locale)]
-      : null,
-    [t.total, money(order.finalValue ?? order.total, order, locale)],
-  ].filter((item): item is string[] => Boolean(item));
-
+  const [ownerOpen, setOwnerOpen] = React.useState(false);
+  const [priorityOpen, setPriorityOpen] = React.useState(false);
+  const owner =
+    order.operationalAssignee ?? users.find((user) => user.id === order.operationalAssigneeId);
+  const priority = order.operationalPriority || "MEDIUM";
+  const priorityColor: Record<string, string> = {
+    LOW: "text-blue-600",
+    MEDIUM: "text-amber-600",
+    HIGH: "text-red-600",
+    URGENT: "text-red-700",
+  };
   return (
     <div className="space-y-4">
-      <OrderIdentificationCard order={order} locale={locale} />
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(280px,320px)]">
-        <main className="min-w-0 space-y-4">
-          <Section title={t.orderSummary} testId="order-workspace-summary">
-            <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-6">
-              {summary.map(([label, value]) => (
-                <div key={label} className="min-w-0">
-                  <dt className="text-xs text-muted-foreground">{label}</dt>
-                  <dd
-                    className="mt-0.5 truncate text-sm font-semibold text-foreground"
-                    title={value}
-                  >
-                    {value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </Section>
-
-          <Section title={t.products} testId="order-workspace-products">
-            {order.items?.length ? (
-              <div>
-                {order.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="grid gap-1 border-b border-border/60 py-2.5 text-sm last:border-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground">
-                        {item.quantity} × {item.productName}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {[item.sku, item.variantTitle].filter(Boolean).join(" · ") || "—"}
-                      </p>
-                    </div>
-                    <div className="text-left sm:text-right">
-                      <p className="font-semibold text-foreground">
-                        {money(item.totalPrice ?? item.total, order, locale)}
-                      </p>
-                      {Number(item.unitPrice) > 0 ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {money(item.unitPrice, order, locale)} / {t.units}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">—</p>
-            )}
-          </Section>
-
-          <div className="grid items-start gap-4 md:grid-cols-2">
-            <Section title={t.financial} testId="order-workspace-financial">
-              <DataRow
-                label={t.payment}
-                value={orderEnumLabel(order.financialStatus || order.status, locale)}
-              />
-              {order.grossValue !== undefined ? (
-                <DataRow label={t.subtotal} value={money(order.grossValue, order, locale)} />
-              ) : null}
-              {Number(order.shippingCost) > 0 ? (
-                <DataRow label={t.shipping} value={money(order.shippingCost, order, locale)} />
-              ) : null}
-              {Number(order.discount) > 0 ? (
-                <DataRow label={t.discount} value={`− ${money(order.discount, order, locale)}`} />
-              ) : null}
-              {order.coupon ? <DataRow label={t.coupon} value={order.coupon} /> : null}
-              <DataRow
-                label={t.total}
-                value={money(order.finalValue ?? order.total, order, locale)}
-                strong
-              />
-              {payment ? (
-                <>
-                  <DataRow label={t.paid} value={money(payment.amount, order, locale)} />
-                  <DataRow label={t.paymentMethod} value={orderEnumLabel(payment.method, locale)} />
-                  {payment.paidAt ? (
-                    <DataRow
-                      label={t.paymentDate}
-                      value={formatOrderDate(payment.paidAt, locale)}
-                    />
-                  ) : null}
-                </>
-              ) : null}
-              {order.paymentGateway ? (
-                <DataRow label={t.paymentGateway} value={order.paymentGateway} />
-              ) : null}
-              <div className="mt-3 border-t border-border/60 pt-3">
-                <p className="text-xs font-medium text-foreground">{t.paymentReceipt}</p>
-                {receiptUrl ? (
-                  <a
-                    className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                    href={receiptUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {t.openReceipt}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                ) : (
-                  <p className="mt-1 text-xs text-muted-foreground">{t.noReceipt}</p>
-                )}
-              </div>
-            </Section>
-
-            <Section title={t.logistics} testId="order-workspace-logistics">
-              {order.shipments?.length ? (
-                <div className="space-y-3">
-                  {order.shipments.map((shipment) => (
-                    <div
-                      key={shipment.id}
-                      className="border-b border-border/60 pb-3 last:border-0 last:pb-0"
-                    >
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <Truck className="h-4 w-4 text-primary" />
-                        {shipment.carrier || t.carrier}
-                      </div>
-                      <div className="mt-2">
-                        <p className="text-xs text-muted-foreground">{t.trackingCode}</p>
-                        <p className="break-all text-sm font-semibold text-foreground">
-                          {shipment.trackingCode || order.trackingCode || "—"}
-                        </p>
-                      </div>
-                      <div className="mt-2 grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <span className="text-muted-foreground">{t.fulfillment}</span>
-                          <p>{orderEnumLabel(shipment.status, locale)}</p>
-                        </div>
-                        {shipment.postedAt ? (
-                          <div>
-                            <span className="text-muted-foreground">{t.postedAt}</span>
-                            <p>{formatOrderDate(shipment.postedAt, locale)}</p>
-                          </div>
-                        ) : null}
-                        {shipment.deliveredAt ? (
-                          <div>
-                            <span className="text-muted-foreground">{t.deliveredAt}</span>
-                            <p>{formatOrderDate(shipment.deliveredAt, locale)}</p>
-                          </div>
-                        ) : null}
-                        {order.currentLocation ? (
-                          <div>
-                            <span className="text-muted-foreground">{t.location}</span>
-                            <p>{order.currentLocation}</p>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div>
-                  <p className="text-xs text-muted-foreground">{t.trackingCode}</p>
-                  <p className="mt-0.5 text-sm font-semibold">{order.trackingCode || "—"}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">{t.noShipment}</p>
-                </div>
-              )}
-            </Section>
+      <OrderIdentificationCard order={order} locale={locale} stages={stages} />
+      <CustomerPurchaseContext
+        isFirstPurchase={order.isFirstPurchase}
+        purchaseOrdinal={order.purchaseOrdinal}
+        orderCount={order.contact?.orderCount}
+        locale={locale}
+      />
+      <div className="space-y-4">
+        <OrderProductsSection orderId={order.id} items={order.items ?? []} locale={locale} />
+        <OrderShippingTrackingSection order={order} locale={locale} />
+      </div>
+      <section
+        data-testid="order-workspace-operation"
+        className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+      >
+        <div className="flex min-h-12 items-center justify-between gap-3 border-b border-border/70 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">{t.operation}</h3>
           </div>
-
-          <Section title={t.marketingAttribution} testId="order-workspace-attribution">
-            {attributionRows.length ? (
-              <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-                {attributionRows.map(([label, value]) => (
-                  <div key={label} className="min-w-0">
-                    <dt className="text-xs text-muted-foreground">{label}</dt>
-                    <dd className="mt-0.5 break-words text-sm text-foreground">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            ) : (
-              <p className="text-xs text-muted-foreground">{t.noAttribution}</p>
-            )}
-          </Section>
-
-          <Section title={t.timeline} testId="order-workspace-timeline">
-            {order.events?.length ? (
-              <ol className="space-y-0">
-                {order.events.map((event, index) => (
-                  <li
-                    key={event.id}
-                    className="relative grid grid-cols-[16px_minmax(0,1fr)] gap-3 pb-4 last:pb-0"
-                  >
-                    {index < (order.events?.length ?? 0) - 1 ? (
-                      <span className="absolute bottom-0 left-[7px] top-3 w-px bg-border" />
-                    ) : null}
-                    <span className="relative mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-primary bg-card" />
-                    <div>
-                      <time className="text-xs text-muted-foreground">
-                        {formatOrderDate(event.occurredAt, locale)}
-                      </time>
-                      <p className="mt-0.5 text-sm font-medium text-foreground">
-                        {orderEnumLabel(event.type, locale)}
-                      </p>
-                      {event.description ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{event.description}</p>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="text-xs text-muted-foreground">{t.noHistory}</p>
-            )}
-          </Section>
-        </main>
-
-        <aside className="min-w-0 space-y-4">
-          <OrderCustomerCard order={order} locale={locale} />
-          <Section title={t.operation} testId="order-workspace-operation">
+          {order.externalUrl ? (
+            <a
+              href={order.externalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+            >
+              {t.openShopify}
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-3">
+          <div className="flex min-h-72 flex-col rounded-xl border border-border/70 bg-muted/25 p-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Controle da etapa
+            </p>
             <div className="space-y-3">
               <Field label={t.stage}>
                 <Select
@@ -320,34 +96,7 @@ export function OrderWorkspaceContent({ order, locale, stages, users, onUpdate }
                   ))}
                 </Select>
               </Field>
-              <Field label={t.owner}>
-                <Select
-                  value={order.operationalAssigneeId ?? ""}
-                  onChange={(event) =>
-                    onUpdate({ operationalAssigneeId: event.target.value || null })
-                  }
-                >
-                  <option value="">{t.noOwner}</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label={t.priority}>
-                <Select
-                  value={order.operationalPriority || "MEDIUM"}
-                  onChange={(event) => onUpdate({ operationalPriority: event.target.value })}
-                >
-                  {["LOW", "MEDIUM", "HIGH", "URGENT"].map((value) => (
-                    <option key={value} value={value}>
-                      {orderEnumLabel(value, locale)}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label={t.due}>
+              <Field label={t.stageCompletionDue}>
                 <Input
                   type="date"
                   value={order.operationalDueAt?.slice(0, 10) || ""}
@@ -360,35 +109,158 @@ export function OrderWorkspaceContent({ order, locale, stages, users, onUpdate }
                   }
                 />
               </Field>
-              <Field label={t.location}>
-                <Input
-                  defaultValue={order.currentLocation || ""}
-                  onBlur={(event) => onUpdate({ currentLocation: event.target.value })}
-                />
-              </Field>
-              <label className="flex gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={Boolean(order.operationalIssue)}
-                  onChange={(event) => onUpdate({ operationalIssue: event.target.checked })}
-                />
-                {t.issue}
-              </label>
-              {order.externalUrl ? (
-                <a
-                  href={order.externalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-2 text-sm text-primary hover:underline"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  {t.openShopify}
-                </a>
-              ) : null}
             </div>
-          </Section>
-        </aside>
-      </div>
+            <div className="mt-auto grid grid-cols-2 gap-4 border-t border-border/70 pt-4">
+              <div className="flex flex-col items-start">
+                <p className="mb-1.5 text-[11px] text-muted-foreground">{t.owner}</p>
+                <Popover
+                  open={ownerOpen}
+                  onOpenChange={setOwnerOpen}
+                  contentWidth={260}
+                  contentClassName="rounded-xl"
+                  aria-label={t.owner}
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full outline-none ring-offset-2 transition hover:ring-2 hover:ring-primary/30 focus-visible:ring-2 focus-visible:ring-primary"
+                      aria-label={`${t.owner}: ${owner?.name || t.noOwner}`}
+                      title={owner?.name || t.noOwner}
+                      onClick={() => setOwnerOpen((open) => !open)}
+                    >
+                      {owner ? (
+                        <Avatar name={owner.name} src={owner.avatarUrl} size="sm" />
+                      ) : (
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-muted">
+                          <UserRound className="h-4 w-4 text-muted-foreground" />
+                        </span>
+                      )}
+                    </button>
+                  }
+                >
+                  <div className="p-3">
+                    <p className="mb-2 text-sm font-semibold">{t.owner}</p>
+                    <div className="max-h-64 space-y-1 overflow-y-auto">
+                      {[{ id: "", name: t.noOwner }, ...users].map((user) => (
+                        <button
+                          key={user.id || "none"}
+                          type="button"
+                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted"
+                          onClick={() => {
+                            onUpdate({ operationalAssigneeId: user.id || null });
+                            setOwnerOpen(false);
+                          }}
+                        >
+                          {user.id ? (
+                            <Avatar name={user.name} src={user.avatarUrl} size="sm" />
+                          ) : (
+                            <span className="flex h-7 w-7 items-center justify-center">
+                              <UserRound className="h-4 w-4" />
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1 truncate">{user.name}</span>
+                          {(order.operationalAssigneeId || "") === user.id ? (
+                            <Check className="h-4 w-4 text-primary" />
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </Popover>
+              </div>
+              <div className="flex flex-col items-start">
+                <p className="mb-1.5 text-[11px] text-muted-foreground">{t.priority}</p>
+                <Popover
+                  open={priorityOpen}
+                  onOpenChange={setPriorityOpen}
+                  contentWidth={220}
+                  contentClassName="rounded-xl"
+                  aria-label={t.priority}
+                  trigger={
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full outline-none ring-offset-2 transition hover:ring-2 hover:ring-primary/30 focus-visible:ring-2 focus-visible:ring-primary",
+                        priority === "LOW" && "bg-blue-50",
+                        priority === "MEDIUM" && "bg-amber-50",
+                        priority === "HIGH" && "bg-red-50",
+                        priority === "URGENT" && "bg-red-100",
+                      )}
+                      aria-label={`${t.priority}: ${orderEnumLabel(priority, locale)}`}
+                      title={orderEnumLabel(priority, locale)}
+                      onClick={() => setPriorityOpen((open) => !open)}
+                    >
+                      <Flag className={cn("h-3.5 w-3.5", priorityColor[priority])} />
+                    </button>
+                  }
+                >
+                  <div className="p-3">
+                    <p className="mb-2 text-sm font-semibold">{t.priority}</p>
+                    <div className="space-y-1">
+                      {["LOW", "MEDIUM", "HIGH", "URGENT"].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted"
+                          onClick={() => {
+                            onUpdate({ operationalPriority: value });
+                            setPriorityOpen(false);
+                          }}
+                        >
+                          <Flag className={cn("h-4 w-4", priorityColor[value])} />
+                          <span className="flex-1">{orderEnumLabel(value, locale)}</span>
+                          {priority === value ? <Check className="h-4 w-4 text-primary" /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </Popover>
+              </div>
+            </div>
+          </div>
+          <OrderNotesPanel orderId={order.id} users={users} />
+          <div className="min-h-72 rounded-xl border border-border/70 bg-muted/25 p-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Atualizações do pedido
+            </p>
+            {order.events?.length ? (
+              <ol className="max-h-64 space-y-0 overflow-y-auto pr-2">
+                {order.events.map((event, index) => (
+                  <li
+                    key={event.id}
+                    className="relative grid grid-cols-[14px_minmax(0,1fr)] gap-3 pb-3 last:pb-0"
+                  >
+                    {index < (order.events?.length ?? 0) - 1 ? (
+                      <span className="absolute bottom-0 left-[6px] top-3 w-px bg-border" />
+                    ) : null}
+                    <span className="relative mt-1.5 h-2.5 w-2.5 rounded-full border-2 border-primary bg-card" />
+                    <div className="min-w-0">
+                      <time className="shrink-0 text-xs text-muted-foreground">
+                        {formatOrderDate(event.occurredAt, locale)}
+                      </time>
+                      <p className="mt-0.5 text-sm font-medium text-foreground">
+                        {orderEnumLabel(event.type, locale)}
+                      </p>
+                      {event.description ? (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                          {event.description}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-xs text-muted-foreground">{t.noHistory}</p>
+            )}
+          </div>
+        </div>
+      </section>
+      <main className="min-w-0 space-y-4">
+        <div className="grid items-stretch gap-4 lg:grid-cols-2">
+          <OrderFinancialSection order={order} locale={locale} />
+          <OrderCustomerCard order={order} locale={locale} />
+        </div>
+      </main>
     </div>
   );
 }

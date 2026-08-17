@@ -1385,6 +1385,7 @@ model Order {
   externalId               String?
   externalName             String?
   externalUrl              String?
+  customerOrderStatusUrl   String?
   financialStatus          String?
   paymentGateway           String?
   customerNameSnapshot     String?
@@ -1497,6 +1498,8 @@ model OrderItem {
   discount          Decimal @default(0) @db.Decimal(12, 2)
   totalPrice        Decimal @db.Decimal(12, 2)
   imageUrl          String?
+  isSeparated       Boolean  @default(false)
+  separatedAt       DateTime?
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
@@ -1548,6 +1551,9 @@ model Shipment {
   orderId      String
   carrier      String?
   trackingCode String?
+  trackingIssuedAt DateTime?
+  shippingLabelUrl String?
+  commercialInvoiceUrl String?
   origin       String?
   destination  String?
   status       ShipmentStatus @default(PENDING)
@@ -1574,12 +1580,17 @@ model ShipmentEvent {
   description String?
   location    String?
   occurredAt  DateTime @default(now())
+  source      String   @default("MANUAL")
+  externalCode String?
+  externalEventId String?
+  metadata    Json?
   createdAt   DateTime @default(now())
 
   shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
   @@index([shipmentId])
   @@index([occurredAt])
+  @@unique([shipmentId, externalEventId])
 }
 
 model Occurrence {

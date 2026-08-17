@@ -28,9 +28,7 @@ for (const viewport of [
   });
 }
 
-test("financial status is editable without opening the workspace and drag remains available", async ({
-  page,
-}) => {
+test("financial status is read-only on the card and drag remains available", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/orders?view=kanban");
   const listResponse = await page.request.get("/api/orders?page=1&pageSize=100");
@@ -44,23 +42,11 @@ test("financial status is editable without opening the workspace and drag remain
   };
   const original = listed.data[0];
   expect(original).toBeTruthy();
-  const nextStatus = original.financialStatus === "PAID" ? "PENDING" : "PAID";
   const card = page.locator(`[data-testid="order-kanban-card"][data-order-id="${original.id}"]`);
   try {
-    await card.getByTestId("order-financial-status").click();
-    const paymentUpdate = page.waitForResponse(
-      (response) =>
-        response.url().includes(`/api/orders/${original.id}`) &&
-        response.request().method() === "PATCH",
-    );
-    await page
-      .getByRole("button", { name: nextStatus === "PAID" ? "Pago" : "Pendente", exact: true })
-      .click();
-    expect((await paymentUpdate).ok()).toBeTruthy();
-    await expect(page).toHaveURL(/\/orders\?view=kanban$/);
-    await expect(card.getByTestId("order-financial-status")).toContainText(
-      nextStatus === "PAID" ? "Pago" : "Pendente",
-    );
+    const financialStatus = card.getByTestId("order-financial-status");
+    await expect(financialStatus).toBeVisible();
+    expect(await financialStatus.evaluate((element) => element.tagName)).toBe("SPAN");
     const targetColumn = page
       .locator(
         `[data-testid="orders-column"]:not([data-stage-id="${original.operationalStageId ?? ""}"])`,
@@ -231,10 +217,12 @@ test("order identification supports cancel, persistence and reload", async ({ pa
     );
     await page.getByRole("button", { name: "Salvar alterações" }).click();
     expect((await update).ok()).toBeTruthy();
-    await expect(identification).toContainText("+55 11 98888-7766");
+    await expect(identification).toContainText("+55 (11) 98888-7766");
     await expect(identification).toContainText("321");
     await page.reload();
-    await expect(page.getByTestId("order-identification-card")).toContainText("+55 11 98888-7766");
+    await expect(page.getByTestId("order-identification-card")).toContainText(
+      "+55 (11) 98888-7766",
+    );
     await expect(page.getByTestId("order-identification-card")).toContainText("Sala 4");
     await expect(page.getByTestId("order-identification-card")).toContainText("Campinas");
   } finally {
@@ -283,4 +271,237 @@ test("failed identification update keeps the form and entered values", async ({ 
   await expect(page.getByTestId("order-identification-form")).toBeVisible();
   await expect(page.getByLabel("Telefone")).toHaveValue("+86 138 0013 8000");
   await expect(page.getByText("Não foi possível salvar as alterações.")).toBeVisible();
+});
+
+test("complete stage persists the next configured stage and records history", async ({ page }) => {
+  test.setTimeout(60_000);
+  const stagesResponse = await page.request.get("/api/orders/stages");
+  const stages = (await stagesResponse.json()) as Array<{
+    id: string;
+    position: number;
+    active: boolean;
+    archived: boolean;
+    isFinal: boolean;
+  }>;
+  const ordered = stages
+    .filter((stage) => stage.active && !stage.archived)
+    .sort((left, right) => left.position - right.position);
+  const ordersResponse = await page.request.get("/api/orders?page=1&pageSize=100");
+  const listed = (await ordersResponse.json()) as {
+    data: Array<{ id: string; operationalStageId?: string | null }>;
+  };
+  const original = listed.data.find((order) => {
+    const index = ordered.findIndex((stage) => stage.id === order.operationalStageId);
+    return index >= 0 && Boolean(ordered[index + 1]);
+  });
+  expect(original).toBeTruthy();
+  const next = ordered[ordered.findIndex((stage) => stage.id === original!.operationalStageId) + 1];
+
+  await page.goto("/orders?view=kanban");
+  try {
+    await page
+      .locator(`[data-testid="order-kanban-card"][data-order-id="${original!.id}"]`)
+      .getByTestId("order-kanban-title")
+      .click();
+    const update = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/orders/${original!.id}`) &&
+        response.request().method() === "PATCH",
+    );
+    await page.getByTestId("complete-order-stage").click();
+    expect((await update).ok()).toBeTruthy();
+    await expect(page.getByTestId("complete-order-stage")).toContainText("Concluída");
+    await expect(page.getByTestId("order-current-stage")).toBeVisible();
+    await expect(page.getByTestId("order-identification-card")).toBeVisible();
+    const persisted = await (await page.request.get(`/api/orders/${original!.id}`)).json();
+    expect(persisted.operationalStageId).toBe(next.id);
+    expect(
+      persisted.events.some(
+        (event: { type: string }) => event.type === "OPERATIONAL_STAGE_CHANGED",
+      ),
+    ).toBe(true);
+  } finally {
+    await page.request.patch(`/api/orders/${original!.id}`, {
+      data: { operationalStageId: original!.operationalStageId },
+    });
+  }
+});
+
+test("failed stage completion keeps the current stage and workspace open", async ({ page }) => {
+  await page.goto("/orders?view=kanban");
+  const card = page.getByTestId("order-kanban-card").first();
+  const orderId = await card.getAttribute("data-order-id");
+  await card.getByTestId("order-kanban-title").click();
+  const before = await page.getByTestId("order-current-stage").textContent();
+  await page.route(`**/api/orders/${orderId}`, async (route) => {
+    if (route.request().method() === "PATCH")
+      await route.fulfill({ status: 500, json: { message: "Falha simulada" } });
+    else await route.continue();
+  });
+  const action = page.getByTestId("complete-order-stage");
+  test.skip(await action.isDisabled(), "The selected demonstration order is already final");
+  await action.click();
+  await expect(page.getByText("Não foi possível concluir a etapa.")).toBeVisible();
+  await expect(page.getByTestId("order-current-stage")).toHaveText(before || "");
+  await expect(page.getByTestId("order-identification-card")).toBeVisible();
+});
+
+test("purchase context shows returning, first-purchase and unknown states truthfully", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const ordersResponse = await page.request.get("/api/orders?page=1&pageSize=100");
+  expect(ordersResponse.ok()).toBeTruthy();
+  const listed = (await ordersResponse.json()) as { data: Array<{ id: string }> };
+  const orderId = listed.data[0].id;
+  const original = await (await page.request.get(`/api/orders/${orderId}`)).json();
+  await page.goto("/orders?view=kanban");
+  const card = page.locator(`[data-testid="order-kanban-card"][data-order-id="${orderId}"]`);
+
+  await card.getByTestId("order-kanban-title").click();
+  const context = page.getByTestId("customer-purchase-context");
+  await expect(context).toContainText("Cliente recorrente");
+  const halo = context.locator("span").first().locator("span").first();
+  expect(await halo.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  await page.keyboard.press("Escape");
+
+  await page.route(`**/api/orders/${orderId}`, async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        json: { ...original, isFirstPurchase: true, purchaseOrdinal: 1 },
+      });
+    } else await route.continue();
+  });
+  await page.reload();
+  await card.getByTestId("order-kanban-title").click();
+  await expect(context).toContainText("Novo cliente");
+  await expect(context).toContainText("primeira compra registrada");
+  await expect(context).toHaveClass(/bg-primary\/5/);
+  await page.keyboard.press("Escape");
+  await page.unroute(`**/api/orders/${orderId}`);
+
+  await page.route(`**/api/orders/${orderId}`, async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        json: {
+          ...original,
+          isFirstPurchase: null,
+          purchaseOrdinal: null,
+          contact: original.contact ? { ...original.contact, orderCount: 0 } : null,
+        },
+      });
+    } else await route.continue();
+  });
+  await page.reload();
+  await card.getByTestId("order-kanban-title").click();
+  await expect(context).toHaveCount(0);
+});
+
+test("product separation persists independently and can be unchecked", async ({ page }) => {
+  test.setTimeout(60_000);
+  const ordersResponse = await page.request.get("/api/orders?page=1&pageSize=100");
+  const listed = (await ordersResponse.json()) as { data: Array<{ id: string }> };
+  const orderId = listed.data[0].id;
+  const original = await (await page.request.get(`/api/orders/${orderId}`)).json();
+  const item = original.items[0];
+  const originalStage = original.operationalStageId;
+  const originalSeparated = Boolean(item.isSeparated);
+  const targetSeparated = !originalSeparated;
+
+  await page.goto("/orders?view=kanban");
+  try {
+    await page
+      .locator(`[data-testid="order-kanban-card"][data-order-id="${orderId}"]`)
+      .getByTestId("order-kanban-title")
+      .click();
+    const row = page.locator(`[data-testid="order-product-row"][data-item-id="${item.id}"]`);
+    const checkbox = row.getByRole("checkbox");
+    const update = page.waitForResponse(
+      (response) =>
+        response.url().includes(`/api/orders/${orderId}/items/${item.id}`) &&
+        response.request().method() === "PATCH",
+    );
+    await checkbox.click();
+    expect((await update).ok()).toBeTruthy();
+    await expect(checkbox).toHaveAttribute("aria-checked", String(targetSeparated));
+    await expect(row).toHaveClass(targetSeparated ? /bg-success\/5/ : /bg-card/);
+    await page.reload();
+    await expect(
+      page
+        .locator(`[data-testid="order-product-row"][data-item-id="${item.id}"]`)
+        .getByRole("checkbox"),
+    ).toHaveAttribute("aria-checked", String(targetSeparated));
+    const persisted = await (await page.request.get(`/api/orders/${orderId}`)).json();
+    expect(persisted.operationalStageId).toBe(originalStage);
+    expect(
+      persisted.items.find((current: { id: string }) => current.id === item.id).isSeparated,
+    ).toBe(targetSeparated);
+  } finally {
+    await page.request.patch(`/api/orders/${orderId}/items/${item.id}`, {
+      data: { isSeparated: originalSeparated },
+    });
+  }
+});
+
+test("failed product separation rolls the row back without blocking other items", async ({
+  page,
+}) => {
+  await page.goto("/orders?view=kanban");
+  await page.getByTestId("order-kanban-title").first().click();
+  const rows = page.getByTestId("order-product-row");
+  const first = rows.first();
+  const firstId = await first.getAttribute("data-item-id");
+  const checkbox = first.getByRole("checkbox");
+  const before = await checkbox.getAttribute("aria-checked");
+  await page.route(`**/api/orders/*/items/${firstId}`, async (route) => {
+    await route.fulfill({ status: 500, json: { message: "Falha simulada" } });
+  });
+  await checkbox.click();
+  await expect(page.getByText("Não foi possível atualizar a separação.")).toBeVisible();
+  await expect(checkbox).toHaveAttribute("aria-checked", before || "false");
+  if ((await rows.count()) > 1) await expect(rows.nth(1).getByRole("checkbox")).toBeEnabled();
+});
+
+test("large product list uses internal scroll and does not invent product links", async ({
+  page,
+}) => {
+  const ordersResponse = await page.request.get("/api/orders?page=1&pageSize=100");
+  const listed = (await ordersResponse.json()) as { data: Array<{ id: string }> };
+  const orderId = listed.data[0].id;
+  const original = await (await page.request.get(`/api/orders/${orderId}`)).json();
+  const items = Array.from({ length: 24 }, (_, index) => ({
+    ...original.items[index % original.items.length],
+    id: `visual-item-${index}`,
+    sku: `SKU-OPERACIONAL-LONGO-${String(index + 1).padStart(2, "0")}`,
+    productName:
+      index === 14
+        ? "Brinco de Argola Cravejado com Zircônias Premium Dourado"
+        : `Produto operacional ${index + 1}`,
+    isSeparated: index < 3,
+  }));
+  await page.route(`**/api/orders/${orderId}`, async (route) => {
+    if (route.request().method() === "GET") await route.fulfill({ json: { ...original, items } });
+    else await route.continue();
+  });
+  await page.goto("/orders?view=kanban");
+  await page
+    .locator(`[data-testid="order-kanban-card"][data-order-id="${orderId}"]`)
+    .getByTestId("order-kanban-title")
+    .click();
+  const products = page.getByTestId("order-workspace-products");
+  await expect(products).toContainText("3 de 24 separados");
+  const scroll = page.getByTestId("order-products-scroll");
+  const dimensions = await scroll.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
+  await scroll.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(
+    page.getByText("Brinco de Argola Cravejado com Zircônias Premium Dourado"),
+  ).toBeVisible();
+  await expect(products.getByRole("link", { name: /produto/i })).toHaveCount(0);
 });

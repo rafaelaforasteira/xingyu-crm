@@ -1,48 +1,44 @@
 "use client";
 import * as React from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { AlertTriangle, Check, ChevronDown } from "lucide-react";
+import { AlertTriangle, Check, Flag, Truck, UserRound } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 import { Popover } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   formatOrderCurrency,
   orderEnumLabel,
   orderText,
   type OrderLocale,
 } from "@/lib/orders-i18n";
-import type { Order } from "@/lib/types";
-
-export const FINANCIAL_STATUS_OPTIONS = [
-  "PENDING",
-  "AWAITING_PAYMENT",
-  "AUTHORIZED",
-  "PARTIALLY_PAID",
-  "PAID",
-  "PAYMENT_APPROVED",
-  "DECLINED",
-  "OVERDUE",
-  "PARTIALLY_REFUNDED",
-  "REFUNDED",
-  "VOIDED",
-  "CANCELLED",
-] as const;
+import type { Order, UserRef } from "@/lib/types";
 
 export function OrderKanbanCard({
   order,
   locale,
   onOpen,
-  onFinancialStatusChange,
-  updating = false,
+  users,
+  onUpdate,
 }: {
   order: Order;
   locale: OrderLocale;
   onOpen: () => void;
-  onFinancialStatusChange: (status: string) => void;
-  updating?: boolean;
+  users: UserRef[];
+  onUpdate: (data: Partial<Order>) => void;
 }) {
   const drag = useDraggable({ id: order.id, data: { order } });
-  const [statusOpen, setStatusOpen] = React.useState(false);
+  const [ownerOpen, setOwnerOpen] = React.useState(false);
+  const [priorityOpen, setPriorityOpen] = React.useState(false);
   const t = orderText(locale);
   const financialStatus = order.financialStatus || order.status;
+  const operationalOwner = order.operationalAssignee;
+  const priority = order.operationalPriority || "MEDIUM";
+  const priorityColor: Record<string, string> = {
+    LOW: "bg-blue-50 text-blue-600",
+    MEDIUM: "bg-amber-50 text-amber-700",
+    HIGH: "bg-red-50 text-red-600",
+    URGENT: "bg-red-100 text-red-700",
+  };
   const seller = order.owner?.name || order.deal?.owner?.name;
   const context = [
     order.deal?.leadSequence
@@ -58,7 +54,7 @@ export function OrderKanbanCard({
   const overdue = due ? due.getTime() < new Date().setHours(0, 0, 0, 0) : false;
   const dueLabel = due
     ? new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(due)
-    : "—";
+    : null;
   const rawNumber = order.externalName || order.number;
   const displayNumber = rawNumber.startsWith("#") ? rawNumber : `#${rawNumber}`;
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
@@ -81,57 +77,126 @@ export function OrderKanbanCard({
         >
           {displayNumber}
         </strong>
-        {order.operationalIssue ? (
-          <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" aria-label={t.issue} />
-        ) : (
-          <span className="h-4 w-4 shrink-0" aria-hidden />
-        )}
+        <div
+          className="flex shrink-0 flex-col items-center gap-1.5"
+          onPointerDown={stop}
+          onClick={stop}
+        >
+          <Popover
+            open={ownerOpen}
+            onOpenChange={setOwnerOpen}
+            contentWidth={260}
+            contentClassName="rounded-xl"
+            aria-label={t.owner}
+            trigger={
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center rounded-full outline-none ring-offset-2 hover:ring-2 hover:ring-primary/30 focus-visible:ring-2 focus-visible:ring-primary"
+                title={`${t.owner}: ${operationalOwner?.name || t.noOwner}`}
+                aria-label={`${t.owner}: ${operationalOwner?.name || t.noOwner}`}
+                onClick={() => setOwnerOpen((open) => !open)}
+              >
+                {operationalOwner ? (
+                  <Avatar
+                    name={operationalOwner.name}
+                    src={operationalOwner.avatarUrl}
+                    size="sm"
+                    className="h-7 w-7"
+                  />
+                ) : (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-muted">
+                    <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
+                  </span>
+                )}
+              </button>
+            }
+          >
+            <div className="p-3">
+              <p className="mb-2 text-sm font-semibold">{t.owner}</p>
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {[null, ...users].map((user) => (
+                  <button
+                    key={user?.id || "none"}
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted"
+                    onClick={() => {
+                      onUpdate({ operationalAssigneeId: user?.id || null });
+                      setOwnerOpen(false);
+                    }}
+                  >
+                    {user ? (
+                      <Avatar name={user.name} src={user.avatarUrl} size="sm" />
+                    ) : (
+                      <span className="flex h-7 w-7 items-center justify-center">
+                        <UserRound className="h-4 w-4" />
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate">{user?.name || t.noOwner}</span>
+                    {(order.operationalAssigneeId || null) === (user?.id || null) ? (
+                      <Check className="h-4 w-4 text-primary" />
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Popover>
+          <Popover
+            open={priorityOpen}
+            onOpenChange={setPriorityOpen}
+            contentWidth={220}
+            contentClassName="rounded-xl"
+            aria-label={t.priority}
+            trigger={
+              <button
+                type="button"
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-full outline-none ring-offset-2 hover:ring-2 hover:ring-primary/30 focus-visible:ring-2 focus-visible:ring-primary",
+                  priorityColor[priority],
+                )}
+                title={`${t.priority}: ${orderEnumLabel(priority, locale)}`}
+                aria-label={`${t.priority}: ${orderEnumLabel(priority, locale)}`}
+                onClick={() => setPriorityOpen((open) => !open)}
+              >
+                <Flag className="h-3.5 w-3.5" />
+              </button>
+            }
+          >
+            <div className="p-3">
+              <p className="mb-2 text-sm font-semibold">{t.priority}</p>
+              <div className="space-y-1">
+                {(["LOW", "MEDIUM", "HIGH", "URGENT"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted"
+                    onClick={() => {
+                      onUpdate({ operationalPriority: value });
+                      setPriorityOpen(false);
+                    }}
+                  >
+                    <Flag className={cn("h-4 w-4", priorityColor[value]?.split(" ")[1])} />
+                    <span className="flex-1">{orderEnumLabel(value, locale)}</span>
+                    {priority === value ? <Check className="h-4 w-4 text-primary" /> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Popover>
+          {order.operationalIssue ? (
+            <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" aria-label={t.issue} />
+          ) : null}
+        </div>
       </div>
       <p className="mt-1 h-4 truncate text-xs text-muted-foreground" title={context || undefined}>
         {context || " "}
       </p>
-      <div className="mt-2" onPointerDown={stop} onClick={stop}>
-        <Popover
-          open={statusOpen}
-          onOpenChange={setStatusOpen}
-          align="start"
-          contentWidth={230}
-          aria-label={t.changePaymentStatus}
-          trigger={
-            <button
-              type="button"
-              data-testid="order-financial-status"
-              disabled={updating}
-              aria-label={`${t.changePaymentStatus}: ${orderEnumLabel(financialStatus, locale)}`}
-              className="inline-flex h-7 max-w-full items-center gap-1 rounded-full border border-border bg-background px-2 text-[11px] text-foreground hover:bg-muted disabled:opacity-60"
-              onPointerDown={stop}
-              onClick={(event) => {
-                stop(event);
-                setStatusOpen(!statusOpen);
-              }}
-            >
-              <span className="truncate">{orderEnumLabel(financialStatus, locale)}</span>
-              <ChevronDown className="h-3 w-3 shrink-0" />
-            </button>
-          }
+      <div className="mt-2">
+        <span
+          data-testid="order-financial-status"
+          className="inline-flex h-7 max-w-full items-center rounded-full border border-primary/15 bg-primary/5 px-2.5 text-[11px] font-medium text-primary"
         >
-          <div className="max-h-72 overflow-y-auto p-1.5" onPointerDown={stop} onClick={stop}>
-            {FINANCIAL_STATUS_OPTIONS.map((status) => (
-              <button
-                type="button"
-                key={status}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs hover:bg-muted"
-                onClick={() => {
-                  onFinancialStatusChange(status);
-                  setStatusOpen(false);
-                }}
-              >
-                <span className="flex-1">{orderEnumLabel(status, locale)}</span>
-                {status === financialStatus ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
-              </button>
-            ))}
-          </div>
-        </Popover>
+          <span className="truncate">{orderEnumLabel(financialStatus, locale)}</span>
+        </span>
       </div>
       <div className="mt-3 flex items-center justify-between gap-2 text-xs">
         <strong className="truncate font-semibold text-primary">
@@ -146,18 +211,28 @@ export function OrderKanbanCard({
         </span>
       </div>
       <div className="mt-1.5 flex min-h-4 items-center justify-between gap-2 text-[11px]">
-        <span className="min-w-0 truncate text-muted-foreground" title={tracking || undefined}>
-          {tracking || " "}
-        </span>
         <span
           className={
-            overdue ? "shrink-0 font-medium text-destructive" : "shrink-0 text-muted-foreground"
+            tracking
+              ? "flex min-w-0 items-center gap-1.5 truncate text-muted-foreground"
+              : "flex min-w-0 items-center gap-1.5 truncate font-medium text-destructive"
           }
-          title={overdue ? t.overdue : t.due}
+          title={tracking || "Não informado"}
         >
-          {dueLabel}
-          {overdue ? <span className="sr-only"> · {t.overdue}</span> : null}
+          <Truck className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="truncate">{tracking || "Não informado"}</span>
         </span>
+        {dueLabel ? (
+          <span
+            className={
+              overdue ? "shrink-0 font-medium text-destructive" : "shrink-0 text-muted-foreground"
+            }
+            title={overdue ? t.overdue : t.due}
+          >
+            {dueLabel}
+            {overdue ? <span className="sr-only"> · {t.overdue}</span> : null}
+          </span>
+        ) : null}
       </div>
     </article>
   );

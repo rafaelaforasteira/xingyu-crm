@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   GripVertical,
   Kanban,
   List,
@@ -28,6 +29,8 @@ import {
   Search,
   Settings,
   Trash2,
+  Truck,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { contactsApi, ordersApi, settingsApi } from "@/lib/api";
@@ -43,6 +46,7 @@ import {
 } from "@/lib/orders-i18n";
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,15 +65,15 @@ function Column({
   orders,
   locale,
   onOpen,
-  onFinancialStatusChange,
-  updatingOrderId,
+  users,
+  onUpdate,
 }: {
   stage: OrderStageDefinition;
   orders: Order[];
   locale: OrderLocale;
   onOpen: (o: Order) => void;
-  onFinancialStatusChange: (order: Order, status: string) => void;
-  updatingOrderId?: string;
+  users: Array<{ id: string; name: string; avatarUrl?: string | null }>;
+  onUpdate: (order: Order, data: Partial<Order>) => void;
 }) {
   const d = useDroppable({ id: stage.id });
   const t = orderText(locale);
@@ -93,9 +97,9 @@ function Column({
             key={o.id}
             order={o}
             locale={locale}
+            users={users}
             onOpen={() => onOpen(o)}
-            onFinancialStatusChange={(status) => onFinancialStatusChange(o, status)}
-            updating={updatingOrderId === o.id}
+            onUpdate={(data) => onUpdate(o, data)}
           />
         ))}
         {!orders.length ? (
@@ -180,6 +184,7 @@ export function OrdersPage() {
     [configure, setConfigure] = React.useState(false),
     [creating, setCreating] = React.useState(false);
   const [languageOpen, setLanguageOpen] = React.useState(false);
+  const [collapsedListStages, setCollapsedListStages] = React.useState<Set<string>>(new Set());
   const t = orderText(locale),
     page = Number(params.get("page") || 1);
   const replace = React.useCallback(
@@ -222,6 +227,27 @@ export function OrdersPage() {
   });
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const list = React.useMemo(() => orders.data?.data ?? [], [orders.data?.data]);
+  const listGroups = React.useMemo(() => {
+    const definitions = stages.data ?? [];
+    const groups = definitions
+      .map((stage) => ({
+        id: stage.id,
+        name: stageLabel(stage, locale),
+        color: stage.color,
+        orders: list.filter(
+          (order) =>
+            order.operationalStageId === stage.id || (!order.operationalStageId && stage.isInitial),
+        ),
+      }))
+      .filter((group) => group.orders.length);
+    const knownIds = new Set(definitions.map((stage) => stage.id));
+    const unassigned = list.filter(
+      (order) => order.operationalStageId && !knownIds.has(order.operationalStageId),
+    );
+    if (unassigned.length)
+      groups.push({ id: "unassigned", name: "Sem etapa", color: "#94A3B8", orders: unassigned });
+    return groups;
+  }, [list, locale, stages.data]);
   const openOrder = (order: Order) => {
     setSelected(order);
     replace({ order: order.id });
@@ -325,10 +351,8 @@ export function OrdersPage() {
                     (o) => o.operationalStageId === s.id || (!o.operationalStageId && s.isInitial),
                   )}
                   onOpen={openOrder}
-                  onFinancialStatusChange={(order, financialStatus) =>
-                    update.mutate({ id: order.id, data: { financialStatus } })
-                  }
-                  updatingOrderId={update.isPending ? update.variables?.id : undefined}
+                  users={users.data ?? []}
+                  onUpdate={(order, data) => update.mutate({ id: order.id, data })}
                 />
               ))}
             </div>
@@ -336,42 +360,127 @@ export function OrdersPage() {
         </DndContext>
       ) : null}
       {view === "list" && list.length ? (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs uppercase">
+            <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
               <tr>
-                {[t.order, t.customer, t.stage, t.payment, t.owner, t.due, t.tracking, t.total].map(
-                  (x) => (
-                    <th key={x} className="p-3 text-left">
-                      {x}
-                    </th>
-                  ),
-                )}
+                {[t.order, t.customer, t.payment, t.owner, t.due, t.tracking, t.total].map((x) => (
+                  <th key={x} className="px-3 py-2.5 text-left font-semibold last:text-right">
+                    {x}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {list.map((o) => (
-                <tr
-                  key={o.id}
-                  className="cursor-pointer border-t hover:bg-muted/30"
-                  onClick={() => openOrder(o)}
-                >
-                  <td className="p-3 font-medium">#{o.externalName || o.number}</td>
-                  <td className="p-3">{customer(o)}</td>
-                  <td className="p-3">
-                    {o.operationalStage ? stageLabel(o.operationalStage, locale) : "—"}
-                  </td>
-                  <td className="p-3">{orderEnumLabel(o.financialStatus || o.status, locale)}</td>
-                  <td className="p-3">{o.operationalAssignee?.name || t.noOwner}</td>
-                  <td className="p-3">
-                    {o.operationalDueAt ? formatOrderDate(o.operationalDueAt, locale) : "—"}
-                  </td>
-                  <td className="p-3">{o.shipments?.[0]?.trackingCode || "—"}</td>
-                  <td className="p-3 text-right">
-                    {formatOrderCurrency(total(o), o.currency, locale)}
-                  </td>
-                </tr>
-              ))}
+              {listGroups.map((group) => {
+                const collapsed = collapsedListStages.has(group.id);
+                return (
+                  <React.Fragment key={group.id}>
+                    <tr className="border-t border-border bg-muted/20">
+                      <td colSpan={7} className="px-3 py-2">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 text-left"
+                          aria-expanded={!collapsed}
+                          onClick={() =>
+                            setCollapsedListStages((current) => {
+                              const next = new Set(current);
+                              if (next.has(group.id)) next.delete(group.id);
+                              else next.add(group.id);
+                              return next;
+                            })
+                          }
+                        >
+                          {collapsed ? (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{ backgroundColor: group.color }}
+                          />
+                          <span className="text-xs font-bold uppercase tracking-wide text-foreground">
+                            {group.name}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="ml-1 h-5 min-w-5 justify-center px-1.5 text-[10px]"
+                          >
+                            {group.orders.length}
+                          </Badge>
+                        </button>
+                      </td>
+                    </tr>
+                    {!collapsed
+                      ? group.orders.map((o) => {
+                          const trackingCode = o.shipments?.[0]?.trackingCode || o.trackingCode;
+                          const rawNumber = o.externalName || o.number;
+                          return (
+                            <tr
+                              key={o.id}
+                              className="cursor-pointer border-t border-border/60 transition hover:bg-primary/[0.025]"
+                              onClick={() => openOrder(o)}
+                            >
+                              <td className="px-3 py-3 font-semibold text-foreground">
+                                {rawNumber.startsWith("#") ? rawNumber : `#${rawNumber}`}
+                              </td>
+                              <td className="max-w-56 truncate px-3 py-3 text-foreground">
+                                {customer(o)}
+                              </td>
+                              <td className="px-3 py-3">
+                                <Badge
+                                  variant="outline"
+                                  className="border-primary/15 bg-primary/5 font-medium text-primary"
+                                >
+                                  {orderEnumLabel(o.financialStatus || o.status, locale)}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex items-center gap-2">
+                                  {o.operationalAssignee ? (
+                                    <Avatar
+                                      name={o.operationalAssignee.name}
+                                      src={o.operationalAssignee.avatarUrl}
+                                      size="sm"
+                                    />
+                                  ) : (
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-muted">
+                                      <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </span>
+                                  )}
+                                  <span className="max-w-32 truncate text-xs">
+                                    {o.operationalAssignee?.name || t.noOwner}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 text-xs text-muted-foreground">
+                                {o.operationalDueAt
+                                  ? formatOrderDate(o.operationalDueAt, locale)
+                                  : "Sem prazo"}
+                              </td>
+                              <td
+                                className={
+                                  trackingCode
+                                    ? "px-3 py-3 text-xs text-muted-foreground"
+                                    : "px-3 py-3 text-xs font-medium text-destructive"
+                                }
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <Truck className="h-3.5 w-3.5 shrink-0 text-primary" />
+                                  {trackingCode || "Não informado"}
+                                </span>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 text-right font-semibold text-primary">
+                                {formatOrderCurrency(total(o), o.currency, locale)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      : null}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -439,7 +548,7 @@ function Workspace({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={t.order}
+      title={t.orderInformation}
       wide
       className="max-h-[calc(100vh-2rem)] max-w-[min(1280px,calc(100vw-2rem))] overflow-y-auto"
     >

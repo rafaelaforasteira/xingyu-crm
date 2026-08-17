@@ -21,6 +21,9 @@ import type {
   NotificationItem,
   Occurrence,
   Order,
+  OrderItem,
+  OrderShipment,
+  ShipmentEvent,
   CreateOrderInput,
   UpdateOrderInput,
   OrderStageDefinition,
@@ -575,8 +578,13 @@ export const notesApi = {
     api.get<PaginatedResponse<Note>>("/notes", query),
   list: async (query?: Record<string, QueryValue>) =>
     unwrapData(await api.get<Note[] | PaginatedResponse<Note>>("/notes", query)),
-  create: (data: { content: string; contactId?: string; dealId?: string; isInternal?: boolean }) =>
-    api.post<Note>("/notes", data),
+  create: (data: {
+    content: string;
+    contactId?: string;
+    dealId?: string;
+    orderId?: string;
+    isInternal?: boolean;
+  }) => api.post<Note>("/notes", data),
 };
 
 export const tasksApi = {
@@ -618,6 +626,33 @@ export const ordersApi = {
     api.post<OrderStageDefinition[]>("/orders/stages/reorder", { stageIds }),
   create: (data: CreateOrderInput) => api.post<Order>("/orders", data),
   update: (id: string, data: UpdateOrderInput) => api.patch<Order>(`/orders/${id}`, data),
+  updateItemSeparation: (orderId: string, itemId: string, isSeparated: boolean) =>
+    api.patch<OrderItem>(`/orders/${orderId}/items/${itemId}`, { isSeparated }),
+  uploadPaymentReceipt: (orderId: string, paymentId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return api.post(`/orders/${orderId}/payments/${paymentId}/receipt`, form);
+  },
+  createShipment: (orderId: string, data: { trackingCode?: string; carrier?: string }) =>
+    api.post<OrderShipment>(`/orders/${orderId}/shipments`, data),
+  updateShipment: (
+    orderId: string,
+    shipmentId: string,
+    data: { trackingCode?: string; postedAt?: string },
+  ) => api.patch<OrderShipment>(`/orders/${orderId}/shipments/${shipmentId}`, data),
+  addShipmentEvent: (
+    orderId: string,
+    shipmentId: string,
+    data: {
+      status: string;
+      description?: string;
+      location?: string;
+      occurredAt?: string;
+      source?: string;
+      externalCode?: string;
+      externalEventId?: string;
+    },
+  ) => api.post<ShipmentEvent>(`/orders/${orderId}/shipments/${shipmentId}/events`, data),
   timeline: (id: string) => api.get<Activity[]>(`/orders/${id}/timeline`),
 };
 

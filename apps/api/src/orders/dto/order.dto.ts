@@ -141,6 +141,7 @@ export class CreateOrderDto {
   @ApiPropertyOptional() @IsOptional() @IsString() externalId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() externalName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() externalUrl?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() customerOrderStatusUrl?: string;
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -184,6 +185,12 @@ export class CreateOrderDto {
 }
 
 export class UpdateOrderDto extends PartialType(CreateOrderDto) {}
+
+export class UpdateOrderItemSeparationDto {
+  @ApiProperty()
+  @IsBoolean()
+  isSeparated!: boolean;
+}
 
 export class QueryOrdersDto extends PaginationQueryDto {
   @ApiPropertyOptional()
@@ -298,4 +305,19 @@ export class CreateShipmentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class UpdateShipmentDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() trackingCode?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() postedAt?: string;
+}
+
+export class CreateShipmentEventDto {
+  @ApiProperty() @IsString() status!: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() location?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() occurredAt?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() source?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() externalCode?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() externalEventId?: string;
 }

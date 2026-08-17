@@ -468,6 +468,7 @@ export interface Conversation {
   contactId?: string | null;
   contact?: Contact | null;
   dealId?: string | null;
+  orderId?: string | null;
   deal?: {
     id: string;
     name: string;
@@ -765,6 +766,7 @@ export interface Order {
   externalId?: string | null;
   externalName?: string | null;
   externalUrl?: string | null;
+  customerOrderStatusUrl?: string | null;
   financialStatus?: string | null;
   paymentGateway?: string | null;
   customerNameSnapshot?: string | null;
@@ -876,6 +878,13 @@ export interface OrderItem {
   externalProductId?: string | null;
   externalVariantId?: string | null;
   variantTitle?: string | null;
+  isSeparated: boolean;
+  separatedAt?: string | null;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+  } | null;
 }
 
 export interface OrderPayment {
@@ -894,7 +903,23 @@ export interface OrderShipment {
   trackingCode?: string | null;
   status: string;
   postedAt?: string | null;
+  trackingIssuedAt?: string | null;
+  expectedAt?: string | null;
   deliveredAt?: string | null;
+  shippingLabelUrl?: string | null;
+  commercialInvoiceUrl?: string | null;
+  events?: ShipmentEvent[];
+}
+export interface ShipmentEvent {
+  id: string;
+  status: string;
+  description?: string | null;
+  location?: string | null;
+  occurredAt: string;
+  source: string;
+  externalCode?: string | null;
+  externalEventId?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 export interface OrderAttribution {
   id: string;

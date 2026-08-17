@@ -10,6 +10,9 @@ describe("orders localization", () => {
       expect(orderText(locale).paymentReceipt).toBeTruthy();
       expect(orderText(locale).marketingAttribution).toBeTruthy();
       expect(orderText(locale).timeline).toBeTruthy();
+      expect(orderText(locale).separated).toBeTruthy();
+      expect(orderText(locale).markSeparated).toBeTruthy();
+      expect(orderText(locale).itemSeparationError).toBeTruthy();
       expect(orderEnumLabel("PAID", locale)).not.toBe("PAID");
     }
   });
