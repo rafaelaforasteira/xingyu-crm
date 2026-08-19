@@ -5,10 +5,12 @@ import { OrganizationId } from "../common/decorators/organization.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
 import { PipelineAccessService } from "../pipelines/pipeline-access.service";
+import { Permissions } from "../auth/decorators/permissions.decorator";
 
 @ApiTags("dashboard")
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
 @Controller("dashboard")
+@Permissions("dashboard.view")
 export class DashboardController {
   constructor(
     private readonly service: DashboardService,

@@ -81,6 +81,7 @@ export class OrdersService {
     organizationId: string,
     query: QueryOrdersDto,
     allowedPipelineIds?: string[] | null,
+    scopedUserId?: string,
   ) {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
@@ -88,6 +89,10 @@ export class OrdersService {
     const where: Record<string, unknown> = {
       organizationId,
       ...notDeleted,
+      ...((scopedUserId || allowedPipelineIds) ? { AND: [
+        ...(scopedUserId ? [{ OR: [{ ownerId: scopedUserId }, { operationalAssigneeId: scopedUserId }, { deal: { ownerId: scopedUserId } }] }] : []),
+        ...(allowedPipelineIds ? [{ OR: [{ dealId: null }, { deal: { pipelineId: { in: allowedPipelineIds } } }] }] : []),
+      ] } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.contactId ? { contactId: query.contactId } : {}),
       ...(query.companyId ? { companyId: query.companyId } : {}),
@@ -103,11 +108,6 @@ export class OrdersService {
       ...(query.issue ? { operationalIssue: true } : {}),
       ...(query.overdue
         ? { operationalDueAt: { lt: new Date() }, operationalStage: { isFinal: false } }
-        : {}),
-      ...(allowedPipelineIds
-        ? {
-            AND: [{ OR: [{ dealId: null }, { deal: { pipelineId: { in: allowedPipelineIds } } }] }],
-          }
         : {}),
       ...(query.search
         ? {

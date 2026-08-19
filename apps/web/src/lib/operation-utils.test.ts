@@ -13,9 +13,8 @@ import {
   sanitizeStageName,
 } from "./operation-utils";
 import type { Deal, Pipeline, PipelineStage } from "./types";
-import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS, BETA_SINGLE_PIPELINE_NAV_GROUPS } from "./nav";
-import { CORE_OPERATION_MODE, shouldHideGlobalHeader } from "./feature-flags";
-import { BETA_SINGLE_PIPELINE_MODE } from "./beta-config";
+import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS } from "./nav";
+import { shouldHideGlobalHeader } from "./feature-flags";
 
 function deal(partial: Partial<Deal> & Pick<Deal, "id" | "name" | "pipelineId" | "stageId">): Deal {
   return {
@@ -181,14 +180,16 @@ describe("navigation mode", () => {
     ]);
   });
 
-  it("uses beta or simplified menu depending on mode flags", () => {
-    if (BETA_SINGLE_PIPELINE_MODE) {
-      expect(NAV_GROUPS).toEqual(BETA_SINGLE_PIPELINE_NAV_GROUPS);
-    } else if (CORE_OPERATION_MODE) {
-      expect(NAV_GROUPS).toEqual(CORE_OPERATION_NAV_GROUPS);
-    } else {
-      expect(NAV_GROUPS).toEqual(FULL_NAV_GROUPS);
-    }
+  it("keeps the compact sidebar separated into product areas", () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual(["Visão geral", "Relacionamento", "Jornadas", "Gestão"]);
+    expect(NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href)).toEqual([
+      "/dashboard",
+      "/tasks",
+      "/clients",
+      "/pipelines",
+      "/orders",
+      "/finance",
+    ]);
   });
 });
 

@@ -15,7 +15,7 @@ export class PipelineAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
   async accessiblePipelineIds(user: AuthenticatedUser): Promise<string[] | null> {
-    if (user.role === "ADMIN") return null;
+    if (user.role === "ADMIN" || user.role === "MANAGER") return null;
     const rows = await this.prisma.$queryRaw<AccessRow[]>`
       SELECT DISTINCT p.id
       FROM "Pipeline" p
@@ -42,7 +42,7 @@ export class PipelineAccessService {
     });
     if (!deal) throw new NotFoundException("Lead não encontrado.");
     await this.assertAccess(user, deal.pipelineId);
-    if (user.role !== "ADMIN" && deal.ownerId !== user.id)
+    if (user.role === "CONSULTANT" && deal.ownerId !== user.id)
       throw new ForbiddenException("Este lead está atribuído a outra pessoa.");
   }
 
@@ -148,6 +148,11 @@ export class PipelineAccessService {
   }
 
   async assertOrderAccess(user: AuthenticatedUser, orderId: string) {
+    if (user.role === "CONSULTANT") {
+      const order = await this.prisma.order.findFirst({ where: { id: orderId, organizationId: user.organizationId, deletedAt: null }, select: { ownerId: true, operationalAssigneeId: true, deal: { select: { ownerId: true } } } });
+      if (!order) throw new NotFoundException("Pedido não encontrado.");
+      if (![order.ownerId, order.operationalAssigneeId, order.deal?.ownerId].includes(user.id)) throw new ForbiddenException("Sem acesso a este pedido.");
+    }
     return this.assertResourceAccess(user, "order", orderId);
   }
 

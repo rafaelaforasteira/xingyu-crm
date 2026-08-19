@@ -5,6 +5,7 @@ import { OrganizationId } from "../common/decorators/organization.decorator";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
 import { PipelineAccessService } from "../pipelines/pipeline-access.service";
+import { getScope } from "../auth/access-policy";
 import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/demo-user.decorator";
 import {
   CreateDealDto,
@@ -26,7 +27,7 @@ export class DealsController {
   @Get()
   @ApiOperation({ summary: "List deals" })
   async findAll(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query() query: QueryDealsDto) {
-    return this.dealsService.findAll(orgId, query, await this.access.accessiblePipelineIds(user), user.role === "ADMIN" ? undefined : user.id);
+    return this.dealsService.findAll(orgId, query, await this.access.accessiblePipelineIds(user), getScope(user.role, "deals") === "SELF" ? user.id : undefined);
   }
 
   @Get("kanban/:pipelineId")
@@ -52,7 +53,7 @@ export class DealsController {
     @CurrentUser() authUser: AuthenticatedUser,
   ) {
     await this.access.assertAccess(authUser, dto.pipelineId);
-    if (authUser.role !== "ADMIN" && dto.ownerId && dto.ownerId !== authUser.id) throw new ForbiddenException("Somente administradores podem atribuir leads a outra pessoa.");
+    if (authUser.role === "CONSULTANT" && dto.ownerId && dto.ownerId !== authUser.id) throw new ForbiddenException("Sem permissão para atribuir leads a outra pessoa.");
     await this.access.assertEligibleUser(authUser, dto.pipelineId, dto.ownerId ?? authUser.id);
     return this.dealsService.createManualLead(orgId, dto, user.id);
   }

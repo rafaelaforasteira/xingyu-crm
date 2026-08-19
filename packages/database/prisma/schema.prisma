@@ -419,6 +419,8 @@ model User {
   phone          String?
   avatarUrl      String?
   title          String?
+  locale         String     @default("pt-BR")
+  timezone       String     @default("America/Sao_Paulo")
   /// Authentication role for homologation RBAC foundation (distinct from CRM Role relation).
   authRole       AuthRole   @default(CONSULTANT)
   passwordHash   String?

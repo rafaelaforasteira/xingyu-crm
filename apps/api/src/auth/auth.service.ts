@@ -21,6 +21,7 @@ import {
 } from "./cookie.config";
 import type { AccessTokenPayload, PublicUser } from "./types";
 import type { LoginDto } from "./dto/login.dto";
+import { accessManifest } from "./access-policy";
 
 const INVALID_CREDENTIALS = "E-mail ou senha inválidos.";
 
@@ -51,13 +52,26 @@ export class AuthService {
     email: string;
     authRole: AuthRole;
     status: UserStatus;
+    phone?: string | null;
+    avatarUrl?: string | null;
+    title?: string | null;
+    locale?: string;
+    timezone?: string;
   }): PublicUser {
+    const access = accessManifest(user.authRole);
     return {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.authRole,
       status: user.status,
+      phone: user.phone ?? null,
+      avatarUrl: user.avatarUrl ?? null,
+      title: user.title ?? null,
+      locale: user.locale ?? "pt-BR",
+      timezone: user.timezone ?? "America/Sao_Paulo",
+      permissions: access.permissions,
+      scopes: access.scopes,
     };
   }
 
@@ -158,6 +172,11 @@ export class AuthService {
         email: true,
         authRole: true,
         status: true,
+        phone: true,
+        avatarUrl: true,
+        title: true,
+        locale: true,
+        timezone: true,
         passwordHash: true,
       },
     });
@@ -351,6 +370,11 @@ export class AuthService {
         email: true,
         authRole: true,
         status: true,
+        phone: true,
+        avatarUrl: true,
+        title: true,
+        locale: true,
+        timezone: true,
       },
     });
     if (!user || user.status !== UserStatus.ACTIVE) {

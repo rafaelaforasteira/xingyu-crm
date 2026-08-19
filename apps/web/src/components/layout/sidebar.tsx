@@ -15,6 +15,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { useUiStore } from "@/stores/ui";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AUTH_ROLE_LABEL } from "@/lib/auth-types";
+import { can, canOpenPath } from "@/lib/access-policy";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { Popover } from "@/components/ui/popover";
@@ -223,10 +224,11 @@ export function Sidebar() {
     queryFn: () => dashboardApi.metrics({ period: "30d" }),
   staleTime: 30_000,
   retry: false,
+  enabled: can(user, "dashboard.view"),
   });
   const accountUser = useQuery({
     queryKey: [...queryKeys.settings, "sidebar-account", user?.id],
-    queryFn: async () => (await settingsApi.users()).find((candidate) => candidate.id === user?.id) ?? null,
+    queryFn: () => settingsApi.profile(),
     enabled: Boolean(user),
     staleTime: 5 * 60_000,
     retry: false,
@@ -322,7 +324,7 @@ export function Sidebar() {
       </div>
 
       <nav data-testid="sidebar-navigation" className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-4">
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => canOpenPath(user, item.href)) })).filter((group) => group.items.length).map((group) => (
           <div key={group.id} className="space-y-1.5">
             {!collapsed ? (
               <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
@@ -370,6 +372,8 @@ export function Sidebar() {
         ))}
       </nav>
 
+      <div className="shrink-0 px-2 pb-2"><SidebarNavLink href="/settings?section=profile" label="Configurações" icon={Settings} collapsed={collapsed} active={pathname.startsWith("/settings")} onNavigate={handleNavigate} onPrefetch={handlePrefetch} /></div>
+
       <div data-testid="sidebar-user-footer" className="shrink-0 border-t border-sidebar-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <Popover open={accountMenuOpen} onOpenChange={setAccountMenuOpen} side="top" align="start" contentWidth={224} aria-label="Menu da conta" className="w-full" contentClassName="rounded-xl border-sidebar-border bg-[#1a1528] text-sidebar-foreground" trigger={
           <button type="button" aria-label="Abrir menu da conta" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((value) => !value)} className={cn("flex w-full items-center gap-2.5 rounded-xl bg-white/5 p-2 text-left transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", collapsed && "justify-center bg-transparent p-0")}>
@@ -380,7 +384,7 @@ export function Sidebar() {
           <div role="menu" className="p-1.5">
             <div className="px-2.5 py-2"><p className="truncate text-sm font-medium text-white" title={user?.name}>{user?.name ?? "Usuário"}</p>{user?.email ? <p className="truncate text-xs text-sidebar-muted" title={user.email}>{user.email}</p> : null}<p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-sidebar-muted">Equipe</p><p className="truncate text-sm text-sidebar-foreground" title={teamName}>{teamName}</p></div>
             <div className="my-1 border-t border-sidebar-border" />
-            <Link role="menuitem" href="/settings/general" onClick={() => { setAccountMenuOpen(false); handleNavigate("/settings/general"); }} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-white/5 hover:text-white"><UserRound className="h-4 w-4" />Meu perfil</Link>
+            <Link role="menuitem" href="/settings?section=profile" onClick={() => { setAccountMenuOpen(false); handleNavigate("/settings?section=profile"); }} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-white/5 hover:text-white"><UserRound className="h-4 w-4" />Meu perfil</Link>
             <Link role="menuitem" href="/settings" onClick={() => { setAccountMenuOpen(false); handleNavigate("/settings"); }} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-white/5 hover:text-white"><Settings className="h-4 w-4" />Configurações</Link>
             <div className="my-1 border-t border-sidebar-border" />
             <button role="menuitem" type="button" disabled={loggingOut} onClick={async () => { setLoggingOut(true); try { await logout(); } finally { setLoggingOut(false); } }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-white/5 hover:text-white disabled:opacity-60"><LogOut className="h-4 w-4" />{loggingOut ? "Saindo…" : "Sair"}</button>

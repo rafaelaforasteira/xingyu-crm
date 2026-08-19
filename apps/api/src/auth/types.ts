@@ -23,4 +23,11 @@ export type PublicUser = {
   email: string;
   role: AuthRole;
   status: UserStatus;
+  phone: string | null;
+  avatarUrl: string | null;
+  title: string | null;
+  locale: string;
+  timezone: string;
+  permissions: string[];
+  scopes: Partial<Record<"deals" | "orders", "SELF" | "TEAM" | "ALL">>;
 };

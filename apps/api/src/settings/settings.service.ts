@@ -16,11 +16,30 @@ import {
   UpdateCustomFieldDto,
   UpdateUserDto,
   QuerySettingsDto,
+  UpdateProfileDto,
+  UpdateOrganizationDto,
 } from "./dto/settings.dto";
 
 @Injectable()
 export class SettingsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async profile(organizationId: string, userId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, organizationId, ...notDeleted }, select: { id:true, name:true, email:true, phone:true, avatarUrl:true, title:true, authRole:true, status:true, locale:true, timezone:true, team:{select:{id:true,name:true}} } });
+    if (!user) throw new NotFoundException("Usuário não encontrado");
+    return user;
+  }
+
+  async updateProfile(organizationId: string, userId: string, dto: UpdateProfileDto) {
+    await this.profile(organizationId, userId);
+    return this.prisma.user.update({ where: { id: userId }, data: dto, select: { id:true, name:true, email:true, phone:true, avatarUrl:true, title:true, authRole:true, status:true, locale:true, timezone:true, team:{select:{id:true,name:true}} } });
+  }
+
+  async updateOrganization(organizationId: string, dto: UpdateOrganizationDto) {
+    const organization = await this.prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null } });
+    if (!organization) throw new NotFoundException("Organização não encontrada");
+    return this.prisma.organization.update({ where: { id: organizationId }, data: dto });
+  }
 
   async overview(organizationId: string) {
     const [organization, users, teams, tags, pipelines] = await Promise.all([

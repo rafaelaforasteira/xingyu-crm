@@ -10,6 +10,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuthService } from "../auth/auth.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { InviteUserDto, QueryUsersDto, UpdateManagedUserDto } from "./dto/user.dto";
+import { AuthRole } from "@xingyu/database";
 
 @Injectable()
 export class UsersService {
@@ -190,6 +191,9 @@ export class UsersService {
   }
 
   async update(organizationId: string, userId: string, dto: UpdateManagedUserDto) {
+    const current = await this.prisma.user.findFirst({ where: { id: userId, organizationId, deletedAt: null }, select: { authRole: true } });
+    if (!current) throw new NotFoundException("Usuário não encontrado.");
+    if (current.authRole === AuthRole.ADMIN && dto.role && dto.role !== AuthRole.ADMIN && await this.prisma.user.count({ where: { organizationId, authRole: AuthRole.ADMIN, status: "ACTIVE", deletedAt: null } }) <= 1) throw new BadRequestException("A organização deve manter ao menos um administrador ativo.");
     if (
       dto.teamId &&
       !(await this.prisma.team.count({
@@ -213,6 +217,7 @@ export class UsersService {
       where: { id: userId, organizationId, deletedAt: null },
     });
     if (!user) throw new NotFoundException("Usuário não encontrado.");
+    if (!active && user.authRole === AuthRole.ADMIN && await this.prisma.user.count({ where: { organizationId, authRole: AuthRole.ADMIN, status: "ACTIVE", deletedAt: null } }) <= 1) throw new BadRequestException("O último administrador ativo não pode ser desativado.");
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: userId },

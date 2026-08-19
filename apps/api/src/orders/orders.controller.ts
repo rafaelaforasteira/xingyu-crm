@@ -34,6 +34,8 @@ import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
 import { PipelineAccessService } from "../pipelines/pipeline-access.service";
 import { uploadMaxBytes } from "../common/upload/upload.util";
+import { can, getScope } from "../auth/access-policy";
+import { Permissions } from "../auth/decorators/permissions.decorator";
 
 @ApiTags("orders")
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
@@ -85,7 +87,7 @@ export class OrdersController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryOrdersDto,
   ) {
-    return this.ordersService.findAll(orgId, query, await this.access.accessiblePipelineIds(user));
+    return this.ordersService.findAll(orgId, query, await this.access.accessiblePipelineIds(user), getScope(user.role, "orders") === "SELF" ? user.id : undefined);
   }
 
   @Get(":id")
@@ -120,6 +122,7 @@ export class OrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     await this.access.assertOrderAccess(user, id);
+    if (dto.financialStatus !== undefined && !can(user.role, "finance.sensitive")) throw new ForbiddenException("Alterações financeiras são restritas a administradores.");
     if (dto.dealId) await this.access.assertDealAccess(user, dto.dealId);
     return this.ordersService.update(orgId, id, dto);
   }
@@ -149,6 +152,7 @@ export class OrdersController {
   }
 
   @Post(":id/payments")
+  @Permissions("finance.sensitive")
   @ApiOperation({ summary: "Add payment" })
   async addPayment(
     @OrganizationId() orgId: string,
@@ -161,6 +165,7 @@ export class OrdersController {
   }
 
   @Post(":orderId/payments/:paymentId/receipt")
+  @Permissions("finance.sensitive")
   @ApiOperation({ summary: "Upload a payment receipt when none was provided automatically" })
   @UseInterceptors(
     FileInterceptor("file", {

@@ -12,6 +12,7 @@ import { validateEnvironment } from "./common/env.validation";
 import { AuthModule } from "./auth/auth.module";
 import { AuthGuard } from "./auth/guards/auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
+import { PermissionsGuard } from "./auth/guards/permissions.guard";
 import { HealthModule } from "./health/health.module";
 import { ContactsModule } from "./contacts/contacts.module";
 import { CompaniesModule } from "./companies/companies.module";
@@ -36,6 +37,8 @@ import { IntegrationsModule } from "./integrations/integrations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { LeadFilesModule } from "./lead-files/lead-files.module";
 import { UsersModule } from "./users/users.module";
+import { FinanceModule } from "./finance/finance.module";
+import { ClientsModule } from "./clients/clients.module";
 import path from "node:path";
 
 const rootEnvFile = path.resolve(__dirname, "../../../.env");
@@ -82,11 +85,14 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
     IntegrationsModule,
     LeadFilesModule,
     UsersModule,
+    FinanceModule,
+    ClientsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule implements NestModule {

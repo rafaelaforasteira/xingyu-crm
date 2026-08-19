@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { BETA_SINGLE_PIPELINE_NAV_GROUPS, NAV_GROUPS } from "./nav";
-import { BETA_SINGLE_PIPELINE_MODE } from "./beta-config";
 
 describe("beta navigation", () => {
   it("exposes the expandable Pipelines module", () => {
@@ -16,9 +15,26 @@ describe("beta navigation", () => {
     expect(items.some((item) => item.href === "/dashboard")).toBe(true);
   });
 
-  it("uses beta nav when beta mode is enabled", () => {
-    if (!BETA_SINGLE_PIPELINE_MODE) return;
-    const hrefs = NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href);
-    expect(hrefs).toEqual(["/dashboard", "/tasks", "/pipelines", "/orders"]);
+  it("uses the sidebar grouped by product area", () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual([
+      "Visão geral",
+      "Relacionamento",
+      "Jornadas",
+      "Gestão",
+    ]);
+    expect(NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href)).toEqual([
+      "/dashboard",
+      "/tasks",
+      "/clients",
+      "/pipelines",
+      "/orders",
+      "/finance",
+    ]);
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/orders", label: "Pedidos" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/finance", label: "Financeiro" }),
+    );
   });
 });

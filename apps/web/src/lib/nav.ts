@@ -14,6 +14,8 @@ import {
   HeartHandshake,
   Contact,
   Plug,
+  Landmark,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,13 +50,18 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: "relationships",
+    label: "Relacionamento",
+    items: [{ href: "/clients", label: "Clientes", icon: UsersRound }],
+  },
+  {
     id: "journeys",
     label: "Jornadas",
     items: [
       { href: "/pipelines", label: "Pipelines", icon: Kanban, expandablePipelines: true },
       { href: "/repurchase", label: "Recompra", icon: RefreshCw },
       { href: "/reactivation", label: "Reativação", icon: Sparkles },
-      { href: "/orders", label: "E-commerce", icon: Package },
+      { href: "/orders", label: "Pedidos", icon: Package },
       { href: "/after-sales", label: "Pós-venda", icon: HeartHandshake },
     ],
   },
@@ -111,8 +118,41 @@ export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Grouped sidebar — only real routes. */
-export const NAV_GROUPS: NavGroup[] = BETA_SINGLE_PIPELINE_NAV_GROUPS;
+/** Compact sidebar grouped by product area; secondary modules remain routable but hidden. */
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "overview",
+    label: "Visão geral",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/tasks", label: "Tarefas", icon: CheckSquare },
+    ],
+  },
+  {
+    id: "relationships",
+    label: "Relacionamento",
+    items: [{ href: "/clients", label: "Clientes", icon: UsersRound }],
+  },
+  {
+    id: "journeys",
+    label: "Jornadas",
+    items: [
+      {
+        href: "/pipelines",
+        label: "Pipelines",
+        icon: Kanban,
+        exact: true,
+        expandablePipelines: true,
+      },
+      { href: "/orders", label: "Pedidos", icon: Package },
+    ],
+  },
+  {
+    id: "management",
+    label: "Gestão",
+    items: [{ href: "/finance", label: "Financeiro", icon: Landmark }],
+  },
+];
 
 /** Flat list kept for command palette / legacy helpers. */
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items).filter(

@@ -31,6 +31,12 @@ export interface ManagedUser extends Omit<UserRef, "team"> {
   directPipelineIds: string[];
   channelOwnerships?: Array<{ id: string; name: string; type: string; status: string }>;
 }
+export interface SettingsProfile {
+  id: string; name: string; email: string; phone?: string | null; avatarUrl?: string | null;
+  title?: string | null; authRole: "ADMIN" | "MANAGER" | "CONSULTANT"; status: string;
+  locale: "pt-BR" | "en" | "zh-CN" | "zh-HK"; timezone: string;
+  team?: { id: string; name: string } | null;
+}
 
 export interface Tag {
   id: string;
@@ -111,6 +117,50 @@ export interface Company {
   contactsCount?: number;
   dealsCount?: number;
   createdAt: string;
+}
+
+export type CustomerProfileStatus = "LEAD" | "CUSTOMER" | "RECURRING";
+export interface CustomerProfileSummary {
+  profileId: string;
+  profileType: "PERSON" | "COMPANY";
+  entityId: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  document?: string | null;
+  owner?: UserRef | null;
+  source?: string | null;
+  tags: Tag[];
+  location: { country?: string | null; state?: string | null; city?: string | null; address?: string | null };
+  status: CustomerProfileStatus;
+  orderCount: number;
+  lifetimeValue: number;
+  averageTicket: number;
+  firstPurchaseAt?: string | null;
+  lastPurchaseAt?: string | null;
+  recency: string;
+  units: number;
+  openDeals: number;
+  createdAt: string;
+}
+export interface CustomerProfile extends CustomerProfileSummary {
+  contacts: Contact[];
+  orders: Order[];
+  deals: Array<Deal & { pipeline?: Pipeline | null; stage?: PipelineStage | null }>;
+  tasks: Task[];
+  notes: Note[];
+  activities: Activity[];
+}
+export interface CustomersDashboard {
+  total: number; leads: number; customers: number; recurring: number;
+  lifetimeValue: number; averageTicket: number;
+  profile: Array<{ label: string; value: number; filter: string }>;
+  location: Array<{ label: string; value: number; filter: string }>;
+  states: Array<{ label: string; value: number }>;
+  countries: Array<{ label: string; value: number }>;
+  recency: Array<{ label: string; value: number }>;
+  owners: Array<{ label: string; value: number }>;
+  quality: { withoutPhone: number; withoutEmail: number; withoutLocation: number; withoutOwner: number };
 }
 
 export interface PipelineNavigationItem {
@@ -938,6 +988,76 @@ export interface OrderEvent {
   description?: string | null;
   occurredAt: string;
   metadata?: Record<string, unknown> | null;
+}
+
+export interface FinanceRevenueRow {
+  id: string;
+  number: string;
+  orderedAt: string;
+  owner?: UserRef | null;
+  grossValue: number;
+  discount: number;
+  coupon?: string | null;
+  shippingCost: number;
+  taxes: number;
+  finalValue: number;
+  financialStatus?: string | null;
+  orderStatus: string;
+  paymentMethod?: string | null;
+  paidAmount: number;
+  openAmount: number;
+  dueAt?: string | null;
+  paidAt?: string | null;
+  isOverdue: boolean;
+  hasReceipt: boolean;
+}
+
+export interface FinanceWorkspace {
+  generatedAt: string;
+  period: { start: string; end: string; label: string };
+  metrics: {
+    grossRevenue: number;
+    discounts: number;
+    shipping: number;
+    taxes: number;
+    netSales: number;
+    received: number;
+    receivable: number;
+    overdue: number;
+    refunded: number;
+    cancelled: number;
+    orderCount: number;
+  };
+  revenues: FinanceRevenueRow[];
+  receivables: FinanceRevenueRow[];
+  reconciliation: Array<{
+    orderId: string;
+    orderNumber: string;
+    expected: number;
+    received: number;
+    difference: number;
+    status: "MATCHED" | "PENDING" | "DIVERGENT";
+  }>;
+  commissions: Array<{
+    ownerId?: string | null;
+    ownerName: string;
+    avatarUrl?: string | null;
+    orders: number;
+    eligibleRevenue: number;
+    rate?: number | null;
+    commission?: number | null;
+    status: "RULE_REQUIRED" | "CALCULATED";
+  }>;
+  paymentMethods: Array<{ method: string; amount: number; count: number }>;
+  revenueTimeline: Array<{ label: string; gross: number; net: number; received: number }>;
+  closing: {
+    ready: boolean;
+    divergences: number;
+    pendingReconciliation: number;
+    missingReceipts: number;
+    approvedPayments: number;
+    receipts: number;
+  };
 }
 
 export interface Activity {

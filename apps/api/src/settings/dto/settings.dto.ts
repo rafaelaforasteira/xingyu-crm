@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
-import { IsBoolean, IsObject, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength } from "class-validator";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export class CreateTeamDto {
@@ -83,3 +83,17 @@ export class UpdateUserDto {
 }
 
 export class QuerySettingsDto extends PaginationQueryDto {}
+
+export class UpdateProfileDto {
+  @IsOptional() @IsString() @MaxLength(160) name?: string;
+  @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @IsOptional() @IsString() @MaxLength(120) title?: string;
+  @IsOptional() @IsIn(["pt-BR", "en", "zh-CN", "zh-HK"]) locale?: string;
+  @IsOptional() @IsIn(["America/Sao_Paulo", "America/Manaus", "UTC", "Asia/Shanghai", "Asia/Hong_Kong"]) timezone?: string;
+}
+
+export class UpdateOrganizationDto {
+  @IsOptional() @IsString() @MaxLength(160) name?: string;
+  @IsOptional() @IsIn(["America/Sao_Paulo", "America/Manaus", "UTC", "Asia/Shanghai", "Asia/Hong_Kong"]) timezone?: string;
+  @IsOptional() @IsIn(["BRL", "USD", "CNY"]) currency?: string;
+}

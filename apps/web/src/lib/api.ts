@@ -57,6 +57,11 @@ import type {
   Team,
   UserRef,
   ManagedUser,
+  FinanceWorkspace,
+  CustomerProfile,
+  CustomerProfileSummary,
+  CustomersDashboard,
+  SettingsProfile,
 } from "./types";
 import { normalizeMessages, unwrapMessageCursorPage } from "./inbox-utils";
 import { normalizeReactivationResponse } from "./reactivation-utils";
@@ -344,6 +349,12 @@ export const contactsApi = {
       tagIds,
       mode,
     }),
+};
+
+export const clientsApi = {
+  list: (query?: Record<string, QueryValue>) => api.get<PaginatedResponse<CustomerProfileSummary>>("/clients", query),
+  dashboard: () => api.get<CustomersDashboard>("/clients/dashboard"),
+  get: (profileId: string) => api.get<CustomerProfile>(`/clients/${encodeURIComponent(profileId)}`),
 };
 
 export const companiesApi = {
@@ -656,6 +667,11 @@ export const ordersApi = {
   timeline: (id: string) => api.get<Activity[]>(`/orders/${id}/timeline`),
 };
 
+export const financeApi = {
+  workspace: (query?: Record<string, QueryValue>) =>
+    api.get<FinanceWorkspace>("/finance/workspace", query),
+};
+
 export const repurchaseApi = {
   list: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<RepurchaseLead>>("/repurchase", query),
@@ -743,6 +759,9 @@ export const notificationsApi = {
 };
 
 export const settingsApi = {
+  profile: () => api.get<SettingsProfile>("/settings/profile"),
+  updateProfile: (data: Partial<Pick<SettingsProfile, "name"|"phone"|"title"|"locale"|"timezone">>) => api.patch<SettingsProfile>("/settings/profile", data),
+  updateOrganization: (data: { name?: string; timezone?: string; currency?: string }) => api.patch("/settings/organization", data),
   overview: () => api.get<SettingsOverview>("/settings"),
   teams: async () => {
     const response = await api.get<Team[] | PaginatedResponse<Team>>("/settings/teams", {
