@@ -62,15 +62,21 @@ export class UsersService {
             select: { id: true, name: true, type: true, status: true },
           },
         },
+        omit: { passwordHash: true },
       }),
       this.prisma.user.count({ where }),
     ]);
     return paginate(
-      data.map(({ passwordHash: _passwordHash, sessions, pipelineAccesses, ...user }) => ({
-        ...user,
-        activeSessions: sessions.length,
-        directPipelineIds: pipelineAccesses.map((access) => access.pipelineId),
-      })),
+      data.map((row) => {
+        const { sessions, pipelineAccesses, ...user } = row;
+        const safeUser = { ...user } as typeof user & { passwordHash?: string };
+        delete safeUser.passwordHash;
+        return {
+          ...safeUser,
+          activeSessions: sessions.length,
+          directPipelineIds: pipelineAccesses.map((access) => access.pipelineId),
+        };
+      }),
       total,
       page,
       pageSize,

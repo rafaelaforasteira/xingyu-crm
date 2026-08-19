@@ -114,11 +114,13 @@ export class DashboardController {
   }
 
   @Get("filters")
+  @ApiOperation({ summary: "Dashboard filter options" })
   filterOptions(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser) {
     return this.service.filterOptions(orgId, user, this.access.accessiblePipelineIds(user));
   }
 
   @Get("overview")
+  @ApiOperation({ summary: "Dashboard overview" })
   async overview(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,

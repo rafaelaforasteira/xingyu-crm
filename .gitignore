@@ -30,6 +30,8 @@ coverage
 playwright-report
 test-results
 blob-report
+load-results
+*.har
 apps/web/e2e/.auth/
 
 # Database / local data

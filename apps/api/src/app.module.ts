@@ -5,7 +5,8 @@ import {
 } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { ThrottlerModule } from "@nestjs/throttler";
+import { UserThrottlerGuard } from "./common/guards/user-throttler.guard";
 import { PrismaModule } from "./prisma/prisma.module";
 import { DemoUserMiddleware } from "./common/middleware/demo-user.middleware";
 import { validateEnvironment } from "./common/env.validation";
@@ -55,7 +56,7 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
       useFactory: (config: ConfigService) => [
         {
           ttl: Number(config.get("RATE_LIMIT_TTL") ?? 60) * 1000,
-          limit: Number(config.get("RATE_LIMIT_MAX") ?? 200),
+          limit: Number(config.get("RATE_LIMIT_MAX") ?? 600),
         },
       ],
     }),
@@ -89,7 +90,7 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
     ClientsModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },

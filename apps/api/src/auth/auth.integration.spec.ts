@@ -244,4 +244,38 @@ describe("Auth HTTP flows (integration)", () => {
 
     expect(missing.body.message).toEqual(wrong.body.message);
   });
+
+  it("rejects INACTIVE users with the same login error", async () => {
+    const passwordHash = await auth.hashPassword("ChangeMeNow123!");
+    prisma.user.findFirst.mockResolvedValue({
+      id: "u-inactive",
+      name: "Inativa",
+      email: "inactive@xingyu.local",
+      authRole: AuthRole.CONSULTANT,
+      status: UserStatus.INACTIVE,
+      passwordHash,
+      organizationId: "org-xingyu",
+      teamId: null,
+      team: null,
+      deletedAt: null,
+    });
+    const res = await request(app.getHttpServer())
+      .post("/api/auth/login")
+      .send({ email: "inactive@xingyu.local", password: "ChangeMeNow123!" })
+      .expect(401);
+    expect(res.body.message).toBeDefined();
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty login body and extra mass-assignment fields", async () => {
+    await request(app.getHttpServer()).post("/api/auth/login").send({}).expect(400);
+    await request(app.getHttpServer())
+      .post("/api/auth/login")
+      .send({
+        email: "admin@xingyu.local",
+        password: "ChangeMeNow123!",
+        organizationId: "org-b",
+      })
+      .expect(400);
+  });
 });

@@ -11,6 +11,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage --passWithNoTests",
     "clean": "rimraf dist"
   },
   "dependencies": {
@@ -63,9 +64,12 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!**/*.spec.ts",
+      "!**/main.ts"
     ],
     "coverageDirectory": "../coverage",
+    "coverageReporters": ["text", "lcov"],
     "testEnvironment": "node"
   }
 }

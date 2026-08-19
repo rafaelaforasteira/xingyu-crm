@@ -68,5 +68,11 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: API coverage
+        run: pnpm test:coverage
+
+      - name: Load target guards
+        run: pnpm test:load:helpers
+
       - name: Build
         run: pnpm build

@@ -73,14 +73,19 @@ describe("AuthService", () => {
       authRole: AuthRole.ADMIN,
       status: UserStatus.ACTIVE,
     });
-    expect(publicUser).toEqual({
-      id: "u1",
-      name: "Admin",
-      email: "admin@xingyu.local",
-      role: AuthRole.ADMIN,
-      status: UserStatus.ACTIVE,
-    });
+    expect(publicUser).toEqual(
+      expect.objectContaining({
+        id: "u1",
+        name: "Admin",
+        email: "admin@xingyu.local",
+        role: AuthRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        permissions: expect.arrayContaining(["users.manage", "dashboard.view"]),
+        scopes: { deals: "ALL", orders: "ALL" },
+      }),
+    );
     expect(publicUser).not.toHaveProperty("passwordHash");
+    expect(JSON.stringify(publicUser)).not.toContain("passwordHash");
   });
 
   it("login succeeds and creates session", async () => {

@@ -82,8 +82,11 @@ export class PipelineAccessService {
         throw new ForbiddenException("Sem acesso a esta conversa.");
       return;
     }
-    if (conversation.deal?.ownerId && conversation.deal.ownerId !== user.id)
-      throw new ForbiddenException("Sem acesso a esta conversa.");
+    if (conversation.deal) {
+      await this.assertAccess(user, conversation.deal.pipelineId);
+      if (user.role === "CONSULTANT" && conversation.deal.ownerId && conversation.deal.ownerId !== user.id)
+        throw new ForbiddenException("Sem acesso a esta conversa.");
+    }
   }
 
   async conversationWhere(user: AuthenticatedUser) {
@@ -104,8 +107,20 @@ export class PipelineAccessService {
             },
           },
         },
-        { channel: { accessMode: "ORGANIZATION" as const }, deal: { ownerId: user.id } },
-        { channelId: null, deal: { ownerId: user.id } },
+        {
+          channel: { accessMode: "ORGANIZATION" as const },
+          deal: {
+            ...(pipelineIds ? { pipelineId: { in: pipelineIds } } : {}),
+            ...(user.role === "CONSULTANT" ? { ownerId: user.id } : {}),
+          },
+        },
+        {
+          channelId: null,
+          deal: {
+            ...(pipelineIds ? { pipelineId: { in: pipelineIds } } : {}),
+            ...(user.role === "CONSULTANT" ? { ownerId: user.id } : {}),
+          },
+        },
       ],
     };
   }

@@ -21,12 +21,14 @@ export class NotesController {
   }
 
   @Get(":id")
+  @ApiOperation({ summary: "Get note by id" })
   async findOne(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
     await this.access.assertNoteAccess(user, id);
     return this.notesService.findOne(orgId, id);
   }
 
   @Post()
+  @ApiOperation({ summary: "Create note" })
   async create(
     @OrganizationId() orgId: string,
     @DemoUser() user: DemoUserType,
@@ -38,6 +40,7 @@ export class NotesController {
   }
 
   @Patch(":id")
+  @ApiOperation({ summary: "Update note" })
   async update(
     @OrganizationId() orgId: string,
     @Param("id") id: string,
@@ -49,6 +52,7 @@ export class NotesController {
   }
 
   @Delete(":id")
+  @ApiOperation({ summary: "Soft-delete note" })
   async remove(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
     await this.access.assertNoteAccess(user, id);
     return this.notesService.remove(orgId, id);

@@ -45,14 +45,6 @@ export class DemoUserMiddleware implements NestMiddleware {
     }
 
     if (!isDemoModeEnabled()) {
-      const orgFromHeader = req.headers[ORG_HEADER] as string | undefined;
-      const orgFromQuery =
-        typeof req.query.organizationId === "string"
-          ? req.query.organizationId
-          : undefined;
-      if (orgFromHeader || orgFromQuery) {
-        req.organizationId = orgFromHeader ?? orgFromQuery;
-      }
       next();
       return;
     }

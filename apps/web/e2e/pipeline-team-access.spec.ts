@@ -49,7 +49,7 @@ test.describe.serial("pipeline team access isolated security matrix", () => {
     ] });
     await prisma.conversation.create({ data: { id: ids.conversationB, organizationId: ids.org, subject: "Conversa restrita" } });
     await prisma.deal.createMany({ data: [
-      { id: ids.dealA, organizationId: ids.org, pipelineId: ids.pipelineA, stageId: ids.stageA, name: "Lead permitido" },
+      { id: ids.dealA, organizationId: ids.org, pipelineId: ids.pipelineA, stageId: ids.stageA, name: "Lead permitido", ownerId: ids.user },
       { id: ids.dealB, organizationId: ids.org, pipelineId: ids.pipelineB, stageId: ids.stageB, conversationId: ids.conversationB, name: "Lead restrito" },
     ] });
     await prisma.message.create({ data: { id: ids.messageB, conversationId: ids.conversationB, direction: "INBOUND", body: "segredo" } });
@@ -112,13 +112,13 @@ test.describe.serial("pipeline team access isolated security matrix", () => {
     expect((await adminApi.get(`/api/deals/${ids.dealB}`)).ok()).toBeTruthy();
     const grantBoth = await adminApi.put(`/api/pipelines/access/${ids.pipelineB}`, { data: { accessMode: "RESTRICTED", teamIds: [ids.team], userIds: [ids.user, ids.outsider] } });
     expect(grantBoth.ok(), await grantBoth.text()).toBeTruthy();
-    expect((await userApi.get(`/api/deals/${ids.dealB}`)).ok()).toBeTruthy();
+    expect((await userApi.get(`/api/conversations/${ids.conversationB}`)).ok()).toBeTruthy();
 
     await adminApi.put(`/api/pipelines/access/${ids.pipelineB}`, { data: { accessMode: "RESTRICTED", teamIds: [ids.team], userIds: [ids.outsider] } });
-    expect((await userApi.get(`/api/tasks/${ids.taskB}`)).ok()).toBeTruthy();
+    expect((await userApi.get(`/api/conversations/${ids.conversationB}`)).ok()).toBeTruthy();
 
     await adminApi.put(`/api/pipelines/access/${ids.pipelineB}`, { data: { accessMode: "RESTRICTED", teamIds: [], userIds: [ids.outsider] } });
-    expect((await userApi.get(`/api/deals/${ids.dealB}`)).status()).toBe(403);
+    expect((await userApi.get(`/api/conversations/${ids.conversationB}`)).status()).toBe(403);
 
     await adminApi.put(`/api/pipelines/access/${ids.pipelineB}`, { data: { accessMode: "RESTRICTED", teamIds: [], userIds: [ids.user, ids.outsider] } });
     expect((await userApi.get(`/api/conversations/${ids.conversationB}/messages`)).ok()).toBeTruthy();

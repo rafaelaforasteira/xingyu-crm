@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
-import { ApiHeader, ApiTags } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiHeader, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AuthRole } from "@xingyu/database";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -10,7 +10,8 @@ import { QueryGoalsDto, UpsertGoalDto } from "./dto/goal.dto";
 import { GoalsService } from "./goals.service";
 
 @ApiTags("dashboard-goals")
-@ApiHeader({ name: "X-Demo-User-Id", required: false })
+@ApiCookieAuth("xingyu_access_token")
+@ApiHeader({ name: "X-Demo-User-Id", required: false, description: "Apenas DEMO_MODE local; não autentica." })
 @Controller("dashboard/goals")
 export class GoalsController {
   constructor(
@@ -18,7 +19,9 @@ export class GoalsController {
     private readonly access: PipelineAccessService,
   ) {}
 
-  @Get() list(
+  @Get()
+  @ApiOperation({ summary: "List dashboard goals" })
+  list(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryGoalsDto,
@@ -26,7 +29,9 @@ export class GoalsController {
     return this.goals.list(orgId, user, query);
   }
 
-  @Get("analytics") analytics(
+  @Get("analytics")
+  @ApiOperation({ summary: "Goal analytics" })
+  analytics(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: QueryGoalsDto,
@@ -36,6 +41,7 @@ export class GoalsController {
 
   @Post()
   @Roles(AuthRole.ADMIN, AuthRole.MANAGER)
+  @ApiOperation({ summary: "Create dashboard goal" })
   async create(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -46,6 +52,7 @@ export class GoalsController {
 
   @Patch(":id")
   @Roles(AuthRole.ADMIN, AuthRole.MANAGER)
+  @ApiOperation({ summary: "Update dashboard goal" })
   async update(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -57,6 +64,7 @@ export class GoalsController {
 
   @Delete(":id")
   @Roles(AuthRole.ADMIN, AuthRole.MANAGER)
+  @ApiOperation({ summary: "Archive dashboard goal" })
   archive(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,

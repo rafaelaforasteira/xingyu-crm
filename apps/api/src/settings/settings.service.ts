@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { AuthRole } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
@@ -19,6 +20,19 @@ import {
   UpdateProfileDto,
   UpdateOrganizationDto,
 } from "./dto/settings.dto";
+
+const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  avatarUrl: true,
+  title: true,
+  authRole: true,
+  status: true,
+  teamId: true,
+  team: { select: { id: true, name: true } },
+} as const;
 
 @Injectable()
 export class SettingsService {
@@ -66,7 +80,7 @@ export class SettingsService {
         where,
         skip,
         take,
-        include: { team: true },
+        select: publicUserSelect,
         orderBy: { name: "asc" },
       }),
       this.prisma.user.count({ where }),
@@ -77,15 +91,42 @@ export class SettingsService {
   async updateUser(organizationId: string, id: string, dto: UpdateUserDto) {
     const user = await this.prisma.user.findFirst({
       where: { id, organizationId, ...notDeleted },
+      select: { id: true, authRole: true, status: true },
     });
     if (!user) throw new NotFoundException(`User ${id} not found`);
-    const { active, ...rest } = dto;
+    const nextRole =
+      dto.role && Object.values(AuthRole).includes(dto.role as AuthRole)
+        ? (dto.role as AuthRole)
+        : undefined;
+    if (
+      user.authRole === AuthRole.ADMIN &&
+      ((nextRole && nextRole !== AuthRole.ADMIN) || dto.active === false)
+    ) {
+      const admins = await this.prisma.user.count({
+        where: {
+          organizationId,
+          authRole: AuthRole.ADMIN,
+          status: "ACTIVE",
+          deletedAt: null,
+        },
+      });
+      if (admins <= 1) {
+        throw new BadRequestException(
+          "A organização deve manter ao menos um administrador ativo.",
+        );
+      }
+    }
     return this.prisma.user.update({
       where: { id },
       data: {
-        ...rest,
-        ...(active !== undefined ? { status: active ? "ACTIVE" : "INACTIVE" } : {}),
-      } as never,
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.teamId !== undefined ? { teamId: dto.teamId || null } : {}),
+        ...(nextRole ? { authRole: nextRole } : {}),
+        ...(dto.active !== undefined
+          ? { status: dto.active ? "ACTIVE" : "INACTIVE" }
+          : {}),
+      },
+      select: publicUserSelect,
     });
   }
 

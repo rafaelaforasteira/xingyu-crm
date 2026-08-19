@@ -8,7 +8,7 @@ import {
   HttpCode,
   HttpStatus,
 } from "@nestjs/common";
-import { ApiTags, ApiOperation } from "@nestjs/swagger";
+import { ApiCookieAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
@@ -18,6 +18,7 @@ import { CurrentUser } from "./decorators/current-user.decorator";
 import type { AuthenticatedUser } from "./types";
 
 @ApiTags("auth")
+@ApiCookieAuth("xingyu_access_token")
 @Controller("auth")
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -27,6 +28,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: "Autenticar com e-mail e senha" })
+  @ApiResponse({ status: 200, description: "Sessão criada; cookies HttpOnly definidos." })
+  @ApiResponse({ status: 400, description: "Payload inválido." })
+  @ApiResponse({ status: 401, description: "E-mail ou senha inválidos." })
   login(
     @Body() dto: LoginDto,
     @Req() req: Request,
@@ -60,6 +64,8 @@ export class AuthController {
 
   @Get("me")
   @ApiOperation({ summary: "Usuário autenticado atual" })
+  @ApiResponse({ status: 200, description: "Perfil público, sem segredos de autenticação." })
+  @ApiResponse({ status: 401, description: "Sessão não autenticada." })
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.auth.me(user.id);
   }
