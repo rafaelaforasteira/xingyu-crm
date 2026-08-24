@@ -18,6 +18,7 @@ export class InviteUserDto {
 export class UpdateManagedUserDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) name?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(40) phone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) title?: string;
   @ApiPropertyOptional({ enum: AuthRole }) @IsOptional() @IsEnum(AuthRole) role?: AuthRole;
   @ApiPropertyOptional() @IsOptional() @IsString() teamId?: string | null;
 }

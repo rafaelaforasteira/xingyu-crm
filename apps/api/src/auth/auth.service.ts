@@ -1,6 +1,7 @@
 import {
   Injectable,
   UnauthorizedException,
+  BadRequestException,
   Logger,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -19,11 +20,13 @@ import {
   refreshTokenExpiresIn,
   refreshTokenMaxAgeMs,
 } from "./cookie.config";
-import type { AccessTokenPayload, PublicUser } from "./types";
+import type { AccessTokenPayload, AuthenticatedUser, PublicUser } from "./types";
 import type { LoginDto } from "./dto/login.dto";
+import type { ChangePasswordDto } from "./dto/change-password.dto";
 import { accessManifest } from "./access-policy";
 
 const INVALID_CREDENTIALS = "E-mail ou senha inválidos.";
+const WRONG_CURRENT_PASSWORD = "Senha atual incorreta.";
 
 const ARGON2_OPTIONS = {
   type: argon2.argon2id as 0 | 1 | 2,
@@ -381,6 +384,52 @@ export class AuthService {
       throw new UnauthorizedException("Usuário indisponível.");
     }
     return this.toPublicUser(user);
+  }
+
+  async changePassword(user: AuthenticatedUser, dto: ChangePasswordDto) {
+    if (dto.newPassword !== dto.confirmPassword) {
+      throw new BadRequestException("A confirmação da nova senha não confere.");
+    }
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException("A nova senha deve ser diferente da atual.");
+    }
+
+    const record = await this.prisma.user.findFirst({
+      where: { id: user.id, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        passwordHash: true,
+      },
+    });
+
+    if (!record?.passwordHash || record.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException("Usuário indisponível.");
+    }
+
+    const valid = await this.verifyPassword(record.passwordHash, dto.currentPassword);
+    if (!valid) {
+      throw new UnauthorizedException(WRONG_CURRENT_PASSWORD);
+    }
+
+    const passwordHash = await this.hashPassword(dto.newPassword);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      }),
+      this.prisma.userSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+          ...(user.sessionId ? { id: { not: user.sessionId } } : {}),
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    this.logger.log(`Password changed userId=${user.id}`);
+    return { ok: true as const };
   }
 
   /** Exposes refresh TTL config for diagnostics without leaking secrets. */

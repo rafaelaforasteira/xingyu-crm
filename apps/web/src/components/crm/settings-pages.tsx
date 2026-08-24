@@ -97,9 +97,9 @@ export function SettingsGeneralPage() {
 
   React.useEffect(() => {
     if (data) {
-      setOrgName(data.organizationName);
-      setTimezone(data.timezone);
-      setCurrency(data.currency);
+      setOrgName(data.organization?.name || data.organizationName || "");
+      setTimezone(data.organization?.timezone || data.timezone || "");
+      setCurrency(data.organization?.currency || data.currency || "BRL");
     }
   }, [data]);
 

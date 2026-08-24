@@ -13,6 +13,7 @@ import { Throttle } from "@nestjs/throttler";
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { Public } from "./decorators/public.decorator";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import type { AuthenticatedUser } from "./types";
@@ -68,5 +69,19 @@ export class AuthController {
   @ApiResponse({ status: 401, description: "Sessão não autenticada." })
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.auth.me(user.id);
+  }
+
+  @Post("change-password")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: "Alterar senha do usuário autenticado" })
+  @ApiResponse({ status: 200, description: "Senha atualizada; outras sessões revogadas." })
+  @ApiResponse({ status: 400, description: "Payload inválido." })
+  @ApiResponse({ status: 401, description: "Senha atual incorreta ou sessão inválida." })
+  changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.auth.changePassword(user, dto);
   }
 }

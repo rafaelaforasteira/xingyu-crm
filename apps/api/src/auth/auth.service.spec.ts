@@ -1,4 +1,4 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { UnauthorizedException, BadRequestException } from "@nestjs/common";
 import { AuthRole, UserStatus } from "@xingyu/database";
 import { AuthService } from "./auth.service";
 
@@ -321,5 +321,106 @@ describe("AuthService", () => {
     const me = await service.me("u1");
     expect(me.role).toBe(AuthRole.MANAGER);
     expect(me).not.toHaveProperty("passwordHash");
+  });
+
+  it("changePassword rejects wrong current password", async () => {
+    const { service, prisma } = createService();
+    const hash = await service.hashPassword("right-password-12");
+    prisma.user.findFirst.mockResolvedValue({
+      id: "u1",
+      status: UserStatus.ACTIVE,
+      passwordHash: hash,
+    });
+    await expect(
+      service.changePassword(
+        {
+          id: "u1",
+          name: "A",
+          email: "a@x.local",
+          role: AuthRole.ADMIN,
+          status: UserStatus.ACTIVE,
+          organizationId: "o1",
+          teamId: null,
+          sessionId: "s1",
+        },
+        {
+          currentPassword: "wrong-password",
+          newPassword: "ChangeMeNow123!",
+          confirmPassword: "ChangeMeNow123!",
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("changePassword updates hash and revokes other sessions", async () => {
+    const { service, prisma } = createService();
+    const hash = await service.hashPassword("ChangeMeNow123!");
+    prisma.user.findFirst.mockResolvedValue({
+      id: "u1",
+      status: UserStatus.ACTIVE,
+      passwordHash: hash,
+    });
+    prisma.user.update.mockResolvedValue({ id: "u1" });
+    prisma.userSession.updateMany.mockResolvedValue({ count: 1 });
+    prisma.$transaction.mockImplementation(async (ops: unknown[]) => ops);
+
+    await expect(
+      service.changePassword(
+        {
+          id: "u1",
+          name: "A",
+          email: "a@x.local",
+          role: AuthRole.CONSULTANT,
+          status: UserStatus.ACTIVE,
+          organizationId: "o1",
+          teamId: null,
+          sessionId: "s-current",
+        },
+        {
+          currentPassword: "ChangeMeNow123!",
+          newPassword: "BrandNewPass123!",
+          confirmPassword: "BrandNewPass123!",
+        },
+      ),
+    ).resolves.toEqual({ ok: true });
+
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "u1" },
+        data: expect.objectContaining({ passwordHash: expect.any(String) }),
+      }),
+    );
+    expect(prisma.userSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: "u1",
+          id: { not: "s-current" },
+        }),
+      }),
+    );
+  });
+
+  it("changePassword rejects mismatched confirmation", async () => {
+    const { service } = createService();
+    await expect(
+      service.changePassword(
+        {
+          id: "u1",
+          name: "A",
+          email: "a@x.local",
+          role: AuthRole.ADMIN,
+          status: UserStatus.ACTIVE,
+          organizationId: "o1",
+          teamId: null,
+          sessionId: "s1",
+        },
+        {
+          currentPassword: "ChangeMeNow123!",
+          newPassword: "BrandNewPass123!",
+          confirmPassword: "DifferentPass12!",
+        },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

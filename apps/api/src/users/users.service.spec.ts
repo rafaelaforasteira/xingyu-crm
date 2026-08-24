@@ -88,7 +88,9 @@ describe("UsersService invitations", () => {
       service.acceptInvite("token", "strong-password", "strong-password"),
     ).resolves.toEqual({ ok: true });
     expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { passwordHash: "argon-hash", status: "ACTIVE" } }),
+      expect.objectContaining({
+        data: { passwordHash: "argon-hash", status: "ACTIVE", deactivatedAt: null },
+      }),
     );
   });
 });

@@ -160,7 +160,7 @@ export function SettingsGeneralPage() {
         <CardContent className="grid gap-4 py-5 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Organização</Label>
-            <Input readOnly value={data?.organizationName ?? ""} />
+            <Input readOnly value={data?.organization?.name ?? data?.organizationName ?? ""} />
           </div>
           <div className="space-y-1">
             <Label>Fuso horário</Label>

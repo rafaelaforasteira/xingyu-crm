@@ -77,4 +77,15 @@ export const authApi = {
   me() {
     return authRequest<AuthUser>("/auth/me");
   },
+
+  changePassword(data: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) {
+    return authRequest<{ ok: true }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
 };

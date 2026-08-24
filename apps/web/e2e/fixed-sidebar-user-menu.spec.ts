@@ -37,29 +37,43 @@ test("desktop sidebar stays in the viewport while the document scrolls", async (
   expect(footerAfter?.y).toBeCloseTo(footerBefore?.y ?? 0, 0);
 });
 
-test("account footer opens a real, unclipped menu above the sidebar", async ({ page }) => {
+test("sidebar footer shows identity only without account menu", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/pipelines");
-  await page.getByTestId("sidebar-user-footer").screenshot({ path: path.join(screenshots, "03-user-footer.png") });
-  const trigger = page.getByRole("button", { name: "Abrir menu da conta" });
-  await trigger.click();
-  const menu = page.getByRole("dialog", { name: "Menu da conta" });
-  await expect(menu).toBeVisible();
-  await expect(menu.getByText("Equipe", { exact: true })).toBeVisible();
-  await expect(menu.getByText("Gestão", { exact: true })).toBeVisible();
-  await page.screenshot({ path: path.join(screenshots, "04-user-menu-open.png"), fullPage: false });
-  await expect(menu.getByRole("menuitem", { name: "Meu perfil" })).toHaveAttribute("href", "/settings/general");
-  await expect(menu.getByRole("menuitem", { name: "Configurações" })).toHaveAttribute("href", "/settings");
-  await expect(menu.getByRole("menuitem", { name: "Sair" })).toBeVisible();
-  const menuBox = await menu.boundingBox();
-  const triggerBox = await trigger.boundingBox();
-  expect((menuBox?.y ?? Infinity) + (menuBox?.height ?? 0)).toBeLessThanOrEqual((triggerBox?.y ?? 0) + 1);
-  await page.keyboard.press("Escape");
-  await expect(menu).toBeHidden();
-  await expect(trigger).toBeFocused();
+  const footer = page.getByTestId("sidebar-user-footer");
+  await expect(footer).toBeVisible();
+  await footer.screenshot({ path: path.join(screenshots, "03-user-footer.png") });
+
+  await expect(page.getByRole("button", { name: "Abrir menu da conta" })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Menu da conta" })).toHaveCount(0);
+  await expect(footer.getByText(/@/)).toHaveCount(0);
+  await expect(footer.getByText("Equipe", { exact: true })).toHaveCount(0);
+  await expect(footer.getByText("Meu perfil")).toHaveCount(0);
+  await expect(footer.getByText(/^Sair$/)).toHaveCount(0);
+  await expect(footer.locator("svg.lucide-more-vertical")).toHaveCount(0);
+  // Role labels must not appear as a secondary line under the name.
+  await expect(footer.locator("p")).toHaveCount(1);
+
+  const identity = page.getByTestId("sidebar-user-identity");
+  await expect(identity).toBeVisible();
+  await expect(identity.locator("p")).toBeVisible();
+  const firstName = (await identity.locator("p").innerText()).trim();
+  expect(firstName.length).toBeGreaterThan(0);
+  expect(firstName.includes(" ")).toBeFalsy();
+
+  const settingsLink = page.getByTestId("beta-nav-settings");
+  await expect(settingsLink).toHaveAttribute("href", "/settings");
+  await settingsLink.click();
+  await expect(page).toHaveURL(/\/settings/);
+  await page.screenshot({ path: path.join(screenshots, "04-settings-from-sidebar.png"), fullPage: false });
 });
 
-for (const [name, width, height] of [["18-sidebar-1920.png", 1920, 1080], ["19-sidebar-1440.png", 1440, 900], ["20-sidebar-1366.png", 1366, 768], ["21-sidebar-1024.png", 1024, 768]] as const) {
+for (const [name, width, height] of [
+  ["18-sidebar-1920.png", 1920, 1080],
+  ["19-sidebar-1440.png", 1440, 900],
+  ["20-sidebar-1366.png", 1366, 768],
+  ["21-sidebar-1024.png", 1024, 768],
+] as const) {
   test(`sidebar remains usable at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto("/pipelines");

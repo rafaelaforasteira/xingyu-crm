@@ -8,6 +8,13 @@ export interface PaginationMeta {
 export interface PaginatedResponse<T> {
   data: T[];
   meta: PaginationMeta;
+  totals?: {
+    all: number;
+    active: number;
+    invited: number;
+    inactive: number;
+    activeAdmins?: number;
+  };
 }
 
 export interface UserRef {
@@ -23,19 +30,105 @@ export interface UserRef {
 export interface ManagedUser extends Omit<UserRef, "team"> {
   email: string;
   phone?: string | null;
+  title?: string | null;
   authRole: "ADMIN" | "MANAGER" | "CONSULTANT";
   status: "ACTIVE" | "INVITED" | "INACTIVE";
   lastLoginAt?: string | null;
+  deactivatedAt?: string | null;
+  inviteExpiresAt?: string | null;
   team?: { id: string; name: string } | null;
   activeSessions: number;
   directPipelineIds: string[];
   channelOwnerships?: Array<{ id: string; name: string; type: string; status: string }>;
 }
 export interface SettingsProfile {
-  id: string; name: string; email: string; phone?: string | null; avatarUrl?: string | null;
-  title?: string | null; authRole: "ADMIN" | "MANAGER" | "CONSULTANT"; status: string;
-  locale: "pt-BR" | "en" | "zh-CN" | "zh-HK"; timezone: string;
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  title?: string | null;
+  authRole: "ADMIN" | "MANAGER" | "CONSULTANT";
+  status: string;
+  locale: "pt-BR" | "en" | "zh-CN" | "zh-HK";
+  timezone: string;
   team?: { id: string; name: string } | null;
+}
+
+export type ConnectionStatus =
+  | "CONNECTED"
+  | "ATTENTION"
+  | "OFFLINE"
+  | "QR_PENDING"
+  | "CONNECTING"
+  | "ARCHIVED";
+
+export interface ConnectionListItem {
+  id: string;
+  name: string;
+  provider: string | null;
+  type?: string;
+  channel?: string;
+  status: ConnectionStatus | string;
+  phone?: string | null;
+  displayAccount?: string | null;
+  defaultPipeline?: { id: string; name: string } | null;
+  enabledPipelineCount?: number;
+  accessSummary?: string | null;
+  avatarUrl?: string | null;
+  lastActivityAt?: string | null;
+  lastError?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ConnectionCounts {
+  all: number;
+  connected: number;
+  attention: number;
+  offline: number;
+}
+
+export interface ConnectionDetail extends ConnectionListItem {
+  description?: string | null;
+  routing?: {
+    pipelineId?: string | null;
+    pipelineName?: string | null;
+    teamId?: string | null;
+    teamName?: string | null;
+    ownerId?: string | null;
+    ownerName?: string | null;
+  } | Array<{
+    id: string;
+    pipelineId: string;
+    isDefault: boolean;
+    active: boolean;
+    priority: number;
+    pipeline?: { id: string; name: string };
+  }>;
+  access?: {
+    mode?: "ALL" | "RESTRICTED" | string;
+    userIds?: string[];
+    teamIds?: string[];
+    users?: Array<{ id: string; name: string }>;
+    teams?: Array<{ id: string; name: string }>;
+  };
+  diagnostics?: {
+    healthy?: boolean;
+    latencyMs?: number | null;
+    webhookStatus?: string | null;
+    lastCheckedAt?: string | null;
+    message?: string | null;
+    [key: string]: unknown;
+  };
+  activity?: Array<{
+    id: string;
+    type: string;
+    message?: string | null;
+    createdAt: string;
+    actorName?: string | null;
+  }>;
+  qrCode?: string | null;
 }
 
 export interface Tag {
@@ -1406,7 +1499,11 @@ export interface DealActionItem extends Deal {
 export interface Team {
   id: string;
   name: string;
+  description?: string | null;
   members?: UserRef[];
+  memberCount?: number;
+  memberPreview?: Array<{ id: string; name: string; avatarUrl?: string | null }>;
+  _count?: { members: number };
 }
 
 export interface PipelineAccessOverview {
@@ -1422,11 +1519,26 @@ export interface PipelineAccessOverview {
 }
 
 export interface SettingsOverview {
-  organizationName: string;
-  timezone: string;
-  currency: string;
-  teams: Team[];
-  users: UserRef[];
+  organization?: {
+    id: string;
+    name: string;
+    timezone?: string;
+    currency?: string;
+  } | null;
+  organizationName?: string;
+  timezone?: string;
+  currency?: string;
+  counts?: { users: number; teams: number; tags: number; pipelines: number };
+  teams?: Team[];
+  users?: UserRef[];
   channels?: { id: string; name: string; status: string }[];
   integrations?: { id: string; name: string; connected: boolean }[];
+}
+
+export interface SettingsPermissionMatrix {
+  roles: Array<"ADMIN" | "MANAGER" | "CONSULTANT">;
+  rows: Array<{
+    area: string;
+    cells: Record<"ADMIN" | "MANAGER" | "CONSULTANT", string>;
+  }>;
 }

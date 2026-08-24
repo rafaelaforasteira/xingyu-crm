@@ -189,6 +189,7 @@ describe("navigation mode", () => {
       "/pipelines",
       "/orders",
       "/finance",
+      "/connections",
     ]);
   });
 });

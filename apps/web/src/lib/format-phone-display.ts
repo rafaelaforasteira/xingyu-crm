@@ -77,6 +77,12 @@ export function formatPhoneForDisplay(value: string | null | undefined): string 
     if (formatted) return formatted;
   }
 
+  // US/Canada: +1 NXX NXX XXXX
+  if (digits.startsWith("1") && digits.length === 11) {
+    const local = digits.slice(1);
+    return `+1 (${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
+  }
+
   return formatInternationalConservative(raw, digits);
 }
 

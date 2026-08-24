@@ -15,6 +15,7 @@ import {
   Contact,
   Plug,
   Landmark,
+  QrCode,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
@@ -150,7 +151,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     id: "management",
     label: "Gestão",
-    items: [{ href: "/finance", label: "Financeiro", icon: Landmark }],
+    items: [
+      { href: "/finance", label: "Financeiro", icon: Landmark },
+      { href: "/connections", label: "Conexões", icon: QrCode },
+    ],
   },
 ];
 

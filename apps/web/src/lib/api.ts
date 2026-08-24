@@ -48,6 +48,7 @@ import type {
   RepurchaseLead,
   SearchResult,
   SettingsOverview,
+  SettingsPermissionMatrix,
   Tag,
   Task,
   TaskBoardGroup,
@@ -62,6 +63,8 @@ import type {
   CustomerProfileSummary,
   CustomersDashboard,
   SettingsProfile,
+  ConnectionListItem,
+  ConnectionDetail,
 } from "./types";
 import { normalizeMessages, unwrapMessageCursorPage } from "./inbox-utils";
 import { normalizeReactivationResponse } from "./reactivation-utils";
@@ -758,17 +761,92 @@ export const notificationsApi = {
   markAllRead: () => api.patch("/notifications/read-all"),
 };
 
+export type ConnectionCounts = {
+  all: number;
+  connected: number;
+  attention: number;
+  offline: number;
+};
+
+export const connectionsApi = {
+  list: async (query?: { status?: string; search?: string }) => {
+    const response = await api.get<ConnectionListItem[] | { data: ConnectionListItem[] }>(
+      "/connections",
+      query,
+    );
+    return Array.isArray(response) ? response : response.data;
+  },
+  counts: () => api.get<ConnectionCounts>("/connections/counts"),
+  create: (data: { name: string; provider?: string }) =>
+    api.post<ConnectionDetail>("/connections", {
+      type: "WHATSAPP",
+      ...data,
+    }),
+  detail: (id: string) => api.get<ConnectionDetail>(`/connections/${id}`),
+  update: (id: string, data: Partial<Pick<ConnectionDetail, "name" | "description">>) =>
+    api.patch<ConnectionDetail>(`/connections/${id}`, data),
+  connect: (id: string) =>
+    api.post<{ status: string; qrPayload?: string | null; expiresAt?: string }>(
+      `/connections/${id}/connect`,
+    ),
+  qr: (id: string) =>
+    api.get<{ status: string; qrPayload?: string | null; expiresAt?: string }>(
+      `/connections/${id}/qr`,
+    ),
+  reconnect: (id: string) => api.post<ConnectionDetail>(`/connections/${id}/reconnect`),
+  disconnect: (id: string) => api.post<ConnectionDetail>(`/connections/${id}/disconnect`),
+  archive: (id: string) => api.post<ConnectionDetail>(`/connections/${id}/archive`),
+  simulateScan: (id: string) =>
+    api.post<{ status: string; displayAccount?: string }>(`/connections/${id}/simulate-scan`),
+  routing: (id: string, data: { enabledPipelineIds: string[]; defaultPipelineId: string }) =>
+    api.patch<ConnectionDetail>(`/connections/${id}/routing`, data),
+  access: (id: string, data: { teamIds: string[]; userIds?: string[] }) =>
+    api.patch<ConnectionDetail>(`/connections/${id}/access`, data),
+  diagnostics: (id: string) =>
+    api.get<NonNullable<ConnectionDetail["diagnostics"]>>(`/connections/${id}/diagnostics`),
+  activity: async (id: string) => {
+    const response = await api.get<
+      Array<Record<string, unknown>> | { data: Array<Record<string, unknown>> }
+    >(`/connections/${id}/activity`);
+    const rows = Array.isArray(response) ? response : response.data;
+    return rows.map((row) => ({
+      id: String(row.id),
+      type: String(row.action ?? row.direction ?? row.status ?? "ACTIVITY"),
+      message: typeof row.body === "string" ? row.body : typeof row.action === "string" ? row.action : null,
+      createdAt: String(row.createdAt ?? row.sentAt),
+    }));
+  },
+};
+
 export const settingsApi = {
   profile: () => api.get<SettingsProfile>("/settings/profile"),
   updateProfile: (data: Partial<Pick<SettingsProfile, "name"|"phone"|"title"|"locale"|"timezone">>) => api.patch<SettingsProfile>("/settings/profile", data),
+  uploadAvatar: (file: File) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return api.post<SettingsProfile>("/settings/profile/avatar", form);
+  },
   updateOrganization: (data: { name?: string; timezone?: string; currency?: string }) => api.patch("/settings/organization", data),
   overview: () => api.get<SettingsOverview>("/settings"),
+  permissions: () => api.get<SettingsPermissionMatrix>("/settings/permissions"),
   teams: async () => {
     const response = await api.get<Team[] | PaginatedResponse<Team>>("/settings/teams", {
       pageSize: 100,
     });
     return Array.isArray(response) ? response : response.data;
   },
+  createTeam: (data: { name: string; description?: string }) => api.post<Team>("/settings/teams", data),
+  updateTeam: (id: string, data: { name?: string; description?: string }) =>
+    api.patch<Team>(`/settings/teams/${id}`, data),
+  addTeamMembers: (id: string, userIds: string[]) =>
+    api.post<{ added: number }>(`/settings/teams/${id}/members`, { userIds }),
+  replaceTeamMembers: (id: string, userIds: string[]) =>
+    api.patch<{ memberCount: number }>(`/settings/teams/${id}/members`, { userIds }),
+  archiveTeam: (
+    id: string,
+    data?: { memberAction?: "detach" | "move"; targetTeamId?: string },
+  ) => api.post<{ id: string; archived: boolean }>(`/settings/teams/${id}/archive`, data ?? {}),
+  removeTeam: (id: string) => api.delete(`/settings/teams/${id}`),
   users: async () => {
     const response = await api.get<UserRef[] | PaginatedResponse<UserRef>>("/settings/users", {
       pageSize: 100,
@@ -803,6 +881,7 @@ export const usersApi = {
     data: Partial<{
       name: string;
       phone: string;
+      title: string;
       role: "ADMIN" | "MANAGER" | "CONSULTANT";
       teamId: string | null;
     }>,

@@ -29,12 +29,16 @@ describe("beta navigation", () => {
       "/pipelines",
       "/orders",
       "/finance",
+      "/connections",
     ]);
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/orders", label: "Pedidos" }),
     );
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/finance", label: "Financeiro" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/connections", label: "Conexões" }),
     );
   });
 });

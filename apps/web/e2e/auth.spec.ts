@@ -29,8 +29,10 @@ test.describe("Authentication flow", () => {
       timeout: 30_000,
     });
 
-    await page.getByRole("button", { name: "Abrir menu da conta" }).click();
-    await page.getByRole("menuitem", { name: /^Sair$|^Saindo/ }).click({ timeout: 15_000 });
+    await page.getByTestId("beta-nav-settings").click();
+    await expect(page).toHaveURL(/\/settings/, { timeout: 30_000 });
+    await page.getByRole("button", { name: "Sair da conta" }).click({ timeout: 15_000 });
+    await page.getByRole("button", { name: /^Sair$/ }).click({ timeout: 15_000 });
     await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
 
     await page.goto("/dashboard");

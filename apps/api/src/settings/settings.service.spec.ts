@@ -50,6 +50,47 @@ describe("SettingsService user surface", () => {
     expect(data.name).toBe("Ana");
   });
 
+  it("profile update ignores role, organizationId and passwordHash", async () => {
+    const prisma = prismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      id: "u1",
+      name: "Ana",
+      email: "ana@org.local",
+    });
+    prisma.user.update.mockResolvedValue({ id: "u1", name: "Ana Silva" });
+    const service = new SettingsService(prisma);
+    await service.updateProfile("org-1", "u1", {
+      name: "Ana Silva",
+      role: "ADMIN",
+      organizationId: "org-b",
+      passwordHash: "hack",
+    } as any);
+    const data = prisma.user.update.mock.calls[0][0].data;
+    expect(data.name).toBe("Ana Silva");
+    expect(data.authRole).toBeUndefined();
+    expect(data.organizationId).toBeUndefined();
+    expect(data.passwordHash).toBeUndefined();
+  });
+
+  it("uploadAvatar rejects non-image mime before persist", async () => {
+    const prisma = prismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      id: "u1",
+      name: "Ana",
+      email: "ana@org.local",
+    });
+    const service = new SettingsService(prisma);
+    await expect(
+      service.uploadAvatar("org-1", "u1", {
+        mimetype: "application/pdf",
+        size: 100,
+        originalname: "x.pdf",
+        buffer: Buffer.from("%PDF"),
+      } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it("blocks demoting the last admin through settings/users", async () => {
     const prisma = prismaMock();
     prisma.user.findFirst.mockResolvedValue({

@@ -38,6 +38,18 @@ enum ChannelAccessMode {
   PERSONAL
 }
 
+/// Canonical CRM connection lifecycle (provider-specific states map into these).
+enum ConnectionLifecycleStatus {
+  DRAFT
+  CONNECTING
+  QR_PENDING
+  CONNECTED
+  RECONNECTING
+  DISCONNECTED
+  ERROR
+  ARCHIVED
+}
+
 enum ContactStatus {
   LEAD
   QUALIFIED
@@ -345,6 +357,9 @@ model Organization {
   conversations              Conversation[]
   channels                   Channel[]
   pipelineChannelConnections PipelineChannelConnection[]
+  channelTeamAccesses        ChannelTeamAccess[]
+  channelUserAccesses        ChannelUserAccess[]
+  providerEventReceipts      ProviderEventReceipt[]
   pipelineTeamAccesses       PipelineTeamAccess[]
   pipelineUserAccesses       PipelineUserAccess[]
   orders                     Order[]
@@ -403,6 +418,7 @@ model Team {
   defaultPipelines           Pipeline[]                  @relation("PipelineDefaultTeam")
   pipelineChannelConnections PipelineChannelConnection[] @relation("PipelineChannelDefaultTeam")
   pipelineAccesses           PipelineTeamAccess[]
+  channelAccesses            ChannelTeamAccess[]
   goals                      Goal[]
 
   @@index([organizationId])
@@ -427,6 +443,8 @@ model User {
   status         UserStatus @default(ACTIVE)
   monthlyGoal    Decimal?   @db.Decimal(12, 2)
   lastLoginAt    DateTime?
+  /// Set when an admin deactivates the user; drives the 90-day soft-archive policy.
+  deactivatedAt  DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   deletedAt      DateTime?
@@ -460,6 +478,7 @@ model User {
   savedLeadFiles             LeadFile[]                  @relation("LeadFileSavedBy")
   pipelineAccesses           PipelineUserAccess[]
   channelOwnerships          Channel[]                   @relation("ChannelOwner")
+  channelAccesses            ChannelUserAccess[]         @relation("ChannelUserAccess")
   invites                    UserInvite[]                @relation("InvitedUser")
   createdInvites             UserInvite[]                @relation("InviteCreator")
   goals                      Goal[]                      @relation("GoalTargetUser")
@@ -1141,37 +1160,53 @@ model CustomFieldValue {
 }
 
 model Channel {
-  id                String            @id @default(cuid())
+  id                String                     @id @default(cuid())
   organizationId    String
   type              ChannelType
   name              String
   provider          String?
   externalAccountId String?
   displayName       String?
-  status            String            @default("ACTIVE")
-  isActive          Boolean           @default(true)
+  /// Human-readable account identity (e.g. formatted WhatsApp phone).
+  displayAccount    String?
+  /// Legacy compatibility flag (ACTIVE / INACTIVE). Prefer lifecycleStatus.
+  status            String                     @default("ACTIVE")
+  lifecycleStatus   ConnectionLifecycleStatus  @default(DRAFT)
+  isActive          Boolean                    @default(true)
+  configurationComplete Boolean                @default(false)
   /// Non-sensitive account configuration. Credentials must be referenced by
   /// secretReference and never persisted in this JSON field.
   config            Json?
   secretReference   String?
+  connectedAt       DateTime?
+  disconnectedAt    DateTime?
+  lastActivityAt    DateTime?
+  lastInboundAt     DateTime?
+  lastOutboundAt    DateTime?
   lastSyncAt        DateTime?
   lastErrorAt       DateTime?
+  lastErrorCode     String?
   lastErrorMessage  String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
   deletedAt         DateTime?
-  accessMode        ChannelAccessMode @default(ORGANIZATION)
+  archivedAt        DateTime?
+  accessMode        ChannelAccessMode          @default(ORGANIZATION)
   ownerUserId       String?
 
   organization        Organization                @relation(fields: [organizationId], references: [id])
   conversations       Conversation[]
   messages            Message[]
   pipelineConnections PipelineChannelConnection[]
+  teamAccesses        ChannelTeamAccess[]
+  userAccesses        ChannelUserAccess[]
+  providerEvents      ProviderEventReceipt[]
   owner               User?                       @relation("ChannelOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([type])
   @@index([organizationId, status, deletedAt])
+  @@index([organizationId, lifecycleStatus, archivedAt, deletedAt])
   @@index([organizationId, provider, externalAccountId])
   @@index([organizationId, accessMode, ownerUserId])
 }
@@ -1184,6 +1219,8 @@ model PipelineChannelConnection {
   organizationId     String
   pipelineId         String
   channelId          String
+  /// At most one active default route per channel (enforced in service).
+  isDefault          Boolean                   @default(false)
   defaultStageId     String?
   defaultOwnerId     String?
   defaultTeamId      String?
@@ -1196,6 +1233,9 @@ model PipelineChannelConnection {
   createDeal         Boolean                   @default(true)
   duplicateStrategy  PipelineDuplicateStrategy @default(MERGE)
   routingMode        PipelineRoutingMode       @default(PIPELINE_DEFAULTS)
+  /// Reserved for future rule engines (priority / condition JSON).
+  priority           Int                       @default(100)
+  condition          Json?
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
   deletedAt          DateTime?
@@ -1210,11 +1250,64 @@ model PipelineChannelConnection {
 
   @@index([organizationId])
   @@index([pipelineId, deletedAt, active])
-  @@index([channelId])
+  @@index([channelId, deletedAt, active])
+  @@index([channelId, isDefault, deletedAt])
   @@index([defaultStageId])
   @@index([defaultOwnerId])
   @@index([defaultTeamId])
   @@index([campaignId])
+}
+
+/// Teams allowed to operate a connection (view/reply). Admin always may administer.
+model ChannelTeamAccess {
+  id             String   @id @default(cuid())
+  organizationId String
+  channelId      String
+  teamId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, teamId])
+  @@index([organizationId])
+  @@index([teamId])
+}
+
+/// Optional per-user connection access grants (same organization only).
+model ChannelUserAccess {
+  id             String   @id @default(cuid())
+  organizationId String
+  channelId      String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user         User         @relation("ChannelUserAccess", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+/// Idempotent receipt of provider webhooks / events.
+model ProviderEventReceipt {
+  id                String   @id @default(cuid())
+  organizationId    String
+  channelId         String
+  externalEventId   String
+  externalMessageId String?
+  processedAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, externalEventId])
+  @@index([organizationId])
+  @@index([channelId, externalMessageId])
 }
 
 model Conversation {

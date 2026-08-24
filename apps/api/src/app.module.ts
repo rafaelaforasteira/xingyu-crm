@@ -40,6 +40,7 @@ import { LeadFilesModule } from "./lead-files/lead-files.module";
 import { UsersModule } from "./users/users.module";
 import { FinanceModule } from "./finance/finance.module";
 import { ClientsModule } from "./clients/clients.module";
+import { ConnectionsModule } from "./connections/connections.module";
 import path from "node:path";
 
 const rootEnvFile = path.resolve(__dirname, "../../../.env");
@@ -88,6 +89,7 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
     UsersModule,
     FinanceModule,
     ClientsModule,
+    ConnectionsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: UserThrottlerGuard },

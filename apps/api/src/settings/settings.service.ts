@@ -5,12 +5,16 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { AuthRole } from "@xingyu/database";
+import { accessMatrix } from "../auth/access-policy";
+import { normalizePhone } from "../common/phone-normalization";
+import { validateAndSaveUpload } from "../common/upload/upload.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
 import {
   CreateTeamDto,
   UpdateTeamDto,
+  ArchiveTeamDto,
   CreateTagDto,
   UpdateTagDto,
   CreateCustomFieldDto,
@@ -46,7 +50,81 @@ export class SettingsService {
 
   async updateProfile(organizationId: string, userId: string, dto: UpdateProfileDto) {
     await this.profile(organizationId, userId);
-    return this.prisma.user.update({ where: { id: userId }, data: dto, select: { id:true, name:true, email:true, phone:true, avatarUrl:true, title:true, authRole:true, status:true, locale:true, timezone:true, team:{select:{id:true,name:true}} } });
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.phone !== undefined
+          ? { phone: dto.phone.trim() ? normalizePhone(dto.phone) : null }
+          : {}),
+        ...(dto.title !== undefined ? { title: dto.title.trim() || null } : {}),
+        ...(dto.locale !== undefined ? { locale: dto.locale } : {}),
+        ...(dto.timezone !== undefined ? { timezone: dto.timezone } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatarUrl: true,
+        title: true,
+        authRole: true,
+        status: true,
+        locale: true,
+        timezone: true,
+        team: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async uploadAvatar(
+    organizationId: string,
+    userId: string,
+    file: Express.Multer.File,
+  ) {
+    await this.profile(organizationId, userId);
+    const mime = (file?.mimetype || "").toLowerCase();
+    const allowed = new Set([
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+    ]);
+    if (!allowed.has(mime)) {
+      throw new BadRequestException("Use JPG, PNG ou WEBP.");
+    }
+    const maxAvatarBytes = 5 * 1024 * 1024;
+    if (file.size > maxAvatarBytes) {
+      throw new BadRequestException("Arquivo muito grande. Limite: 5 MB.");
+    }
+    const saved = validateAndSaveUpload(file);
+    if (saved.kind !== "image") {
+      throw new BadRequestException("Tipo de arquivo não permitido.");
+    }
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: saved.url },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatarUrl: true,
+        title: true,
+        authRole: true,
+        status: true,
+        locale: true,
+        timezone: true,
+        team: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  permissions() {
+    return {
+      roles: ["ADMIN", "MANAGER", "CONSULTANT"] as const,
+      rows: accessMatrix(),
+    };
   }
 
   async updateOrganization(organizationId: string, dto: UpdateOrganizationDto) {
@@ -140,16 +218,70 @@ export class SettingsService {
         where,
         skip,
         take,
-        include: { _count: { select: { members: true } } },
+        include: {
+          _count: { select: { members: { where: { deletedAt: null } } } },
+        },
         orderBy: { name: "asc" },
       }),
       this.prisma.team.count({ where }),
     ]);
-    return paginate(data, total, page, pageSize);
+    const teamIds = data.map((team) => team.id);
+    const memberRows =
+      teamIds.length === 0
+        ? []
+        : await this.prisma.user.findMany({
+            where: { organizationId, deletedAt: null, teamId: { in: teamIds } },
+            select: { id: true, name: true, avatarUrl: true, teamId: true },
+            orderBy: { name: "asc" },
+          });
+    const previewByTeam = new Map<string, Array<{ id: string; name: string; avatarUrl: string | null }>>();
+    for (const row of memberRows) {
+      if (!row.teamId) continue;
+      const list = previewByTeam.get(row.teamId) ?? [];
+      if (list.length < 5) {
+        list.push({ id: row.id, name: row.name, avatarUrl: row.avatarUrl });
+        previewByTeam.set(row.teamId, list);
+      }
+    }
+    return paginate(
+      data.map((team) => ({
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        memberCount: team._count.members,
+        memberPreview: previewByTeam.get(team.id) ?? [],
+        _count: team._count,
+      })),
+      total,
+      page,
+      pageSize,
+    );
+  }
+
+  private async assertUniqueTeamName(organizationId: string, name: string, excludeId?: string) {
+    const duplicate = await this.prisma.team.findFirst({
+      where: {
+        organizationId,
+        ...notDeleted,
+        name: { equals: name, mode: "insensitive" },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (duplicate) throw new ConflictException("Já existe uma equipe com este nome.");
   }
 
   async createTeam(organizationId: string, dto: CreateTeamDto) {
-    return this.prisma.team.create({ data: { ...dto, organizationId } });
+    const name = dto.name.trim();
+    if (!name) throw new BadRequestException("Nome da equipe é obrigatório.");
+    await this.assertUniqueTeamName(organizationId, name);
+    return this.prisma.team.create({
+      data: {
+        organizationId,
+        name,
+        description: dto.description?.trim() || null,
+      },
+    });
   }
 
   async updateTeam(organizationId: string, id: string, dto: UpdateTeamDto) {
@@ -157,15 +289,116 @@ export class SettingsService {
       where: { id, organizationId, ...notDeleted },
     });
     if (!team) throw new NotFoundException(`Team ${id} not found`);
-    return this.prisma.team.update({ where: { id }, data: dto });
+    const name = dto.name !== undefined ? dto.name.trim() : undefined;
+    if (name !== undefined) {
+      if (!name) throw new BadRequestException("Nome da equipe é obrigatório.");
+      await this.assertUniqueTeamName(organizationId, name, id);
+    }
+    return this.prisma.team.update({
+      where: { id },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
+      },
+    });
   }
 
-  async removeTeam(organizationId: string, id: string) {
+  private async loadEligibleUsers(organizationId: string, userIds: string[]) {
+    const uniqueIds = [...new Set(userIds.filter(Boolean))];
+    if (uniqueIds.length === 0) return [];
+    const users = await this.prisma.user.findMany({
+      where: { organizationId, id: { in: uniqueIds }, deletedAt: null },
+      select: { id: true, status: true, teamId: true },
+    });
+    if (users.length !== uniqueIds.length) {
+      throw new BadRequestException("Um ou mais usuários não pertencem a esta organização.");
+    }
+    if (users.some((user) => user.status === "INACTIVE")) {
+      throw new BadRequestException("Usuários inativos não podem ser adicionados à equipe.");
+    }
+    return users;
+  }
+
+  async addTeamMembers(organizationId: string, teamId: string, userIds: string[]) {
+    const team = await this.prisma.team.findFirst({
+      where: { id: teamId, organizationId, ...notDeleted },
+      select: { id: true },
+    });
+    if (!team) throw new NotFoundException(`Team ${teamId} not found`);
+    const users = await this.loadEligibleUsers(organizationId, userIds);
+    const ids = users.map((user) => user.id);
+    if (ids.length === 0) return { added: 0 };
+    await this.prisma.user.updateMany({
+      where: { organizationId, id: { in: ids }, deletedAt: null },
+      data: { teamId },
+    });
+    return { added: ids.length };
+  }
+
+  async replaceTeamMembers(organizationId: string, teamId: string, userIds: string[]) {
+    const team = await this.prisma.team.findFirst({
+      where: { id: teamId, organizationId, ...notDeleted },
+      select: { id: true },
+    });
+    if (!team) throw new NotFoundException(`Team ${teamId} not found`);
+    const desired = await this.loadEligibleUsers(organizationId, userIds);
+    const desiredIds = new Set(desired.map((user) => user.id));
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.updateMany({
+        where: {
+          organizationId,
+          teamId,
+          deletedAt: null,
+          ...(desiredIds.size ? { id: { notIn: [...desiredIds] } } : {}),
+        },
+        data: { teamId: null },
+      });
+      if (desiredIds.size) {
+        await tx.user.updateMany({
+          where: { organizationId, id: { in: [...desiredIds] }, deletedAt: null },
+          data: { teamId },
+        });
+      }
+    });
+    return { memberCount: desiredIds.size };
+  }
+
+  async archiveTeam(organizationId: string, id: string, dto: ArchiveTeamDto = {}) {
     const team = await this.prisma.team.findFirst({
       where: { id, organizationId, ...notDeleted },
     });
     if (!team) throw new NotFoundException(`Team ${id} not found`);
-    return this.prisma.team.update({ where: { id }, data: softDeleteData() });
+    const memberAction = dto.memberAction ?? "detach";
+    if (memberAction === "move") {
+      if (!dto.targetTeamId) throw new BadRequestException("Selecione a equipe de destino.");
+      if (dto.targetTeamId === id) {
+        throw new BadRequestException("Não é possível mover membros para a própria equipe.");
+      }
+      const target = await this.prisma.team.findFirst({
+        where: { id: dto.targetTeamId, organizationId, ...notDeleted },
+        select: { id: true },
+      });
+      if (!target) throw new BadRequestException("Equipe de destino inválida.");
+    }
+    await this.prisma.$transaction(async (tx) => {
+      if (memberAction === "move" && dto.targetTeamId) {
+        await tx.user.updateMany({
+          where: { organizationId, teamId: id, deletedAt: null },
+          data: { teamId: dto.targetTeamId },
+        });
+      } else {
+        await tx.user.updateMany({
+          where: { organizationId, teamId: id, deletedAt: null },
+          data: { teamId: null },
+        });
+      }
+      await tx.team.update({ where: { id }, data: softDeleteData() });
+    });
+    return { id, archived: true };
+  }
+
+  async removeTeam(organizationId: string, id: string) {
+    return this.archiveTeam(organizationId, id, { memberAction: "detach" });
   }
 
   async listTags(organizationId: string, query: QuerySettingsDto) {

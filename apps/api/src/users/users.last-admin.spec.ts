@@ -74,12 +74,23 @@ describe("UsersService last-admin protection", () => {
         name: "Ana",
         email: "ana@example.com",
         passwordHash: "SHOULD-NOT-LEAK",
+        deactivatedAt: null,
+        lastLoginAt: null,
         sessions: [{ id: "s1" }],
         pipelineAccesses: [],
+        channelOwnerships: [],
+        invites: [],
       },
     ]);
-    prisma.user.count.mockResolvedValue(1);
+    prisma.user.count
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1);
     const service = new UsersService(prisma, auth, config);
+    (service as any).lastArchiveSweepAt = Date.now();
     const result = await service.list("org-1", { page: 1, pageSize: 20 } as any);
     expect(result.data[0]).not.toHaveProperty("passwordHash");
     expect(result.data[0].activeSessions).toBe(1);

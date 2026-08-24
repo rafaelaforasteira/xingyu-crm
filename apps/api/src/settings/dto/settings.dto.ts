@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength } from "class-validator";
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from "class-validator";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export class CreateTeamDto {
@@ -11,10 +20,31 @@ export class CreateTeamDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MaxLength(300)
   description?: string;
 }
 
 export class UpdateTeamDto extends PartialType(CreateTeamDto) {}
+
+export class TeamMembersDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  userIds!: string[];
+}
+
+export class ArchiveTeamDto {
+  @ApiPropertyOptional({ enum: ["detach", "move"] })
+  @IsOptional()
+  @IsIn(["detach", "move"])
+  memberAction?: "detach" | "move";
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  targetTeamId?: string;
+}
 
 export class CreateTagDto {
   @ApiProperty()

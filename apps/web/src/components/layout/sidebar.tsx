@@ -4,21 +4,19 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, LogOut, MoreVertical, Settings, UserRound, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, Settings, X, type LucideIcon } from "lucide-react";
 import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
 import { formatPipelineNavLabel, resolvePipelineIcon } from "@/lib/pipeline-icons";
-import { dashboardApi, pipelinesApi, settingsApi } from "@/lib/api";
+import { dashboardApi, pipelinesApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { useUiStore } from "@/stores/ui";
 import { useAuth } from "@/components/auth/auth-provider";
-import { AUTH_ROLE_LABEL } from "@/lib/auth-types";
 import { can, canOpenPath } from "@/lib/access-policy";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
-import { Popover } from "@/components/ui/popover";
+import { SidebarUserIdentity } from "@/components/layout/sidebar-user-identity";
 
 const PIPELINES_HREF = "/pipelines";
 const PIPELINES_NAV_STALE_TIME = 3 * 60_000;
@@ -210,10 +208,8 @@ function PipelinesNavSection({
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [pendingHref, setPendingHref] = React.useState<string | null>(null);
-  const [loggingOut, setLoggingOut] = React.useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = React.useState(false);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const mobileOpen = useUiStore((s) => s.sidebarMobileOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
@@ -226,19 +222,6 @@ export function Sidebar() {
   retry: false,
   enabled: can(user, "dashboard.view"),
   });
-  const accountUser = useQuery({
-    queryKey: [...queryKeys.settings, "sidebar-account", user?.id],
-    queryFn: () => settingsApi.profile(),
-    enabled: Boolean(user),
-    staleTime: 5 * 60_000,
-    retry: false,
-  });
-  const rawTeam = accountUser.data?.team as unknown;
-  const teamName = typeof rawTeam === "string"
-    ? rawTeam
-    : rawTeam && typeof rawTeam === "object" && "name" in rawTeam
-      ? String((rawTeam as { name: unknown }).name)
-      : "Sem equipe";
 
   React.useEffect(() => {
     if (
@@ -372,24 +355,24 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="shrink-0 px-2 pb-2"><SidebarNavLink href="/settings?section=profile" label="Configurações" icon={Settings} collapsed={collapsed} active={pathname.startsWith("/settings")} onNavigate={handleNavigate} onPrefetch={handlePrefetch} /></div>
-
-      <div data-testid="sidebar-user-footer" className="shrink-0 border-t border-sidebar-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <Popover open={accountMenuOpen} onOpenChange={setAccountMenuOpen} side="top" align="start" contentWidth={224} aria-label="Menu da conta" className="w-full" contentClassName="rounded-xl border-sidebar-border bg-[#1a1528] text-sidebar-foreground" trigger={
-          <button type="button" aria-label="Abrir menu da conta" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((value) => !value)} className={cn("flex w-full items-center gap-2.5 rounded-xl bg-white/5 p-2 text-left transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", collapsed && "justify-center bg-transparent p-0")}>
-            <Avatar name={user?.name ?? "Usuário"} size="sm" className="bg-white/10 text-white" />
-            {!collapsed ? <><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-white" title={user?.name}>{user?.name ?? "Usuário"}</p><p className="truncate text-[11px] text-sidebar-muted" title={user ? AUTH_ROLE_LABEL[user.role] : undefined}>{user ? AUTH_ROLE_LABEL[user.role] : "—"}</p></div><MoreVertical className="h-4 w-4 shrink-0 text-sidebar-muted" /></> : null}
-          </button>
-        }>
-          <div role="menu" className="p-1.5">
-            <div className="px-2.5 py-2"><p className="truncate text-sm font-medium text-white" title={user?.name}>{user?.name ?? "Usuário"}</p>{user?.email ? <p className="truncate text-xs text-sidebar-muted" title={user.email}>{user.email}</p> : null}<p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-sidebar-muted">Equipe</p><p className="truncate text-sm text-sidebar-foreground" title={teamName}>{teamName}</p></div>
-            <div className="my-1 border-t border-sidebar-border" />
-            <Link role="menuitem" href="/settings?section=profile" onClick={() => { setAccountMenuOpen(false); handleNavigate("/settings?section=profile"); }} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-white/5 hover:text-white"><UserRound className="h-4 w-4" />Meu perfil</Link>
-            <Link role="menuitem" href="/settings" onClick={() => { setAccountMenuOpen(false); handleNavigate("/settings"); }} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-white/5 hover:text-white"><Settings className="h-4 w-4" />Configurações</Link>
-            <div className="my-1 border-t border-sidebar-border" />
-            <button role="menuitem" type="button" disabled={loggingOut} onClick={async () => { setLoggingOut(true); try { await logout(); } finally { setLoggingOut(false); } }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-white/5 hover:text-white disabled:opacity-60"><LogOut className="h-4 w-4" />{loggingOut ? "Saindo…" : "Sair"}</button>
-          </div>
-        </Popover>
+      <div className="shrink-0 space-y-1 border-t border-sidebar-border px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+        <SidebarNavLink
+          href="/settings"
+          label="Configurações"
+          icon={Settings}
+          collapsed={collapsed}
+          active={pathname.startsWith("/settings")}
+          onNavigate={handleNavigate}
+          onPrefetch={handlePrefetch}
+          testId="beta-nav-settings"
+        />
+        <div data-testid="sidebar-user-footer">
+          <SidebarUserIdentity
+            name={user?.name}
+            avatarUrl={user?.avatarUrl}
+            collapsed={collapsed}
+          />
+        </div>
       </div>
     </aside>
   );

@@ -45,8 +45,8 @@ describe("formatPhoneForDisplay", () => {
   });
 
   it("does not apply Brazilian mask to non-BR international numbers", () => {
-    expect(formatPhoneForDisplay("+14155552671")).toBe("+14155552671");
-    expect(formatPhoneForDisplay("+14155552671")).not.toMatch(/\(\d{2}\)/);
+    expect(formatPhoneForDisplay("+14155552671")).toBe("+1 (415) 555-2671");
+    expect(formatPhoneForDisplay("+14155552671")).toMatch(/\(\d{3}\)/);
   });
 
   it("returns a safe fallback when absent", () => {
