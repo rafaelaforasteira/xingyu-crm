@@ -13,6 +13,10 @@ export type ProviderQr = {
 
 export type NormalizedProviderEvent =
   | {
+      kind: "ignored";
+      reason: string;
+    }
+  | {
       kind: "inbound_message";
       externalEventId: string;
       externalMessageId?: string;

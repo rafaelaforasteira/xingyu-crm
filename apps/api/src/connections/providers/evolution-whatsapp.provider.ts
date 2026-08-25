@@ -19,6 +19,7 @@ import type {
 const QR_TTL_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const INTEGRATION = "WHATSAPP-BAILEYS";
+const WEBHOOK_EVENTS = ["CONNECTION_UPDATE", "MESSAGES_UPSERT", "QRCODE_UPDATED"];
 
 type JsonObject = Record<string, unknown>;
 
@@ -34,12 +35,15 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
         qrcode: true,
         integration: INTEGRATION,
       });
+      const externalInstanceId = this.readInstanceName(payload, instanceName);
+      await this.ensureWebhook(externalInstanceId);
       return {
-        externalInstanceId: this.readInstanceName(payload, instanceName),
+        externalInstanceId,
         status: ConnectionLifecycleStatus.DRAFT,
       };
     } catch (error) {
       if (this.statusOf(error) === 409) {
+        await this.ensureWebhook(instanceName);
         return {
           externalInstanceId: instanceName,
           status: ConnectionLifecycleStatus.DRAFT,
@@ -74,6 +78,23 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
     }
   }
 
+  async ensureWebhook(externalInstanceId: string): Promise<void> {
+    const secret = process.env.EVOLUTION_WEBHOOK_SECRET?.trim();
+    if (!secret) {
+      throw new ServiceUnavailableException("Evolution webhook secret is not configured");
+    }
+    await this.request("POST", `/webhook/set/${encodeURIComponent(externalInstanceId)}`, {
+      webhook: {
+        enabled: true,
+        url: this.webhookUrl(externalInstanceId),
+        byEvents: false,
+        base64: false,
+        headers: { "x-connection-signature": secret },
+        events: WEBHOOK_EVENTS,
+      },
+    });
+  }
+
   validateWebhook(_payload: unknown, signature?: string): boolean {
     const secret = process.env.EVOLUTION_WEBHOOK_SECRET?.trim();
     if (!secret || !signature) return false;
@@ -83,8 +104,169 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
     return timingSafeEqual(expected, supplied);
   }
 
-  normalizeWebhook(_payload: unknown): NormalizedProviderEvent {
-    throw new BadRequestException("Evolution webhook normalization is not implemented");
+  normalizeWebhook(payload: unknown): NormalizedProviderEvent {
+    const record = this.asObject(payload);
+    if (!record) {
+      throw new BadRequestException("Invalid webhook payload");
+    }
+    const eventName = this.eventName(record);
+    const data = this.asObject(record.data) ?? record;
+    const instance = this.stringValue(record.instance) ?? this.stringValue(data.instance) ?? "unknown";
+    const occurredAt = this.occurredAt(record, data);
+
+    if (eventName === "connection.update") {
+      return this.normalizeConnectionUpdate(instance, data, occurredAt, record);
+    }
+    if (eventName === "messages.upsert") {
+      return this.normalizeMessageUpsert(instance, data, occurredAt, record);
+    }
+    if (!eventName) {
+      throw new BadRequestException("Invalid webhook payload");
+    }
+    return { kind: "ignored", reason: eventName };
+  }
+
+  private normalizeConnectionUpdate(
+    instance: string,
+    data: JsonObject,
+    occurredAt: Date,
+    envelope: JsonObject,
+  ): NormalizedProviderEvent {
+    const status =
+      this.stringValue(data.state) ??
+      this.stringValue(data.status) ??
+      this.stringValue(this.asObject(data.instance)?.state);
+    if (!status) return { kind: "ignored", reason: "connection.update-missing-state" };
+    const wuid = this.stringValue(data.wuid) ?? this.stringValue(data.ownerJid);
+    const phone = this.phoneFromJid(wuid);
+    const dateTime = this.stringValue(envelope.date_time) ?? occurredAt.toISOString();
+    const statusReason = data.statusReason;
+    return {
+      kind: "connection_status",
+      externalEventId: `evolution:${instance}:connection.update:${status}:${dateTime}`,
+      status,
+      displayAccount: phone ? `+${phone}` : undefined,
+      errorCode:
+        statusReason === undefined || statusReason === null ? undefined : String(statusReason),
+      occurredAt,
+    };
+  }
+
+  private normalizeMessageUpsert(
+    instance: string,
+    data: JsonObject,
+    occurredAt: Date,
+    envelope: JsonObject,
+  ): NormalizedProviderEvent {
+    const message = this.firstMessage(data);
+    const key = this.asObject(message.key) ?? {};
+    if (key.fromMe === true) return { kind: "ignored", reason: "fromMe" };
+
+    const remoteJid = this.stringValue(key.remoteJid) ?? "";
+    if (this.isBroadcast(remoteJid)) return { kind: "ignored", reason: "broadcast" };
+    if (this.isGroup(remoteJid)) return { kind: "ignored", reason: "group" };
+
+    const bodyMessage = this.asObject(message.message) ?? {};
+    if (bodyMessage.protocolMessage) return { kind: "ignored", reason: "protocolMessage" };
+    if (bodyMessage.reactionMessage) return { kind: "ignored", reason: "reactionMessage" };
+
+    const body = this.messageText(bodyMessage);
+    if (!body) return { kind: "ignored", reason: "unsupported-body" };
+
+    const phone = this.messagePhone(key, remoteJid);
+    if (!phone) return { kind: "ignored", reason: "missing-phone" };
+
+    const messageId = this.stringValue(key.id) ?? "unknown";
+    const dateTime = this.stringValue(envelope.date_time) ?? occurredAt.toISOString();
+    return {
+      kind: "inbound_message",
+      externalEventId: `evolution:${instance}:messages.upsert:${messageId}:${dateTime}`,
+      externalMessageId: messageId,
+      phone,
+      contactName: this.stringValue(message.pushName),
+      body,
+      occurredAt,
+    };
+  }
+
+  private firstMessage(data: JsonObject) {
+    if (Array.isArray(data.messages)) {
+      const first = this.asObject(data.messages[0]);
+      if (first) return first;
+    }
+    return data;
+  }
+
+  private messagePhone(key: JsonObject, remoteJid: string) {
+    const candidates = [
+      remoteJid,
+      this.stringValue(key.remoteJidAlt),
+      this.stringValue(key.senderPn),
+      this.stringValue(key.participantAlt),
+    ];
+    for (const candidate of candidates) {
+      const phone = this.phoneFromJid(candidate);
+      if (phone) return phone;
+    }
+    return null;
+  }
+
+  private phoneFromJid(value: string | null) {
+    if (!value) return null;
+    const jid = value.trim();
+    if (!jid || this.isGroup(jid) || this.isBroadcast(jid) || this.isLid(jid)) return null;
+    const local = jid.includes("@") ? jid.split("@")[0] : jid;
+    if (jid.includes("@") && !jid.includes("@s.whatsapp.net")) return null;
+    const digits = local.replace(/\D/g, "");
+    if (digits.length < 8 || digits.length > 15) return null;
+    return digits;
+  }
+
+  private messageText(message: JsonObject) {
+    const conversation = this.stringValue(message.conversation);
+    if (conversation) return conversation;
+    const extended = this.asObject(message.extendedTextMessage);
+    return this.stringValue(extended?.text);
+  }
+
+  private isGroup(jid: string) {
+    return jid.includes("@g.us");
+  }
+
+  private isBroadcast(jid: string) {
+    return jid === "status@broadcast" || jid.includes("@broadcast");
+  }
+
+  private isLid(jid: string) {
+    return jid.includes("@lid");
+  }
+
+  private eventName(record: JsonObject) {
+    const raw = this.stringValue(record.event) ?? this.stringValue(record.type);
+    if (!raw) return "";
+    return raw.toLowerCase().replace(/_/g, ".");
+  }
+
+  private occurredAt(envelope: JsonObject, data: JsonObject) {
+    const dateTime = this.stringValue(envelope.date_time);
+    if (dateTime && !Number.isNaN(Date.parse(dateTime))) return new Date(dateTime);
+    const timestamp = data.messageTimestamp;
+    if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
+      return new Date(timestamp < 1e12 ? timestamp * 1000 : timestamp);
+    }
+    if (typeof timestamp === "string" && /^\d+$/.test(timestamp)) {
+      const numeric = Number(timestamp);
+      return new Date(numeric < 1e12 ? numeric * 1000 : numeric);
+    }
+    return new Date();
+  }
+
+  private webhookUrl(instanceName: string) {
+    const base = process.env.CRM_PUBLIC_API_URL?.trim().replace(/\/+$/, "");
+    if (!base) {
+      throw new ServiceUnavailableException("CRM public API URL is not configured");
+    }
+    return `${base}/api/webhooks/connections/evolution/${encodeURIComponent(instanceName)}`;
   }
 
   private async readQr(externalInstanceId: string): Promise<ProviderQr | null> {
@@ -227,6 +409,10 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
     return record?.error === true;
   }
 
+  private stringValue(value: unknown) {
+    return typeof value === "string" && value.trim() ? value.trim() : null;
+  }
+
   private asObject(value: unknown): JsonObject | null {
     return value && typeof value === "object" && !Array.isArray(value)
       ? (value as JsonObject)
@@ -234,8 +420,11 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
   }
 
   private redact(message: string) {
-    const key = process.env.EVOLUTION_API_KEY?.trim();
-    if (!key) return message;
-    return message.split(key).join("[redacted]");
+    let result = message;
+    for (const value of [process.env.EVOLUTION_API_KEY, process.env.EVOLUTION_WEBHOOK_SECRET]) {
+      const secret = value?.trim();
+      if (secret) result = result.split(secret).join("[redacted]");
+    }
+    return result;
   }
 }

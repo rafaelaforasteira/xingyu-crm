@@ -38,6 +38,9 @@ export class ConnectionsInboundService {
     channel: { id: string; organizationId: string },
     event: NormalizedProviderEvent,
   ) {
+    if (event.kind === "ignored") {
+      return { accepted: true, ignored: true };
+    }
     try {
       return await this.prisma.$transaction(
         async (tx) => {

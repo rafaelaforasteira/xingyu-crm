@@ -34,7 +34,11 @@ export class ConnectionsWebhookController {
     if (!provider.validateWebhook(payload, signature)) {
       throw new ForbiddenException("Invalid webhook signature");
     }
+    const event = provider.normalizeWebhook(payload);
+    if (event.kind === "ignored") {
+      return { accepted: true, ignored: true };
+    }
     const channel = await this.inbound.resolveChannel(providerName, externalInstanceId);
-    return this.inbound.process(channel, provider.normalizeWebhook(payload));
+    return this.inbound.process(channel, event);
   }
 }

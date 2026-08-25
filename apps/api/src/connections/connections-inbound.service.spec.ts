@@ -128,4 +128,16 @@ describe("ConnectionsInboundService", () => {
       select: expect.any(Object),
     });
   });
+
+  it("acknowledges ignored provider events without side effects", async () => {
+    const prisma = createPrisma();
+    const service = new ConnectionsInboundService(prisma as PrismaService);
+
+    await expect(service.process(channel, { kind: "ignored", reason: "fromMe" })).resolves.toEqual({
+      accepted: true,
+      ignored: true,
+    });
+    expect(prisma.providerEventReceipt.create).not.toHaveBeenCalled();
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
 });

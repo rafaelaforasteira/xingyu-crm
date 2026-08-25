@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   ConflictException,
   HttpException,
   ServiceUnavailableException,
@@ -10,6 +11,7 @@ import { ConnectionProviderRegistry } from "./connection-provider.registry";
 import { FakeWhatsAppProvider } from "./fake-whatsapp.provider";
 
 const API_KEY = "evolution-secret-key-test-value";
+const WEBHOOK_SECRET = "evolution-webhook-secret-test-value";
 const CHANNEL_ID = "550e8400-e29b-41d4-a716-446655440000";
 const INSTANCE_NAME = `xingyu-${CHANNEL_ID}`;
 const PNG_BASE64 =
@@ -30,6 +32,21 @@ function errorText(error: unknown) {
   return String(error);
 }
 
+function webhookEnvelope(
+  event: string,
+  data: Record<string, unknown>,
+  extras: Record<string, unknown> = {},
+) {
+  return {
+    event,
+    instance: INSTANCE_NAME,
+    data,
+    date_time: "2026-08-24T18:00:00.000Z",
+    sender: "evolution",
+    ...extras,
+  };
+}
+
 describe("EvolutionWhatsAppProvider", () => {
   const originalEnv = { ...process.env };
   const originalFetch = global.fetch;
@@ -39,8 +56,20 @@ describe("EvolutionWhatsAppProvider", () => {
   beforeEach(() => {
     process.env.EVOLUTION_API_URL = "https://evolution.example.com/";
     process.env.EVOLUTION_API_KEY = API_KEY;
-    delete process.env.EVOLUTION_WEBHOOK_SECRET;
-    fetchMock = jest.fn();
+    process.env.EVOLUTION_WEBHOOK_SECRET = WEBHOOK_SECRET;
+    process.env.CRM_PUBLIC_API_URL = "https://crm.example.com";
+    fetchMock = jest.fn(async (url: string) => {
+      if (String(url).includes("/instance/create")) {
+        return jsonResponse(201, {
+          instance: { instanceName: INSTANCE_NAME, status: "connecting" },
+          hash: "instance-token-must-not-leak",
+        });
+      }
+      if (String(url).includes("/webhook/set")) {
+        return jsonResponse(201, { enabled: true });
+      }
+      return jsonResponse(200, {});
+    });
     global.fetch = fetchMock as typeof fetch;
     provider = new EvolutionWhatsAppProvider();
   });
@@ -52,21 +81,15 @@ describe("EvolutionWhatsAppProvider", () => {
   });
 
   it("creates an instance on the Evolution v2 endpoint with the apikey header", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(201, {
-        instance: { instanceName: INSTANCE_NAME, status: "connecting" },
-        hash: "instance-token-must-not-leak",
-      }),
-    );
-
     const created = await provider.create(CHANNEL_ID);
 
     expect(created).toEqual({
       externalInstanceId: INSTANCE_NAME,
       status: ConnectionLifecycleStatus.DRAFT,
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const createCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/instance/create"));
+    expect(createCall).toBeDefined();
+    const [url, init] = createCall as [string, RequestInit];
     expect(url).toBe("https://evolution.example.com/instance/create");
     expect(init.method).toBe("POST");
     expect(init.headers).toEqual(
@@ -80,6 +103,43 @@ describe("EvolutionWhatsAppProvider", () => {
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
     });
+  });
+
+  it("configures the instance webhook after create with the signature header", async () => {
+    await provider.create(CHANNEL_ID);
+
+    const webhookCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/webhook/set"));
+    expect(webhookCall).toBeDefined();
+    const [url, init] = webhookCall as [string, RequestInit];
+    expect(url).toBe(`https://evolution.example.com/webhook/set/${INSTANCE_NAME}`);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      webhook: {
+        enabled: true,
+        url: `https://crm.example.com/api/webhooks/connections/evolution/${INSTANCE_NAME}`,
+        byEvents: false,
+        base64: false,
+        headers: { "x-connection-signature": WEBHOOK_SECRET },
+        events: ["CONNECTION_UPDATE", "MESSAGES_UPSERT", "QRCODE_UPDATED"],
+      },
+    });
+  });
+
+  it("reapplies the webhook when create returns 409", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/instance/create")) {
+        return jsonResponse(409, { message: "already exists" });
+      }
+      if (String(url).includes("/webhook/set")) {
+        return jsonResponse(201, { enabled: true });
+      }
+      return jsonResponse(200, {});
+    });
+
+    const created = await provider.create(CHANNEL_ID);
+
+    expect(created.externalInstanceId).toBe(INSTANCE_NAME);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/webhook/set"))).toBe(true);
   });
 
   it("converts a real Evolution QR image into qrPayload", async () => {
@@ -171,11 +231,12 @@ describe("EvolutionWhatsAppProvider", () => {
       await provider.create(CHANNEL_ID);
     } catch (error) {
       expect(errorText(error)).not.toContain(API_KEY);
+      expect(errorText(error)).not.toContain(WEBHOOK_SECRET);
     }
   });
 
-  it("maps 500 without exposing the API key", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(500, { error: API_KEY }));
+  it("maps 500 without exposing the API key or webhook secret", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(500, { error: `${API_KEY} ${WEBHOOK_SECRET}` }));
 
     try {
       await provider.connect(CHANNEL_ID, INSTANCE_NAME);
@@ -184,14 +245,161 @@ describe("EvolutionWhatsAppProvider", () => {
       expect(error).toBeInstanceOf(BadGatewayException);
       expect(errorText(error)).toContain("Evolution API is unavailable");
       expect(errorText(error)).not.toContain(API_KEY);
+      expect(errorText(error)).not.toContain(WEBHOOK_SECRET);
     }
   });
 
+  it("accepts a matching webhook signature and rejects a wrong one", () => {
+    expect(provider.validateWebhook({ event: "connection.update" }, WEBHOOK_SECRET)).toBe(true);
+    expect(provider.validateWebhook({ event: "connection.update" }, "wrong")).toBe(false);
+  });
+
   it("never accepts an Evolution webhook without the server-side secret", () => {
+    delete process.env.EVOLUTION_WEBHOOK_SECRET;
     expect(provider.validateWebhook({ event: "connection.update" }, "anything")).toBe(false);
-    process.env.EVOLUTION_WEBHOOK_SECRET = "webhook-shared-secret";
-    expect(provider.validateWebhook({}, "webhook-shared-secret")).toBe(true);
-    expect(provider.validateWebhook({}, "wrong")).toBe(false);
+  });
+
+  it("normalizes CONNECTION_UPDATE open to connected with displayAccount", () => {
+    const event = provider.normalizeWebhook(
+      webhookEnvelope("connection.update", {
+        instance: INSTANCE_NAME,
+        state: "open",
+        wuid: "5511999887766@s.whatsapp.net",
+        profileName: "Comercial",
+        statusReason: 200,
+      }),
+    );
+
+    expect(event).toEqual({
+      kind: "connection_status",
+      externalEventId: `evolution:${INSTANCE_NAME}:connection.update:open:2026-08-24T18:00:00.000Z`,
+      status: "open",
+      displayAccount: "+5511999887766",
+      errorCode: "200",
+      occurredAt: new Date("2026-08-24T18:00:00.000Z"),
+    });
+  });
+
+  it("normalizes CONNECTION_UPDATE close", () => {
+    const event = provider.normalizeWebhook(
+      webhookEnvelope("CONNECTION_UPDATE", {
+        instance: INSTANCE_NAME,
+        state: "close",
+        statusReason: 401,
+      }),
+    );
+
+    expect(event.kind).toBe("connection_status");
+    if (event.kind !== "connection_status") return;
+    expect(event.status).toBe("close");
+    expect(event.errorCode).toBe("401");
+  });
+
+  it("normalizes a simple inbound conversation message", () => {
+    const event = provider.normalizeWebhook(
+      webhookEnvelope("messages.upsert", {
+        key: {
+          remoteJid: "5511987654321@s.whatsapp.net",
+          fromMe: false,
+          id: "MSG123",
+        },
+        pushName: "Maria Silva",
+        message: { conversation: "Olá" },
+        messageTimestamp: 1756058400,
+      }),
+    );
+
+    expect(event).toEqual({
+      kind: "inbound_message",
+      externalEventId: `evolution:${INSTANCE_NAME}:messages.upsert:MSG123:2026-08-24T18:00:00.000Z`,
+      externalMessageId: "MSG123",
+      phone: "5511987654321",
+      contactName: "Maria Silva",
+      body: "Olá",
+      occurredAt: new Date("2026-08-24T18:00:00.000Z"),
+    });
+  });
+
+  it("normalizes extendedTextMessage text", () => {
+    const event = provider.normalizeWebhook(
+      webhookEnvelope("MESSAGES_UPSERT", {
+        key: {
+          remoteJid: "5511912345678@s.whatsapp.net",
+          fromMe: false,
+          id: "MSG456",
+        },
+        message: { extendedTextMessage: { text: "Segue o link" } },
+      }),
+    );
+
+    expect(event.kind).toBe("inbound_message");
+    if (event.kind !== "inbound_message") return;
+    expect(event.body).toBe("Segue o link");
+  });
+
+  it("ignores outbound, broadcast, group, and invalid payloads without throwing 400", () => {
+    expect(
+      provider.normalizeWebhook(
+        webhookEnvelope("messages.upsert", {
+          key: { remoteJid: "5511987654321@s.whatsapp.net", fromMe: true, id: "OUT1" },
+          message: { conversation: "eu enviei" },
+        }),
+      ),
+    ).toEqual({ kind: "ignored", reason: "fromMe" });
+
+    expect(
+      provider.normalizeWebhook(
+        webhookEnvelope("messages.upsert", {
+          key: { remoteJid: "status@broadcast", fromMe: false, id: "ST1" },
+          message: { conversation: "status" },
+        }),
+      ),
+    ).toEqual({ kind: "ignored", reason: "broadcast" });
+
+    expect(
+      provider.normalizeWebhook(
+        webhookEnvelope("messages.upsert", {
+          key: { remoteJid: "1203630-group@g.us", fromMe: false, id: "G1" },
+          message: { conversation: "grupo" },
+        }),
+      ),
+    ).toEqual({ kind: "ignored", reason: "group" });
+
+    expect(provider.normalizeWebhook(webhookEnvelope("qrcode.updated", { qrcode: {} }))).toEqual({
+      kind: "ignored",
+      reason: "qrcode.updated",
+    });
+  });
+
+  it("does not invent a phone number from a LID without a real PN", () => {
+    expect(
+      provider.normalizeWebhook(
+        webhookEnvelope("messages.upsert", {
+          key: { remoteJid: "123456789012345@lid", fromMe: false, id: "LID1" },
+          message: { conversation: "oi" },
+        }),
+      ),
+    ).toEqual({ kind: "ignored", reason: "missing-phone" });
+
+    const withAlt = provider.normalizeWebhook(
+      webhookEnvelope("messages.upsert", {
+        key: {
+          remoteJid: "123456789012345@lid",
+          remoteJidAlt: "5511999999999@s.whatsapp.net",
+          fromMe: false,
+          id: "LID2",
+        },
+        message: { conversation: "oi" },
+      }),
+    );
+    expect(withAlt.kind).toBe("inbound_message");
+    if (withAlt.kind !== "inbound_message") return;
+    expect(withAlt.phone).toBe("5511999999999");
+  });
+
+  it("rejects an invalid webhook payload", () => {
+    expect(() => provider.normalizeWebhook(null)).toThrow(BadRequestException);
+    expect(() => provider.normalizeWebhook("nope")).toThrow(BadRequestException);
   });
 });
 
