@@ -209,7 +209,9 @@ export class ConnectionsService {
 
   async qr(organizationId: string, id: string) {
     const connection = await this.requireConnection(organizationId, id);
-    const qr = await this.providers.get(connection.provider).getQr(id);
+    const qr = await this.providers
+      .get(connection.provider)
+      .getQr(id, this.requireExternalId(connection));
     if (!qr) throw new ConflictException("QR code is unavailable or expired");
     return qr;
   }

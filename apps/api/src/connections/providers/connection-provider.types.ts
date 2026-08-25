@@ -34,7 +34,7 @@ export interface ConnectionProvider {
   readonly name: string;
   create(channelId: string): Promise<ProviderConnection>;
   connect(channelId: string, externalInstanceId: string): Promise<ProviderQr>;
-  getQr(channelId: string): Promise<ProviderQr | null>;
+  getQr(channelId: string, externalInstanceId: string): Promise<ProviderQr | null>;
   disconnect(channelId: string, externalInstanceId: string): Promise<void>;
   validateWebhook(payload: unknown, signature?: string): boolean;
   normalizeWebhook(payload: unknown): NormalizedProviderEvent;

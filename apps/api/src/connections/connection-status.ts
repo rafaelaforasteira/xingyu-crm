@@ -23,7 +23,9 @@ export function mapProviderStatus(status: string): ConnectionLifecycleStatus {
     CONNECTED: ConnectionLifecycleStatus.CONNECTED,
     CONNECTING: ConnectionLifecycleStatus.CONNECTING,
     QR: ConnectionLifecycleStatus.QR_PENDING,
+    QRCODE: ConnectionLifecycleStatus.QR_PENDING,
     QR_PENDING: ConnectionLifecycleStatus.QR_PENDING,
+    PAIRING: ConnectionLifecycleStatus.QR_PENDING,
     RECONNECTING: ConnectionLifecycleStatus.RECONNECTING,
     CLOSE: ConnectionLifecycleStatus.DISCONNECTED,
     CLOSED: ConnectionLifecycleStatus.DISCONNECTED,
@@ -31,6 +33,7 @@ export function mapProviderStatus(status: string): ConnectionLifecycleStatus {
     DISCONNECTED: ConnectionLifecycleStatus.DISCONNECTED,
     ERROR: ConnectionLifecycleStatus.ERROR,
     FAILED: ConnectionLifecycleStatus.ERROR,
+    REFUSED: ConnectionLifecycleStatus.ERROR,
   };
   return aliases[normalized] ?? ConnectionLifecycleStatus.ERROR;
 }

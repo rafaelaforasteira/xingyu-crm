@@ -8,8 +8,11 @@ import {
 describe("connection status mapping", () => {
   it("maps provider aliases to lifecycle statuses", () => {
     expect(mapProviderStatus("ready")).toBe(ConnectionLifecycleStatus.CONNECTED);
+    expect(mapProviderStatus("open")).toBe(ConnectionLifecycleStatus.CONNECTED);
     expect(mapProviderStatus("qr")).toBe(ConnectionLifecycleStatus.QR_PENDING);
+    expect(mapProviderStatus("qrcode")).toBe(ConnectionLifecycleStatus.QR_PENDING);
     expect(mapProviderStatus("failed")).toBe(ConnectionLifecycleStatus.ERROR);
+    expect(mapProviderStatus("refused")).toBe(ConnectionLifecycleStatus.ERROR);
   });
 
   it("uses the canonical list filter groups", () => {

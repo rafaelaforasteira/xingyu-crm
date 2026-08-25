@@ -22,7 +22,7 @@ export class FakeWhatsAppProvider implements ConnectionProvider {
     };
   }
 
-  async connect(channelId: string): Promise<ProviderQr> {
+  async connect(channelId: string, _externalInstanceId?: string): Promise<ProviderQr> {
     this.clearQr(channelId);
     const expiresAt = new Date(Date.now() + 60_000);
     const value = `xingyu:${channelId}:${randomUUID()}`;
@@ -38,7 +38,7 @@ export class FakeWhatsAppProvider implements ConnectionProvider {
     return qr;
   }
 
-  async getQr(channelId: string): Promise<ProviderQr | null> {
+  async getQr(channelId: string, _externalInstanceId?: string): Promise<ProviderQr | null> {
     const qr = this.qrs.get(channelId);
     if (!qr || qr.expiresAt <= new Date()) {
       this.clearQr(channelId);
@@ -48,7 +48,7 @@ export class FakeWhatsAppProvider implements ConnectionProvider {
     return result;
   }
 
-  async disconnect(channelId: string): Promise<void> {
+  async disconnect(channelId: string, _externalInstanceId?: string): Promise<void> {
     this.clearQr(channelId);
   }
 
