@@ -90,7 +90,7 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
       `/message/sendText/${encodeURIComponent(externalInstanceId)}`,
       {
         number: destination,
-        textMessage: { text },
+        text,
       },
     );
     if (this.hasEvolutionError(payload)) {

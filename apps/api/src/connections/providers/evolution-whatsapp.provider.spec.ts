@@ -439,7 +439,7 @@ describe("EvolutionWhatsAppProvider", () => {
     );
     expect(JSON.parse(String(init.body))).toEqual({
       number: "5511999999999",
-      textMessage: { text: "Mensagem" },
+      text: "Mensagem",
     });
   });
 
