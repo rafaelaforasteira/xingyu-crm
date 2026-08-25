@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   HttpException,
+  NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { ConnectionLifecycleStatus } from "@xingyu/database";
@@ -401,6 +402,120 @@ describe("EvolutionWhatsAppProvider", () => {
     expect(() => provider.normalizeWebhook(null)).toThrow(BadRequestException);
     expect(() => provider.normalizeWebhook("nope")).toThrow(BadRequestException);
   });
+
+  it("sends text to the Evolution v2 sendText endpoint", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(201, {
+        key: {
+          remoteJid: "5511999999999@s.whatsapp.net",
+          fromMe: true,
+          id: "BAE5OUTBOUND1",
+        },
+        status: "PENDING",
+      }),
+    );
+
+    const result = await provider.sendText(
+      CHANNEL_ID,
+      INSTANCE_NAME,
+      "5511999999999",
+      "Mensagem",
+    );
+
+    expect(result).toEqual({
+      externalMessageId: "BAE5OUTBOUND1",
+      remoteJid: "5511999999999@s.whatsapp.net",
+      status: "PENDING",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`https://evolution.example.com/message/sendText/${INSTANCE_NAME}`);
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual(
+      expect.objectContaining({
+        apikey: API_KEY,
+        "Content-Type": "application/json",
+      }),
+    );
+    expect(JSON.parse(String(init.body))).toEqual({
+      number: "5511999999999",
+      textMessage: { text: "Mensagem" },
+    });
+  });
+
+  it("maps sendText 400 without exposing secrets", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(400, { message: `bad ${API_KEY}` }));
+    try {
+      await provider.sendText(CHANNEL_ID, INSTANCE_NAME, "5511999999999", "oi");
+      throw new Error("expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect(errorText(error)).toContain("Evolution API request failed");
+      expect(errorText(error)).not.toContain(API_KEY);
+      expect(errorText(error)).not.toContain(WEBHOOK_SECRET);
+    }
+  });
+
+  it("maps sendText 401 and 403 as authentication failures", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(401, { error: API_KEY }));
+    await expect(
+      provider.sendText(CHANNEL_ID, INSTANCE_NAME, "5511999999999", "oi"),
+    ).rejects.toBeInstanceOf(BadGatewayException);
+
+    fetchMock.mockResolvedValue(jsonResponse(403, { error: WEBHOOK_SECRET }));
+    try {
+      await provider.sendText(CHANNEL_ID, INSTANCE_NAME, "5511999999999", "oi");
+      throw new Error("expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadGatewayException);
+      expect(errorText(error)).toContain("Evolution API authentication failed");
+      expect(errorText(error)).not.toContain(API_KEY);
+      expect(errorText(error)).not.toContain(WEBHOOK_SECRET);
+    }
+  });
+
+  it("maps sendText 404 to a missing instance", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(404, { message: "not found" }));
+    await expect(
+      provider.sendText(CHANNEL_ID, INSTANCE_NAME, "5511999999999", "oi"),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("maps sendText 500 without exposing secrets", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(500, { error: `${API_KEY} ${WEBHOOK_SECRET}` }));
+    try {
+      await provider.sendText(CHANNEL_ID, INSTANCE_NAME, "5511999999999", "oi");
+      throw new Error("expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadGatewayException);
+      expect(errorText(error)).toContain("Evolution API is unavailable");
+      expect(errorText(error)).not.toContain(API_KEY);
+      expect(errorText(error)).not.toContain(WEBHOOK_SECRET);
+    }
+  });
+
+  it("times out sendText without exposing secrets", async () => {
+    jest.useFakeTimers();
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          const error = new Error(`Aborted ${API_KEY}`);
+          error.name = "AbortError";
+          reject(error);
+        });
+      });
+    });
+
+    const pending = provider.sendText(CHANNEL_ID, INSTANCE_NAME, "5511999999999", "oi");
+    const assertion = pending.catch((error: unknown) => {
+      expect(error).toBeInstanceOf(ServiceUnavailableException);
+      expect(errorText(error)).toContain("Evolution API request timed out");
+      expect(errorText(error)).not.toContain(API_KEY);
+      expect(errorText(error)).not.toContain(WEBHOOK_SECRET);
+    });
+    await jest.advanceTimersByTimeAsync(15_000);
+    await assertion;
+  });
 });
 
 describe("ConnectionProviderRegistry with Evolution", () => {
@@ -424,5 +539,10 @@ describe("ConnectionProviderRegistry with Evolution", () => {
     const created = await registry.get("fake").create("channel-test");
     expect(created.externalInstanceId).toMatch(/^fake-channel-test-/);
     expect(created.status).toBe(ConnectionLifecycleStatus.DRAFT);
+
+    const sent = await registry.get("fake").sendText("channel-test", created.externalInstanceId, "5511999999999", "oi");
+    expect(sent.externalMessageId).toMatch(/^fake-/);
+    expect(sent.remoteJid).toBe("5511999999999@s.whatsapp.net");
+    expect(sent.status).toBe("SENT");
   });
 });

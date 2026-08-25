@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@xingyu/database";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { ConnectionLifecycleStatus, Prisma } from "@xingyu/database";
+import { ConnectionProviderRegistry } from "../connections/providers/connection-provider.registry";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
@@ -93,7 +99,10 @@ const DETAIL_INCLUDE = {
 
 @Injectable()
 export class ConversationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly providers: ConnectionProviderRegistry,
+  ) {}
 
   private async assertConversationExists(organizationId: string, id: string) {
     const conversation = await this.prisma.conversation.findFirst({
@@ -799,7 +808,7 @@ export class ConversationsService {
     userId: string,
     files: Express.Multer.File[] = [],
   ) {
-    const conversation = await this.assertConversationExists(organizationId, conversationId);
+    const conversation = await this.loadConversationForSend(organizationId, conversationId);
     const now = new Date();
     const direction = dto.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const);
     const trimmedBody = dto.body?.trim() ?? "";
@@ -809,13 +818,170 @@ export class ConversationsService {
       throw new BadRequestException("Informe uma mensagem ou anexe um arquivo.");
     }
 
+    const usesLiveChannel = direction === "OUTBOUND" && Boolean(conversation.channelId);
+    if (usesLiveChannel) {
+      return this.sendProviderText(
+        organizationId,
+        conversation,
+        dto,
+        userId,
+        files,
+        trimmedBody,
+        now,
+      );
+    }
+
+    return this.persistCrmOnlyMessage(
+      organizationId,
+      conversation,
+      dto,
+      userId,
+      files,
+      trimmedBody,
+      direction,
+      now,
+    );
+  }
+
+  private async loadConversationForSend(organizationId: string, id: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      select: {
+        id: true,
+        contactId: true,
+        channelId: true,
+        contact: { select: { id: true, whatsapp: true, phone: true } },
+        channel: {
+          select: {
+            id: true,
+            provider: true,
+            externalAccountId: true,
+            lifecycleStatus: true,
+            archivedAt: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+    if (!conversation) {
+      throw new NotFoundException(`Conversation ${id} not found`);
+    }
+    return conversation;
+  }
+
+  private async sendProviderText(
+    organizationId: string,
+    conversation: Awaited<ReturnType<ConversationsService["loadConversationForSend"]>>,
+    dto: SendMessageDto,
+    userId: string,
+    files: Express.Multer.File[],
+    trimmedBody: string,
+    now: Date,
+  ) {
+    const channel = conversation.channel;
+    if (!channel) {
+      throw new BadRequestException("Esta conversa não possui um canal de conexão.");
+    }
+    if (channel.archivedAt || channel.deletedAt) {
+      throw new ConflictException("A conexão deste canal está arquivada.");
+    }
+    if (!channel.externalAccountId?.trim()) {
+      throw new ConflictException("Connection provider instance is missing");
+    }
+    if (channel.lifecycleStatus !== ConnectionLifecycleStatus.CONNECTED) {
+      throw new ConflictException("A conexão não está conectada.");
+    }
+    if (this.requiresMediaSend(dto, files.length > 0)) {
+      throw new BadRequestException("Envio de mídia ainda não está disponível neste canal.");
+    }
+    if (!trimmedBody) {
+      throw new BadRequestException("Informe uma mensagem ou anexe um arquivo.");
+    }
+
+    const destination =
+      this.destinationDigits(conversation.contact?.whatsapp) ??
+      this.destinationDigits(conversation.contact?.phone);
+    if (!destination) {
+      throw new BadRequestException("O contato não possui WhatsApp ou telefone para envio.");
+    }
+
+    const providerName = channel.provider?.trim();
+    if (!providerName) {
+      throw new BadRequestException("Connection provider is not configured");
+    }
+    const provider = this.providers.get(providerName);
+    const sent = await provider.sendText(
+      channel.id,
+      channel.externalAccountId,
+      destination,
+      trimmedBody,
+    );
+
+    const isAutomation = dto.senderType === "automation";
+    const message = await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        channelId: channel.id,
+        body: trimmedBody,
+        direction: "OUTBOUND",
+        senderId: isAutomation ? null : userId,
+        status: "SENT",
+        sentAt: now,
+        metadata: {
+          contentType: dto.contentType ?? "text",
+          provider: providerName,
+          ...(sent.externalMessageId ? { externalMessageId: sent.externalMessageId } : {}),
+          ...(sent.remoteJid ? { remoteJid: sent.remoteJid } : {}),
+          ...(isAutomation ? { senderType: "automation" } : {}),
+        },
+      },
+      include: {
+        attachments: true,
+        sender: { select: { id: true, name: true } },
+      },
+    });
+
+    await this.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: now, unreadCount: 0 },
+    });
+    await this.prisma.channel.update({
+      where: { id: channel.id },
+      data: { lastOutboundAt: now, lastActivityAt: now },
+    });
+    await this.prisma.activity.create({
+      data: {
+        organizationId,
+        type: "MESSAGE_SENT",
+        title: "Mensagem enviada",
+        description: trimmedBody.slice(0, 200),
+        contactId: conversation.contactId,
+        conversationId: conversation.id,
+        actorId: userId,
+      },
+    });
+
+    return message;
+  }
+
+  private async persistCrmOnlyMessage(
+    organizationId: string,
+    conversation: { id: string; contactId: string | null },
+    dto: SendMessageDto,
+    userId: string,
+    files: Express.Multer.File[],
+    trimmedBody: string,
+    direction: "INBOUND" | "OUTBOUND",
+    now: Date,
+  ) {
+    const hasFiles = files.length > 0;
     const savedUploads = files.map((file) => validateAndSaveUpload(file));
     const isAutomation = dto.senderType === "automation";
     const senderId = direction === "OUTBOUND" && !isAutomation ? userId : null;
 
     const message = await this.prisma.message.create({
       data: {
-        conversationId,
+        conversationId: conversation.id,
         body: trimmedBody || null,
         direction,
         senderId,
@@ -848,7 +1014,7 @@ export class ConversationsService {
       trimmedBody || (savedUploads[0] ? `Anexo: ${savedUploads[0].originalName}` : "Nova mensagem");
 
     await this.prisma.conversation.update({
-      where: { id: conversationId },
+      where: { id: conversation.id },
       data: { lastMessageAt: now, unreadCount: 0 },
     });
 
@@ -859,12 +1025,27 @@ export class ConversationsService {
         title: "Mensagem enviada",
         description: preview.slice(0, 200),
         contactId: conversation.contactId,
-        conversationId,
+        conversationId: conversation.id,
         actorId: userId,
       },
     });
 
     return message;
+  }
+
+  private destinationDigits(value?: string | null) {
+    if (!value) return null;
+    const digits = value.replace(/\D/g, "");
+    return digits.length > 0 ? digits : null;
+  }
+
+  private requiresMediaSend(dto: SendMessageDto, hasFiles: boolean) {
+    if (hasFiles) return true;
+    const contentType = dto.contentType?.trim().toLowerCase() ?? "";
+    if (!contentType) return false;
+    if (contentType === "text" || contentType === "text/plain") return false;
+    if (contentType.startsWith("text/plain;")) return false;
+    return true;
   }
 
   private async resolveMessageCursor(

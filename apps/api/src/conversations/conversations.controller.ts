@@ -114,7 +114,7 @@ export class ConversationsController {
   @ApiOperation({
     summary: "Send message (text and/or CRM-only attachments)",
     description:
-      "Attachments are stored in the CRM only. They are not forwarded to WhatsApp/Meta in this phase.",
+      "Live WhatsApp connections send text through the channel provider. Media on a live channel is not available yet. Conversations without a connection still store CRM-only attachments locally.",
   })
   @ApiConsumes("application/json", "multipart/form-data")
   @ApiBody({ type: SendMessageDto })

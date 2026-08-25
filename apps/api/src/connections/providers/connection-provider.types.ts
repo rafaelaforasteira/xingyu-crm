@@ -34,12 +34,24 @@ export type NormalizedProviderEvent =
       occurredAt: Date;
     };
 
+export type ProviderOutboundTextResult = {
+  externalMessageId?: string;
+  remoteJid?: string;
+  status?: string;
+};
+
 export interface ConnectionProvider {
   readonly name: string;
   create(channelId: string): Promise<ProviderConnection>;
   connect(channelId: string, externalInstanceId: string): Promise<ProviderQr>;
   getQr(channelId: string, externalInstanceId: string): Promise<ProviderQr | null>;
   disconnect(channelId: string, externalInstanceId: string): Promise<void>;
+  sendText(
+    channelId: string,
+    externalInstanceId: string,
+    destination: string,
+    text: string,
+  ): Promise<ProviderOutboundTextResult>;
   validateWebhook(payload: unknown, signature?: string): boolean;
   normalizeWebhook(payload: unknown): NormalizedProviderEvent;
 }

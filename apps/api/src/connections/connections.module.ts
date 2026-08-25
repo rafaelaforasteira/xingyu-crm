@@ -16,7 +16,7 @@ import { FakeWhatsAppProvider } from "./providers/fake-whatsapp.provider";
     FakeWhatsAppProvider,
     EvolutionWhatsAppProvider,
   ],
-  exports: [ConnectionsService, ConnectionsInboundService],
+  exports: [ConnectionsService, ConnectionsInboundService, ConnectionProviderRegistry],
 })
 export class ConnectionsModule {}
 

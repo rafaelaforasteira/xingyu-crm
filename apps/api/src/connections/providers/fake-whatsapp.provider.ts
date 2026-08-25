@@ -5,6 +5,7 @@ import type {
   ConnectionProvider,
   NormalizedProviderEvent,
   ProviderConnection,
+  ProviderOutboundTextResult,
   ProviderQr,
 } from "./connection-provider.types";
 
@@ -50,6 +51,19 @@ export class FakeWhatsAppProvider implements ConnectionProvider {
 
   async disconnect(channelId: string, _externalInstanceId?: string): Promise<void> {
     this.clearQr(channelId);
+  }
+
+  async sendText(
+    _channelId: string,
+    _externalInstanceId: string,
+    destination: string,
+    _text: string,
+  ): Promise<ProviderOutboundTextResult> {
+    return {
+      externalMessageId: `fake-${randomUUID()}`,
+      remoteJid: `${destination}@s.whatsapp.net`,
+      status: "SENT",
+    };
   }
 
   simulateScan(channelId: string) {

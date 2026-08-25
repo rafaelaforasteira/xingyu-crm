@@ -13,6 +13,7 @@ import type {
   ConnectionProvider,
   NormalizedProviderEvent,
   ProviderConnection,
+  ProviderOutboundTextResult,
   ProviderQr,
 } from "./connection-provider.types";
 
@@ -76,6 +77,26 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
       if (status === 400 || status === 404) return;
       throw error;
     }
+  }
+
+  async sendText(
+    _channelId: string,
+    externalInstanceId: string,
+    destination: string,
+    text: string,
+  ): Promise<ProviderOutboundTextResult> {
+    const payload = await this.request(
+      "POST",
+      `/message/sendText/${encodeURIComponent(externalInstanceId)}`,
+      {
+        number: destination,
+        textMessage: { text },
+      },
+    );
+    if (this.hasEvolutionError(payload)) {
+      throw new BadGatewayException("Evolution API request failed");
+    }
+    return this.readOutboundResult(payload);
   }
 
   async ensureWebhook(externalInstanceId: string): Promise<void> {
@@ -294,6 +315,19 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "");
     return `xingyu-${sanitized || "channel"}`.slice(0, 100);
+  }
+
+  private readOutboundResult(payload: unknown): ProviderOutboundTextResult {
+    const record = this.asObject(payload);
+    const key = this.asObject(record?.key);
+    return {
+      externalMessageId:
+        this.stringValue(key?.id) ??
+        this.stringValue(record?.keyId) ??
+        this.stringValue(record?.messageId),
+      remoteJid: this.stringValue(key?.remoteJid),
+      status: this.stringValue(record?.status) ?? this.stringValue(record?.messageStatus),
+    };
   }
 
   private readInstanceName(payload: unknown, fallback: string) {
