@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import { ActivityType, DealStatus, PipelineStageType, Prisma } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
@@ -21,6 +22,8 @@ import {
 import { allocateLeadSequence, formatLeadCode } from "../common/lead-sequence";
 import { normalizePhone } from "../common/phone-normalization";
 import { toDealResponse } from "../common/mappers";
+import { DomainEventsService } from "../automations/runtime/domain-events.service";
+import { DOMAIN_EVENT_TYPES } from "../automations/domain/constants";
 
 type DbClient = Prisma.TransactionClient | PrismaService;
 
@@ -68,7 +71,10 @@ const dealMutationSelect = {
 
 @Injectable()
 export class DealsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly domainEvents?: DomainEventsService,
+  ) {}
 
   async findAll(organizationId: string, query: QueryDealsDto, allowedPipelineIds?: string[] | null, ownerId?: string) {
     const page = query.page ?? 1;
@@ -144,7 +150,7 @@ export class DealsService {
   }
 
   async create(organizationId: string, dto: CreateDealDto, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       await this.requireOrganizationUser(tx, organizationId, userId);
       await this.requireActivePipeline(tx, organizationId, dto.pipelineId);
       const stage = await this.requireActiveStage(tx, organizationId, dto.pipelineId, dto.stageId);
@@ -200,8 +206,26 @@ export class DealsService {
         },
       });
 
+      await this.domainEvents?.emit(tx, {
+        organizationId,
+        eventType: DOMAIN_EVENT_TYPES.DEAL_CREATED,
+        aggregateType: "deal",
+        aggregateId: created.id,
+        origin: "USER",
+        actorId: userId,
+        payload: {
+          dealId: created.id,
+          pipelineId: created.pipelineId,
+          stageId: created.stageId,
+          contactId: created.contactId,
+          ownerId: created.ownerId,
+        },
+        subjectType: "deal",
+        subjectId: created.id,
+      });
       return created;
     });
+    return created;
   }
 
   async lookupManualLead(organizationId: string, dto: LookupManualLeadDto, allowedPipelineIds?: string[] | null) {
@@ -427,7 +451,9 @@ export class DealsService {
   }
 
   async update(organizationId: string, id: string, dto: UpdateDealDto, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    let previousStageId: string | null = null;
+    let ownerChangedFrom: string | null | undefined;
+    const updated = await this.prisma.$transaction(async (tx) => {
       const deal = await this.requireDeal(tx, organizationId, id);
       await this.requireOrganizationUser(tx, organizationId, userId);
 
@@ -464,9 +490,11 @@ export class DealsService {
       });
 
       if (stageChanged) {
+        previousStageId = deal.stageId;
         await this.recordStageChange(tx, organizationId, deal, stage, userId, now);
       }
       if (dto.ownerId !== undefined && dto.ownerId !== deal.ownerId) {
+        ownerChangedFrom = deal.ownerId;
         const users = await tx.user.findMany({
           where: {
             id: { in: [deal.ownerId, dto.ownerId].filter(Boolean) as string[] },
@@ -498,6 +526,44 @@ export class DealsService {
       }
       return updated;
     });
+    if (previousStageId) {
+      await this.domainEvents?.emitStandalone({
+        organizationId,
+        eventType: DOMAIN_EVENT_TYPES.DEAL_STAGE_CHANGED,
+        aggregateType: "deal",
+        aggregateId: updated.id,
+        origin: "USER",
+        actorId: userId,
+        payload: {
+          dealId: updated.id,
+          pipelineId: updated.pipelineId,
+          stageId: updated.stageId,
+          fromStageId: previousStageId,
+          contactId: updated.contactId,
+        },
+        subjectType: "deal",
+        subjectId: updated.id,
+      });
+    }
+    if (ownerChangedFrom !== undefined) {
+      await this.domainEvents?.emitStandalone({
+        organizationId,
+        eventType: DOMAIN_EVENT_TYPES.DEAL_OWNER_CHANGED,
+        aggregateType: "deal",
+        aggregateId: updated.id,
+        origin: "USER",
+        actorId: userId,
+        payload: {
+          dealId: updated.id,
+          fromOwnerId: ownerChangedFrom,
+          ownerId: updated.ownerId,
+          contactId: updated.contactId,
+        },
+        subjectType: "deal",
+        subjectId: updated.id,
+      });
+    }
+    return updated;
   }
 
   async addTag(organizationId: string, id: string, tagId: string, userId: string) {
@@ -520,6 +586,17 @@ export class DealsService {
             actorId: userId,
             metadata: { tagId, tagName: tag.name },
           },
+        });
+        await this.domainEvents?.emit(tx, {
+          organizationId,
+          eventType: DOMAIN_EVENT_TYPES.DEAL_TAG_ADDED,
+          aggregateType: "deal",
+          aggregateId: id,
+          origin: "USER",
+          actorId: userId,
+          payload: { dealId: id, tagId, tagName: tag.name, contactId: deal.contactId },
+          subjectType: "deal",
+          subjectId: id,
         });
       }
       return { updated: result.count > 0, tag };
@@ -551,7 +628,8 @@ export class DealsService {
   }
 
   async moveStage(organizationId: string, id: string, dto: MoveStageDto, userId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    let previousStageId: string | null = null;
+    const updated = await this.prisma.$transaction(async (tx) => {
       const deal = await this.requireDeal(tx, organizationId, id);
       await this.requireOrganizationUser(tx, organizationId, userId);
       await this.requireActivePipeline(tx, organizationId, deal.pipelineId);
@@ -570,9 +648,30 @@ export class DealsService {
         },
         include: { stage: true },
       });
+      previousStageId = deal.stageId;
       await this.recordStageChange(tx, organizationId, deal, stage, userId, now);
       return updated;
     });
+    if (previousStageId) {
+      await this.domainEvents?.emitStandalone({
+        organizationId,
+        eventType: DOMAIN_EVENT_TYPES.DEAL_STAGE_CHANGED,
+        aggregateType: "deal",
+        aggregateId: updated.id,
+        origin: "USER",
+        actorId: userId,
+        payload: {
+          dealId: updated.id,
+          pipelineId: updated.pipelineId,
+          stageId: updated.stageId,
+          fromStageId: previousStageId,
+          contactId: updated.contactId,
+        },
+        subjectType: "deal",
+        subjectId: updated.id,
+      });
+    }
+    return updated;
   }
 
   async win(organizationId: string, id: string, dto: WinLoseDto, userId: string) {

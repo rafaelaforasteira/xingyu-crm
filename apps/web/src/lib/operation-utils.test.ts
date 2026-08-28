@@ -181,15 +181,17 @@ describe("navigation mode", () => {
   });
 
   it("keeps the compact sidebar separated into product areas", () => {
-    expect(NAV_GROUPS.map((group) => group.label)).toEqual(["Visão geral", "Relacionamento", "Jornadas", "Gestão"]);
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual(["Visão geral", "Jornadas", "Gestão", "Infraestrutura"]);
     expect(NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href)).toEqual([
       "/dashboard",
       "/tasks",
-      "/clients",
       "/pipelines",
       "/orders",
       "/finance",
+      "/clients",
       "/connections",
+      "/integrations",
+      "/automations",
     ]);
   });
 });
@@ -206,6 +208,12 @@ describe("shouldHideGlobalHeader", () => {
     expect(shouldHideGlobalHeader("/settings", true, false)).toBe(false);
     expect(shouldHideGlobalHeader("/inbox", true, false)).toBe(false);
     expect(shouldHideGlobalHeader("/dashboard", true, false)).toBe(false);
+  });
+
+  it("hides the global header inside Automation Studio", () => {
+    expect(shouldHideGlobalHeader("/automations/abc", true, true)).toBe(true);
+    expect(shouldHideGlobalHeader("/automations", true, true)).toBe(false);
+    expect(shouldHideGlobalHeader("/automations/new", true, true)).toBe(false);
   });
 
   it("keeps header when core mode is off", () => {

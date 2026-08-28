@@ -18,18 +18,20 @@ describe("beta navigation", () => {
   it("uses the sidebar grouped by product area", () => {
     expect(NAV_GROUPS.map((group) => group.label)).toEqual([
       "Visão geral",
-      "Relacionamento",
       "Jornadas",
       "Gestão",
+      "Infraestrutura",
     ]);
     expect(NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href)).toEqual([
       "/dashboard",
       "/tasks",
-      "/clients",
       "/pipelines",
       "/orders",
       "/finance",
+      "/clients",
       "/connections",
+      "/integrations",
+      "/automations",
     ]);
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/orders", label: "Pedidos" }),
@@ -39,6 +41,12 @@ describe("beta navigation", () => {
     );
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/connections", label: "Conexões" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/integrations", label: "Integrações" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/automations", label: "Automações" }),
     );
   });
 });

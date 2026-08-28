@@ -255,6 +255,8 @@ enum AutomationStatus {
   ACTIVE
   INACTIVE
   DRAFT
+  PAUSED
+  ARCHIVED
 }
 
 enum NotificationType {
@@ -368,6 +370,13 @@ model Organization {
   occurrences                Occurrence[]
   campaigns                  Campaign[]
   automations                Automation[]
+  automationVersions         AutomationVersion[]
+  automationDomainEvents     AutomationDomainEvent[]
+  automationJobs             AutomationJob[]
+  automationWaits            AutomationWaitSubscription[]
+  automationTriggers         AutomationTriggerSubscription[]
+  automationTemplates        AutomationTemplate[]
+  automationNodeExecutions   AutomationNodeExecution[]
   notifications              Notification[]
   savedViews                 SavedView[]
   auditLogs                  AuditLog[]
@@ -381,6 +390,8 @@ model Organization {
   taskComments               TaskComment[]
   taskCommentMentions        TaskCommentMention[]
   taskCommentAttachments     TaskCommentAttachment[]
+  automationExecutions       AutomationExecution[]
+  automationIdempotency      AutomationIdempotency[]
 }
 
 model Role {
@@ -1160,39 +1171,39 @@ model CustomFieldValue {
 }
 
 model Channel {
-  id                String                     @id @default(cuid())
-  organizationId    String
-  type              ChannelType
-  name              String
-  provider          String?
-  externalAccountId String?
-  displayName       String?
+  id                    String                    @id @default(cuid())
+  organizationId        String
+  type                  ChannelType
+  name                  String
+  provider              String?
+  externalAccountId     String?
+  displayName           String?
   /// Human-readable account identity (e.g. formatted WhatsApp phone).
-  displayAccount    String?
+  displayAccount        String?
   /// Legacy compatibility flag (ACTIVE / INACTIVE). Prefer lifecycleStatus.
-  status            String                     @default("ACTIVE")
-  lifecycleStatus   ConnectionLifecycleStatus  @default(DRAFT)
-  isActive          Boolean                    @default(true)
-  configurationComplete Boolean                @default(false)
+  status                String                    @default("ACTIVE")
+  lifecycleStatus       ConnectionLifecycleStatus @default(DRAFT)
+  isActive              Boolean                   @default(true)
+  configurationComplete Boolean                   @default(false)
   /// Non-sensitive account configuration. Credentials must be referenced by
   /// secretReference and never persisted in this JSON field.
-  config            Json?
-  secretReference   String?
-  connectedAt       DateTime?
-  disconnectedAt    DateTime?
-  lastActivityAt    DateTime?
-  lastInboundAt     DateTime?
-  lastOutboundAt    DateTime?
-  lastSyncAt        DateTime?
-  lastErrorAt       DateTime?
-  lastErrorCode     String?
-  lastErrorMessage  String?
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
-  deletedAt         DateTime?
-  archivedAt        DateTime?
-  accessMode        ChannelAccessMode          @default(ORGANIZATION)
-  ownerUserId       String?
+  config                Json?
+  secretReference       String?
+  connectedAt           DateTime?
+  disconnectedAt        DateTime?
+  lastActivityAt        DateTime?
+  lastInboundAt         DateTime?
+  lastOutboundAt        DateTime?
+  lastSyncAt            DateTime?
+  lastErrorAt           DateTime?
+  lastErrorCode         String?
+  lastErrorMessage      String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  deletedAt             DateTime?
+  archivedAt            DateTime?
+  accessMode            ChannelAccessMode         @default(ORGANIZATION)
+  ownerUserId           String?
 
   organization        Organization                @relation(fields: [organizationId], references: [id])
   conversations       Conversation[]
@@ -1579,7 +1590,7 @@ model OrderStageDefinition {
 }
 
 model OrderItem {
-  id                String  @id @default(cuid())
+  id                String    @id @default(cuid())
   orderId           String
   productId         String?
   externalProductId String?
@@ -1588,12 +1599,12 @@ model OrderItem {
   productName       String
   sku               String?
   collection        String?
-  quantity          Int     @default(1)
-  unitPrice         Decimal @db.Decimal(12, 2)
-  discount          Decimal @default(0) @db.Decimal(12, 2)
-  totalPrice        Decimal @db.Decimal(12, 2)
+  quantity          Int       @default(1)
+  unitPrice         Decimal   @db.Decimal(12, 2)
+  discount          Decimal   @default(0) @db.Decimal(12, 2)
+  totalPrice        Decimal   @db.Decimal(12, 2)
   imageUrl          String?
-  isSeparated       Boolean  @default(false)
+  isSeparated       Boolean   @default(false)
   separatedAt       DateTime?
 
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1642,23 +1653,23 @@ model Payment {
 }
 
 model Shipment {
-  id           String         @id @default(cuid())
-  orderId      String
-  carrier      String?
-  trackingCode String?
-  trackingIssuedAt DateTime?
-  shippingLabelUrl String?
+  id                   String         @id @default(cuid())
+  orderId              String
+  carrier              String?
+  trackingCode         String?
+  trackingIssuedAt     DateTime?
+  shippingLabelUrl     String?
   commercialInvoiceUrl String?
-  origin       String?
-  destination  String?
-  status       ShipmentStatus @default(PENDING)
-  postedAt     DateTime?
-  expectedAt   DateTime?
-  deliveredAt  DateTime?
-  notes        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  deletedAt    DateTime?
+  origin               String?
+  destination          String?
+  status               ShipmentStatus @default(PENDING)
+  postedAt             DateTime?
+  expectedAt           DateTime?
+  deliveredAt          DateTime?
+  notes                String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  deletedAt            DateTime?
 
   order  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   events ShipmentEvent[]
@@ -1669,23 +1680,23 @@ model Shipment {
 }
 
 model ShipmentEvent {
-  id          String   @id @default(cuid())
-  shipmentId  String
-  status      String
-  description String?
-  location    String?
-  occurredAt  DateTime @default(now())
-  source      String   @default("MANUAL")
-  externalCode String?
+  id              String   @id @default(cuid())
+  shipmentId      String
+  status          String
+  description     String?
+  location        String?
+  occurredAt      DateTime @default(now())
+  source          String   @default("MANUAL")
+  externalCode    String?
   externalEventId String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
+  metadata        Json?
+  createdAt       DateTime @default(now())
 
   shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
+  @@unique([shipmentId, externalEventId])
   @@index([shipmentId])
   @@index([occurredAt])
-  @@unique([shipmentId, externalEventId])
 }
 
 model Occurrence {
@@ -1801,26 +1812,63 @@ model Attribution {
 }
 
 model Automation {
-  id             String           @id @default(cuid())
-  organizationId String
-  name           String
-  description    String?
-  status         AutomationStatus @default(DRAFT)
-  triggerType    String
-  config         Json?
-  createdById    String?
-  updatedById    String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  deletedAt      DateTime?
+  id              String           @id @default(cuid())
+  organizationId  String
+  name            String
+  description     String?
+  status          AutomationStatus @default(DRAFT)
+  triggerType     String           @default("GRAPH")
+  config          Json?
+  draftDefinition Json?
+  settings        Json?
+  webhookToken    String?          @unique
+  activeVersionId String?          @unique
+  revision        Int              @default(0)
+  scopeType       String           @default("ORGANIZATION")
+  scopeId         String?
+  publishedAt     DateTime?
+  pausedAt        DateTime?
+  archivedAt      DateTime?
+  createdById     String?
+  updatedById     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
 
-  organization Organization          @relation(fields: [organizationId], references: [id])
-  nodes        AutomationNode[]
-  edges        AutomationEdge[]
-  executions   AutomationExecution[]
+  organization         Organization                    @relation(fields: [organizationId], references: [id])
+  nodes                AutomationNode[]
+  edges                AutomationEdge[]
+  executions           AutomationExecution[]
+  versions             AutomationVersion[]             @relation("AutomationVersions")
+  activeVersion        AutomationVersion?              @relation("AutomationActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+  jobs                 AutomationJob[]
+  triggerSubscriptions AutomationTriggerSubscription[]
 
   @@index([organizationId])
   @@index([status])
+  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, scopeType, scopeId])
+}
+
+model AutomationVersion {
+  id             String   @id @default(cuid())
+  organizationId String
+  automationId   String
+  version        Int
+  definition     Json
+  checksum       String
+  createdById    String?
+  createdAt      DateTime @default(now())
+  publishedAt    DateTime @default(now())
+
+  organization         Organization                    @relation(fields: [organizationId], references: [id])
+  automation           Automation                      @relation("AutomationVersions", fields: [automationId], references: [id], onDelete: Cascade)
+  activeFor            Automation?                     @relation("AutomationActiveVersion")
+  executions           AutomationExecution[]
+  triggerSubscriptions AutomationTriggerSubscription[]
+
+  @@unique([automationId, version])
+  @@index([organizationId, publishedAt])
 }
 
 model AutomationNode {
@@ -1851,19 +1899,200 @@ model AutomationEdge {
 }
 
 model AutomationExecution {
-  id           String    @id @default(cuid())
-  automationId String
-  status       String    @default("RUNNING")
-  startedAt    DateTime  @default(now())
-  finishedAt   DateTime?
-  context      Json?
-  error        String?
+  id             String    @id @default(cuid())
+  automationId   String
+  organizationId String?
+  versionId      String?
+  triggerEventId String?
+  status         String    @default("RUNNING")
+  subjectType    String?
+  subjectId      String?
+  currentNodeId  String?
+  waitingUntil   DateTime?
+  input          Json?
+  output         Json?
+  retryCount     Int       @default(0)
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  context        Json?
+  error          String?
 
-  automation Automation               @relation(fields: [automationId], references: [id], onDelete: Cascade)
-  logs       AutomationExecutionLog[]
+  automation     Automation                   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  organization   Organization?                @relation(fields: [organizationId], references: [id])
+  version        AutomationVersion?           @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  logs           AutomationExecutionLog[]
+  nodeExecutions AutomationNodeExecution[]
+  jobs           AutomationJob[]
+  waits          AutomationWaitSubscription[]
 
   @@index([automationId])
   @@index([startedAt])
+  @@index([organizationId, status, startedAt])
+  @@index([versionId])
+  @@index([triggerEventId])
+  @@index([subjectType, subjectId])
+}
+
+model AutomationNodeExecution {
+  id             String    @id @default(cuid())
+  organizationId String
+  executionId    String
+  nodeId         String
+  nodeType       String
+  status         String    @default("RUNNING")
+  attempt        Int       @default(1)
+  input          Json?
+  output         Json?
+  errorCode      String?
+  errorMessage   String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  execution    AutomationExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, nodeId, attempt])
+  @@index([organizationId, status, startedAt])
+  @@index([executionId, startedAt])
+}
+
+model AutomationDomainEvent {
+  id               String    @id @default(cuid())
+  organizationId   String
+  eventType        String
+  aggregateType    String
+  aggregateId      String
+  subjectType      String?
+  subjectId        String?
+  origin           String    @default("SYSTEM")
+  actorId          String?
+  correlationId    String?
+  payload          Json
+  metadata         Json?
+  status           String    @default("PENDING")
+  availableAt      DateTime  @default(now())
+  attempts         Int       @default(0)
+  maxAttempts      Int       @default(8)
+  lockedAt         DateTime?
+  lockedBy         String?
+  leaseUntil       DateTime?
+  processedAt      DateTime?
+  lastError        String?
+  deduplicationKey String?
+  occurredAt       DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, deduplicationKey])
+  @@index([status, availableAt, createdAt])
+  @@index([organizationId, eventType, occurredAt])
+  @@index([aggregateType, aggregateId, occurredAt])
+}
+
+model AutomationJob {
+  id             String    @id @default(cuid())
+  organizationId String
+  automationId   String?
+  executionId    String?
+  nodeId         String?
+  jobType        String
+  status         String    @default("PENDING")
+  payload        Json
+  runAt          DateTime  @default(now())
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(8)
+  lockedAt       DateTime?
+  lockedBy       String?
+  leaseUntil     DateTime?
+  completedAt    DateTime?
+  lastError      String?
+  uniqueKey      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  automation   Automation?          @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  execution    AutomationExecution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, uniqueKey])
+  @@index([status, runAt, createdAt])
+  @@index([executionId, status])
+  @@index([automationId, status])
+}
+
+model AutomationWaitSubscription {
+  id             String    @id @default(cuid())
+  organizationId String
+  executionId    String
+  nodeId         String
+  eventType      String
+  subjectType    String?
+  subjectId      String?
+  correlation    Json?
+  resumeNodeIds  Json
+  timeoutHandle  String?
+  status         String    @default("WAITING")
+  expiresAt      DateTime?
+  resumedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  execution    AutomationExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, eventType, status])
+  @@index([subjectType, subjectId, status])
+  @@index([status, expiresAt])
+}
+
+model AutomationTriggerSubscription {
+  id             String   @id @default(cuid())
+  organizationId String
+  automationId   String
+  versionId      String
+  eventType      String
+  filters        Json?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  automation   Automation        @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  version      AutomationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, versionId, eventType])
+  @@index([organizationId, eventType, active])
+}
+
+model AutomationTemplate {
+  id             String   @id @default(cuid())
+  organizationId String?
+  key            String
+  name           String
+  description    String?
+  category       String
+  definition     Json
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, key])
+  @@index([category, active])
+}
+
+model AutomationIdempotency {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  executionId    String?
+  result         Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, key])
+  @@index([createdAt])
 }
 
 model AutomationExecutionLog {

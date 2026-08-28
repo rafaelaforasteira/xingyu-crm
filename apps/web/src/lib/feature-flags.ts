@@ -16,6 +16,7 @@ export function shouldHideGlobalHeader(
   coreMode = CORE_OPERATION_MODE,
   betaMode = BETA_SINGLE_PIPELINE_MODE,
 ): boolean {
+  if (pathname && /^\/automations\/(?!new(?:\/|$))[^/]+/.test(pathname)) return true;
   if (betaMode) return false;
   if (!coreMode || !pathname) return false;
   return pathname === "/operacao" || pathname.startsWith("/operacao/");

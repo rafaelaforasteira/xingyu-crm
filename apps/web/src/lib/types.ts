@@ -1346,13 +1346,124 @@ export interface CreateReactivationActionInput {
   reason?: string;
 }
 
+export type AutomationTrigger = string;
+export type AutomationStatus = "ACTIVE" | "INACTIVE" | "DRAFT" | "PAUSED" | "ARCHIVED" | string;
+export type AutomationActionType = "CREATE_TASK" | "MOVE_STAGE" | "ASSIGN_OWNER" | "ADD_TAG" | "CREATE_NOTIFICATION" | string;
+export type AutomationConditionOperator = "EQUALS" | "NOT_EQUALS" | "GREATER_THAN" | "LESS_THAN" | "CONTAINS" | "IS_EMPTY" | "IS_NOT_EMPTY" | string;
+
+export interface WorkflowGraphNode {
+  id: string;
+  type: string;
+  label?: string;
+  position: { x: number; y: number };
+  config?: Record<string, unknown>;
+}
+
+export interface WorkflowGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  label?: string;
+}
+
+export interface WorkflowDefinition {
+  schemaVersion?: number;
+  nodes: WorkflowGraphNode[];
+  edges: WorkflowGraphEdge[];
+  viewport?: { x: number; y: number; zoom: number };
+  frames?: Array<{ id: string; label: string; x: number; y: number; width: number; height: number; color?: string }>;
+  annotations?: Array<{ id: string; text: string; x: number; y: number }>;
+  settings?: Record<string, unknown>;
+}
+
+export interface AutomationNodeCatalogItem {
+  id: string;
+  type: string;
+  version: number;
+  category: string;
+  label: string;
+  description: string;
+  icon: string;
+  executable: boolean;
+  eventType?: string;
+  handles: { inputs: string[]; outputs: string[] };
+}
+
+export interface AutomationTemplateCard {
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  nodeCount: number;
+}
+
+export interface AutomationCondition {
+  field: string;
+  operator: AutomationConditionOperator;
+  value?: unknown;
+}
+
+export interface AutomationAction {
+  id?: string;
+  type: AutomationActionType;
+  config: Record<string, unknown>;
+}
+
+export interface AutomationConfig {
+  triggerConfig: { pipelineId?: string; fromStageId?: string; toStageId?: string };
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+}
+
+export interface AutomationExecution {
+  id: string;
+  status: "RUNNING" | "SUCCESS" | "FAILED" | "SKIPPED" | string;
+  startedAt: string;
+  finishedAt?: string | null;
+  error?: string | null;
+  context?: Record<string, unknown>;
+  currentNodeId?: string | null;
+  subjectType?: string | null;
+  subjectId?: string | null;
+  automation?: { id: string; name: string };
+  logs?: Array<{ id: string; level: string; message: string; createdAt: string }>;
+  nodeExecutions?: Array<{
+    id: string;
+    nodeId: string;
+    nodeType: string;
+    status: string;
+    output?: unknown;
+    input?: unknown;
+    errorMessage?: string | null;
+    startedAt: string;
+    finishedAt?: string | null;
+  }>;
+  version?: { id: string; version: number; definition?: WorkflowDefinition };
+}
+
 export interface Automation {
   id: string;
   name: string;
   description?: string | null;
-  status: "ACTIVE" | "DRAFT" | "PAUSED" | string;
-  trigger?: string;
+  status: AutomationStatus;
+  triggerType: AutomationTrigger;
+  triggerLabel?: string;
+  config?: AutomationConfig | null;
+  draft?: WorkflowDefinition | null;
+  draftDefinition?: WorkflowDefinition | null;
+  revision?: number;
+  webhookToken?: string | null;
+  scopeType?: string;
+  scopeId?: string | null;
+  validation?: Array<{ level: string; code: string; message: string; nodeId?: string }>;
   nodes?: AutomationNode[];
+  executions?: AutomationExecution[];
+  lastExecution?: AutomationExecution | null;
+  executionCount?: number;
+  recentFailures?: number;
+  successRate?: number | null;
   updatedAt?: string;
   createdAt: string;
 }
@@ -1362,7 +1473,8 @@ export interface AutomationNode {
   type: "TRIGGER" | "CONDITION" | "ACTION" | "DELAY" | string;
   label: string;
   config?: Record<string, unknown>;
-  order: number;
+  positionX?: number;
+  positionY?: number;
 }
 
 export interface NotificationItem {

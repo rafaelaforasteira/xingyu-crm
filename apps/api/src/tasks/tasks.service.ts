@@ -570,6 +570,19 @@ export class TasksService {
             actorId: userId,
           },
         });
+      await tx.automationDomainEvent.create({
+        data: {
+          organizationId,
+          eventType: "task.created",
+          aggregateType: "task",
+          aggregateId: created.id,
+          origin: "USER",
+          actorId: userId,
+          payload: { taskId: created.id, dealId: created.dealId, assigneeId: created.assigneeId },
+          subjectType: "task",
+          subjectId: created.id,
+        },
+      });
 
       return mapTask(created);
     });
@@ -686,6 +699,19 @@ export class TasksService {
             actorId: userId,
           },
         });
+      await tx.automationDomainEvent.create({
+        data: {
+          organizationId,
+          eventType: "task.completed",
+          aggregateType: "task",
+          aggregateId: task.id,
+          origin: "USER",
+          actorId: userId,
+          payload: { taskId: task.id, dealId: task.dealId, assigneeId: task.assigneeId },
+          subjectType: "task",
+          subjectId: task.id,
+        },
+      });
       return mapTask(task);
     });
   }

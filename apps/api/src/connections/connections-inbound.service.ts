@@ -112,6 +112,19 @@ export class ConnectionsInboundService {
           : {}),
       },
     });
+    if (status === ConnectionLifecycleStatus.CONNECTED || status === ConnectionLifecycleStatus.DISCONNECTED) {
+      await tx.automationDomainEvent.create({
+        data: {
+          organizationId: channel.organizationId,
+          eventType: status === ConnectionLifecycleStatus.CONNECTED ? "connection.connected" : "connection.disconnected",
+          aggregateType: "channel",
+          aggregateId: channel.id,
+          origin: "INTEGRATION",
+          payload: { channelId: channel.id, status },
+          deduplicationKey: `connection:${channel.id}:${event.externalEventId}`,
+        },
+      });
+    }
     return { accepted: true, duplicate: false, status };
   }
 
@@ -346,6 +359,26 @@ export class ConnectionsInboundService {
         lifecycleStatus: ConnectionLifecycleStatus.CONNECTED,
         status: "ACTIVE",
         isActive: true,
+      },
+    });
+    await tx.automationDomainEvent.create({
+      data: {
+        organizationId,
+        eventType: "message.received",
+        aggregateType: "message",
+        aggregateId: message.id,
+        subjectType: "deal",
+        subjectId: deal?.id ?? conversation.id,
+        origin: "INTEGRATION",
+        payload: {
+          messageId: message.id,
+          conversationId: conversation.id,
+          contactId: contact.id,
+          dealId: deal?.id ?? null,
+          channelId: channel.id,
+          body: event.body.slice(0, 2000),
+        },
+        deduplicationKey: `message:${channel.id}:${event.externalEventId}`,
       },
     });
     return {

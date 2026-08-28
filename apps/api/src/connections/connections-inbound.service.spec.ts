@@ -24,6 +24,7 @@ function createPrisma() {
     message: { create: jest.fn() },
     activity: { create: jest.fn() },
     channel: { findFirst: jest.fn(), update: jest.fn() },
+    automationDomainEvent: { create: jest.fn().mockResolvedValue({ id: "event-1" }) },
     $transaction: jest.fn((callback) => callback(prisma)),
   };
   return prisma;

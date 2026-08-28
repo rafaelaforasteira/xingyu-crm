@@ -247,7 +247,8 @@ export class OrdersService {
           },
           orderBy: { position: "asc" },
         });
-    return this.prisma.order.create({
+    const created = await this.prisma.$transaction(async (tx) => {
+    const order = await tx.order.create({
       data: {
         contactId: data.contactId,
         companyId: data.companyId,
@@ -337,6 +338,28 @@ export class OrdersService {
         events: true,
       },
     });
+    await tx.automationDomainEvent.create({
+      data: {
+        organizationId,
+        eventType: "order.created",
+        aggregateType: "order",
+        aggregateId: order.id,
+        origin: "USER",
+        actorId: userId,
+        payload: {
+          orderId: order.id,
+          dealId: order.dealId,
+          contactId: order.contactId,
+          status: order.status,
+          number: order.number,
+        },
+        subjectType: "order",
+        subjectId: order.id,
+      },
+    });
+    return order;
+    });
+    return created;
   }
 
   async update(organizationId: string, id: string, dto: UpdateOrderDto) {
@@ -472,6 +495,20 @@ export class OrdersService {
           });
         }
       }
+      if (data.status !== undefined && data.status !== previous.status) {
+        await tx.automationDomainEvent.create({
+          data: {
+            organizationId,
+            eventType: "order.status.changed",
+            aggregateType: "order",
+            aggregateId: id,
+            origin: "USER",
+            payload: { orderId: id, from: previous.status, to: data.status, dealId: previous.dealId, contactId: previous.contactId },
+            subjectType: "order",
+            subjectId: id,
+          },
+        });
+      }
       return updated;
     });
   }
@@ -505,16 +542,39 @@ export class OrdersService {
 
   async addPayment(organizationId: string, orderId: string, dto: CreatePaymentDto) {
     await this.findOne(organizationId, orderId);
-    return this.prisma.payment.create({
-      data: {
-        orderId,
-        amount: dto.amount,
-        status: (dto.status as never) ?? "PENDING",
-        method: (dto.method as never) ?? "PIX",
-        paidAt: dto.paidAt ? new Date(dto.paidAt) : undefined,
-        transactionCode: dto.reference,
-        notes: dto.notes,
-      } as never,
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          orderId,
+          amount: dto.amount,
+          status: (dto.status as never) ?? "PENDING",
+          method: (dto.method as never) ?? "PIX",
+          paidAt: dto.paidAt ? new Date(dto.paidAt) : undefined,
+          transactionCode: dto.reference,
+          notes: dto.notes,
+        } as never,
+      });
+      const eventType = dto.status === "APPROVED" || dto.status === "PAID"
+        ? "order.payment.confirmed"
+        : dto.status === "DECLINED" || dto.status === "CANCELLED"
+          ? "order.payment.failed"
+          : null;
+      if (eventType) {
+        await tx.automationDomainEvent.create({
+          data: {
+            organizationId,
+            eventType,
+            aggregateType: "order",
+            aggregateId: orderId,
+            origin: "USER",
+            payload: { orderId, paymentId: payment.id, status: dto.status },
+            subjectType: "order",
+            subjectId: orderId,
+            deduplicationKey: `payment:${payment.id}:${eventType}`,
+          },
+        });
+      }
+      return payment;
     });
   }
 
@@ -633,8 +693,25 @@ export class OrdersService {
   }
 
   async updateStatus(organizationId: string, id: string, status: string) {
-    await this.findOne(organizationId, id);
-    return this.prisma.order.update({ where: { id }, data: { status: status as never } });
+    const previous = await this.findOne(organizationId, id);
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({ where: { id }, data: { status: status as never } });
+      if (previous.status !== status) {
+        await tx.automationDomainEvent.create({
+          data: {
+            organizationId,
+            eventType: "order.status.changed",
+            aggregateType: "order",
+            aggregateId: id,
+            origin: "USER",
+            payload: { orderId: id, from: previous.status, to: status },
+            subjectType: "order",
+            subjectId: id,
+          },
+        });
+      }
+      return updated;
+    });
   }
   private async ensureDefaultStages(organizationId: string) {
     const hasStages = await this.prisma.orderStageDefinition.count({

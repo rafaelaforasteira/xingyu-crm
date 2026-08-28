@@ -199,3 +199,40 @@
     background-color: hsl(var(--foreground) / 0.28);
   }
 }
+
+.automation-studio {
+  --automation-canvas: 240 8% 11%;
+  --automation-surface: 240 7% 15%;
+  --automation-surface-2: 240 6% 18%;
+  --automation-elevated: 240 8% 20%;
+  --automation-border: 240 6% 24%;
+  --automation-border-selected: 262 52% 58%;
+  --automation-text: 240 20% 96%;
+  --automation-text-2: 240 8% 70%;
+  --automation-accent: 262 52% 62%;
+  --automation-success: 152 45% 42%;
+  --automation-warning: 38 84% 52%;
+  --automation-error: 0 72% 58%;
+}
+
+.automation-studio .react-flow__edge-path {
+  stroke: hsl(var(--automation-border));
+  stroke-width: 1.5;
+}
+
+.automation-studio .react-flow__connection-line {
+  stroke: hsl(var(--automation-accent));
+}
+
+.automation-studio .react-flow__background {
+  background: hsl(var(--automation-canvas));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .automation-studio *,
+  .automation-studio *::before,
+  .automation-studio *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -703,12 +703,39 @@ export const occurrencesApi = {
 };
 
 export const automationsApi = {
-  list: async () =>
-    unwrapData(await api.get<Automation[] | PaginatedResponse<Automation>>("/automations")),
+  list: async (query?: Record<string, QueryValue>) =>
+    api.get<PaginatedResponse<Automation>>("/automations", query),
+  metrics: () => api.get<{ active: number; running: number; waiting: number; failed: number }>("/automations/metrics"),
+  runtimeHealth: () => api.get<{ status: string; lastBeatAt: string; ageMs: number }>("/automations/runtime/health"),
+  catalog: () => api.get<import("./types").AutomationNodeCatalogItem[]>("/automations/node-catalog"),
+  templates: () => api.get<import("./types").AutomationTemplateCard[]>("/automations/templates"),
   get: (id: string) => api.get<Automation>(`/automations/${id}`),
-  create: (data: Partial<Automation>) => api.post<Automation>("/automations", data),
-  update: (id: string, data: Partial<Automation>) =>
+  create: (data: Record<string, unknown>) => api.post<Automation>("/automations", data),
+  update: (id: string, data: Record<string, unknown>) =>
     api.patch<Automation>(`/automations/${id}`, data),
+  saveDraft: (id: string, data: Record<string, unknown>) =>
+    api.put<Automation>(`/automations/${id}/draft`, data),
+  validate: (id: string) => api.post<{ ok: boolean; issues: Array<{ level: string; code: string; message: string; nodeId?: string }> }>(`/automations/${id}/validate`, {}),
+  publish: (id: string) => api.post<Automation>(`/automations/${id}/publish`, {}),
+  pause: (id: string, enabled: boolean) => api.post<Automation>(`/automations/${id}/pause`, { enabled }),
+  toggle: (id: string, enabled: boolean) => api.post<Automation>(`/automations/${id}/toggle`, { enabled }),
+  duplicate: (id: string) => api.post<Automation>(`/automations/${id}/duplicate`, {}),
+  archive: (id: string) => api.post<Automation>(`/automations/${id}/archive`, {}),
+  export: (id: string) => api.get<Record<string, unknown>>(`/automations/${id}/export`),
+  versions: (id: string) => api.get<Array<{ id: string; version: number; createdAt: string; createdById?: string | null }>>(`/automations/${id}/versions`),
+  restoreVersion: (id: string, versionId: string) => api.post<Automation>(`/automations/${id}/versions/${versionId}/restore`, {}),
+  remove: (id: string) => api.delete<Automation>(`/automations/${id}`),
+  executions: (id: string, query?: Record<string, QueryValue>) =>
+    api.get<PaginatedResponse<import("./types").AutomationExecution>>(`/automations/${id}/executions`, query),
+  allExecutions: (query?: Record<string, QueryValue>) =>
+    api.get<PaginatedResponse<import("./types").AutomationExecution>>("/automations/executions", query),
+  getExecution: (executionId: string) => api.get<import("./types").AutomationExecution>(`/automations/executions/${executionId}`),
+  retryExecution: (executionId: string, fromStart = false) =>
+    api.post(`/automations/executions/${executionId}/retry`, { fromStart }),
+  cancelExecution: (executionId: string) => api.post(`/automations/executions/${executionId}/cancel`, {}),
+  recentExecutions: () => api.get<import("./types").AutomationExecution[]>("/automations/executions/recent"),
+  test: (id: string, data: Record<string, unknown>) => api.post<Record<string, unknown>>(`/automations/${id}/test`, data),
+  testNode: (data: Record<string, unknown>) => api.post<Record<string, unknown>>("/automations/test-node", data),
 };
 
 export const marketingApi = {

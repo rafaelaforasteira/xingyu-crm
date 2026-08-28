@@ -1,9 +1,15 @@
 "use client";
 
+import { Suspense } from "react";
+import { AutomationStudio } from "@/components/crm/automations/automation-studio";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useParams } from "next/navigation";
-import { AutomationDetailPage } from "@/components/crm/automations-page";
 
 export default function Page() {
   const params = useParams<{ automationId: string }>();
-  return <AutomationDetailPage automationId={params.automationId} />;
+  return (
+    <Suspense fallback={<Skeleton className="h-full w-full" />}>
+      <AutomationStudio automationId={params.automationId} />
+    </Suspense>
+  );
 }

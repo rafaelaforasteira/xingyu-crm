@@ -89,21 +89,37 @@ export class ContactsService {
       notes?: string;
       tagIds?: string[];
     };
-    const created = await this.prisma.contact.create({
-      data: {
-        ...data,
-        observations: notes,
-        organizationId,
-        ownerId: data.ownerId ?? userId,
-        type: data.type as never,
-        status: data.status as never,
-        ...(tagIds?.length ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } } : {}),
-      } as never,
-      include: {
-        tags: { include: { tag: true } },
-        company: true,
-        owner: { select: { id: true, name: true } },
-      },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const contact = await tx.contact.create({
+        data: {
+          ...data,
+          observations: notes,
+          organizationId,
+          ownerId: data.ownerId ?? userId,
+          type: data.type as never,
+          status: data.status as never,
+          ...(tagIds?.length ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } } : {}),
+        } as never,
+        include: {
+          tags: { include: { tag: true } },
+          company: true,
+          owner: { select: { id: true, name: true } },
+        },
+      });
+      await tx.automationDomainEvent.create({
+        data: {
+          organizationId,
+          eventType: "contact.created",
+          aggregateType: "contact",
+          aggregateId: contact.id,
+          origin: "USER",
+          actorId: userId,
+          payload: { contactId: contact.id, ownerId: contact.ownerId },
+          subjectType: "contact",
+          subjectId: contact.id,
+        },
+      });
+      return contact;
     });
     return toContactResponse(created);
   }

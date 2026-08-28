@@ -65,6 +65,11 @@ export const queryKeys = {
   automations: {
     all: ["automations"] as const,
     detail: (id: string) => ["automations", id] as const,
+    executions: (id?: string) => ["automations", "executions", id] as const,
+    execution: (id: string) => ["automations", "execution", id] as const,
+    catalog: ["automations", "catalog"] as const,
+    templates: ["automations", "templates"] as const,
+    metrics: ["automations", "metrics"] as const,
   },
   marketing: ["marketing"] as const,
   reports: ["reports"] as const,

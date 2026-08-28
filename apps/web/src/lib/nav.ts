@@ -130,11 +130,6 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "relationships",
-    label: "Relacionamento",
-    items: [{ href: "/clients", label: "Clientes", icon: UsersRound }],
-  },
-  {
     id: "journeys",
     label: "Jornadas",
     items: [
@@ -153,7 +148,16 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Gestão",
     items: [
       { href: "/finance", label: "Financeiro", icon: Landmark },
+      { href: "/clients", label: "Clientes", icon: UsersRound },
+    ],
+  },
+  {
+    id: "infrastructure",
+    label: "Infraestrutura",
+    items: [
       { href: "/connections", label: "Conexões", icon: QrCode },
+      { href: "/integrations", label: "Integrações", icon: Plug },
+      { href: "/automations", label: "Automações", icon: Zap },
     ],
   },
 ];
