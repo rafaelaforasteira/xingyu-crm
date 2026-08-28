@@ -53,7 +53,9 @@ const connectionSelect = {
       active: true,
       priority: true,
       createDeal: true,
+      defaultStageId: true,
       pipeline: { select: { id: true, name: true } },
+      defaultStage: { select: { id: true, name: true } },
     },
   },
   teamAccesses: { select: { teamId: true, team: { select: { id: true, name: true } } } },
@@ -245,7 +247,11 @@ export class ConnectionsService {
 
   async archive(organizationId: string, id: string, userId: string) {
     const connection = await this.requireConnection(organizationId, id);
-    await this.providers.get(connection.provider).disconnect(id, this.requireExternalId(connection));
+    const provider = this.providers.get(connection.provider);
+    if (connection.externalAccountId) {
+      // Prefer permanent remote cleanup so archived CRM rows do not leave orphan Evolution sessions.
+      await provider.deleteInstance(id, connection.externalAccountId);
+    }
     const archivedAt = new Date();
     await this.prisma.$transaction(async (tx) => {
       await tx.pipelineChannelConnection.updateMany({
@@ -264,6 +270,7 @@ export class ConnectionsService {
       });
       await this.audit(tx, organizationId, userId, "CONNECTION_ARCHIVED", id, {
         archivedAt: archivedAt.toISOString(),
+        deletedRemoteInstance: Boolean(connection.externalAccountId),
       });
     });
     return { id, status: ConnectionLifecycleStatus.ARCHIVED, archivedAt };
@@ -389,6 +396,10 @@ export class ConnectionsService {
 
   async diagnostics(organizationId: string, id: string) {
     const connection = await this.requireConnection(organizationId, id);
+    const defaultRoute = connection.pipelineConnections.find((route) => route.isDefault);
+    const enabledNames = connection.pipelineConnections
+      .map((route) => route.pipeline.name)
+      .filter(Boolean);
     return {
       id: connection.id,
       status: connection.lifecycleStatus,
@@ -401,11 +412,14 @@ export class ConnectionsService {
       lastErrorCode: connection.lastErrorCode,
       routing: {
         enabledPipelineCount: connection.pipelineConnections.length,
-        hasDefault: connection.pipelineConnections.some((route) => route.isDefault),
+        hasDefault: Boolean(defaultRoute),
+        defaultPipelineName: defaultRoute?.pipeline.name ?? null,
+        defaultStageName: defaultRoute?.defaultStage?.name ?? null,
+        enabledPipelineNames: enabledNames,
       },
       checks: {
         providerConfigured: Boolean(connection.provider && connection.externalAccountId),
-        routingConfigured: connection.pipelineConnections.some((route) => route.isDefault),
+        routingConfigured: Boolean(defaultRoute),
       },
     };
   }
@@ -472,6 +486,9 @@ export class ConnectionsService {
       displayAccount: connection.displayAccount,
       status: connection.lifecycleStatus,
       defaultPipeline: defaultRoute?.pipeline ?? null,
+      defaultStage: defaultRoute?.defaultStage
+        ? { id: defaultRoute.defaultStage.id, name: defaultRoute.defaultStage.name }
+        : null,
       enabledPipelineCount: connection.pipelineConnections.length,
       accessSummary:
         connection.accessMode === ChannelAccessMode.ORGANIZATION
@@ -487,16 +504,39 @@ export class ConnectionsService {
     const {
       organizationId: _organizationId,
       externalAccountId: _externalAccountId,
+      pipelineConnections,
+      teamAccesses,
+      userAccesses,
       ...safe
     } = connection;
+    const defaultRoute = pipelineConnections.find((route) => route.isDefault) ?? null;
     return {
       ...safe,
       status: connection.lifecycleStatus,
-      routing: connection.pipelineConnections,
+      defaultPipeline: defaultRoute?.pipeline ?? null,
+      enabledPipelineCount: pipelineConnections.length,
+      routing: {
+        defaultPipelineId: defaultRoute?.pipelineId ?? null,
+        defaultPipelineName: defaultRoute?.pipeline.name ?? null,
+        defaultStageId: defaultRoute?.defaultStageId ?? null,
+        defaultStageName: defaultRoute?.defaultStage?.name ?? null,
+        enabledPipelines: pipelineConnections.map((route) => ({
+          id: route.id,
+          pipelineId: route.pipelineId,
+          pipelineName: route.pipeline.name,
+          isDefault: route.isDefault,
+          active: route.active,
+          priority: route.priority,
+          defaultStageId: route.defaultStageId,
+          defaultStageName: route.defaultStage?.name ?? null,
+        })),
+      },
       access: {
         mode: connection.accessMode,
-        teams: connection.teamAccesses.map((entry) => entry.team),
-        users: connection.userAccesses.map((entry) => entry.user),
+        teams: teamAccesses.map((entry) => entry.team),
+        users: userAccesses.map((entry) => entry.user),
+        teamIds: teamAccesses.map((entry) => entry.teamId),
+        userIds: userAccesses.map((entry) => entry.userId),
       },
     };
   }

@@ -73,6 +73,7 @@ export interface ConnectionListItem {
   phone?: string | null;
   displayAccount?: string | null;
   defaultPipeline?: { id: string; name: string } | null;
+  defaultStage?: { id: string; name: string } | null;
   enabledPipelineCount?: number;
   accessSummary?: string | null;
   avatarUrl?: string | null;
@@ -91,34 +92,52 @@ export interface ConnectionCounts {
 
 export interface ConnectionDetail extends ConnectionListItem {
   description?: string | null;
+  configurationComplete?: boolean;
   routing?: {
-    pipelineId?: string | null;
-    pipelineName?: string | null;
-    teamId?: string | null;
-    teamName?: string | null;
-    ownerId?: string | null;
-    ownerName?: string | null;
-  } | Array<{
-    id: string;
-    pipelineId: string;
-    isDefault: boolean;
-    active: boolean;
-    priority: number;
-    pipeline?: { id: string; name: string };
-  }>;
+    defaultPipelineId?: string | null;
+    defaultPipelineName?: string | null;
+    defaultStageId?: string | null;
+    defaultStageName?: string | null;
+    enabledPipelines?: Array<{
+      id: string;
+      pipelineId: string;
+      pipelineName?: string;
+      isDefault: boolean;
+      active?: boolean;
+      priority?: number;
+      defaultStageId?: string | null;
+      defaultStageName?: string | null;
+      pipeline?: { id: string; name: string };
+    }>;
+  };
   access?: {
-    mode?: "ALL" | "RESTRICTED" | string;
+    mode?: "ALL" | "RESTRICTED" | "ORGANIZATION" | "PIPELINE" | string;
     userIds?: string[];
     teamIds?: string[];
     users?: Array<{ id: string; name: string }>;
     teams?: Array<{ id: string; name: string }>;
   };
   diagnostics?: {
-    healthy?: boolean;
-    latencyMs?: number | null;
-    webhookStatus?: string | null;
-    lastCheckedAt?: string | null;
-    message?: string | null;
+    id?: string;
+    status?: string;
+    provider?: string | null;
+    configurationComplete?: boolean;
+    lastActivityAt?: string | null;
+    lastInboundAt?: string | null;
+    lastOutboundAt?: string | null;
+    lastErrorAt?: string | null;
+    lastErrorCode?: string | null;
+    routing?: {
+      enabledPipelineCount?: number;
+      hasDefault?: boolean;
+      defaultPipelineName?: string | null;
+      defaultStageName?: string | null;
+      enabledPipelineNames?: string[];
+    };
+    checks?: {
+      providerConfigured?: boolean;
+      routingConfigured?: boolean;
+    };
     [key: string]: unknown;
   };
   activity?: Array<{

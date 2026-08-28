@@ -79,6 +79,20 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
     }
   }
 
+  async deleteInstance(_channelId: string, externalInstanceId: string): Promise<void> {
+    try {
+      await this.request(
+        "DELETE",
+        `/instance/delete/${encodeURIComponent(externalInstanceId)}`,
+      );
+    } catch (error) {
+      const status = this.statusOf(error);
+      // Already removed remotely — treat as success so CRM soft-delete can continue.
+      if (status === 404) return;
+      throw error;
+    }
+  }
+
   async sendText(
     _channelId: string,
     externalInstanceId: string,

@@ -28,6 +28,7 @@ Access: `integrations.manage` or `ADMIN`. Supervisor/Consultant are redirected a
 - `GET /connections`, `GET /connections/counts`, `POST /connections`
 - `GET/PATCH /connections/:id`
 - `POST /connections/:id/connect|reconnect|disconnect|archive|simulate-scan`
+  - `archive` is the product action **Excluir conexão**: soft-archives the CRM Channel (`ARCHIVED` / `archivedAt`) and deletes the remote provider instance (Evolution `DELETE /instance/delete/{instance}`). Commercial history is preserved.
 - `GET /connections/:id/qr|diagnostics|activity`
 - `PATCH /connections/:id/routing|access`
 - Webhook: `POST /webhooks/connections/:provider/:externalInstanceId` (resolve Connection by provider identity; never trust body `organizationId`)

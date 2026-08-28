@@ -46,6 +46,8 @@ export interface ConnectionProvider {
   connect(channelId: string, externalInstanceId: string): Promise<ProviderQr>;
   getQr(channelId: string, externalInstanceId: string): Promise<ProviderQr | null>;
   disconnect(channelId: string, externalInstanceId: string): Promise<void>;
+  /** Permanently remove the remote provider instance. Must be idempotent when already gone. */
+  deleteInstance(channelId: string, externalInstanceId: string): Promise<void>;
   sendText(
     channelId: string,
     externalInstanceId: string,

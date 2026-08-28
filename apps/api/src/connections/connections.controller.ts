@@ -92,6 +92,11 @@ export class ConnectionsController {
   }
 
   @Post(":id/archive")
+  @ApiOperation({
+    summary: "Excluir conexão (soft-delete)",
+    description:
+      "Desconecta/remove a instância no provider externo e arquiva a conexão no CRM sem apagar histórico comercial.",
+  })
   archive(
     @OrganizationId() organizationId: string,
     @CurrentUser() user: AuthenticatedUser,

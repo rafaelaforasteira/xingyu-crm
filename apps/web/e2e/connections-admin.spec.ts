@@ -39,6 +39,31 @@ test.describe("Connections center", () => {
     await expect(page.getByText("WhatsApp Loja")).toBeVisible();
     await expect(page.getByText("WhatsApp Comercial")).toHaveCount(0);
   });
+
+  test("connected menu keeps only edit, disconnect and delete", async ({ page }) => {
+    await page.goto("/connections");
+    await expect(page.getByText("WhatsApp Comercial")).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: /Ações · WhatsApp Comercial/ }).click();
+    await expect(page.getByRole("menuitem", { name: "Editar" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Desconectar" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Excluir conexão" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Reconectar" })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Abrir" })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Roteamento" })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Acesso" })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Diagnóstico" })).toHaveCount(0);
+    await expect(page.getByRole("menuitem", { name: "Arquivar" })).toHaveCount(0);
+  });
+
+  test("disconnected menu offers reconnect instead of disconnect", async ({ page }) => {
+    await page.goto("/connections");
+    await expect(page.getByText("WhatsApp Loja")).toBeVisible({ timeout: 20_000 });
+    await page.getByRole("button", { name: /Ações · WhatsApp Loja/ }).click();
+    await expect(page.getByRole("menuitem", { name: "Editar" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Reconectar" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Excluir conexão" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Desconectar" })).toHaveCount(0);
+  });
 });
 
 test.describe("Connections consultant access", () => {

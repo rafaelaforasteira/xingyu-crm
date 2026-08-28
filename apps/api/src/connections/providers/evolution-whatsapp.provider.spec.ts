@@ -516,6 +516,37 @@ describe("EvolutionWhatsAppProvider", () => {
     await jest.advanceTimersByTimeAsync(15_000);
     await assertion;
   });
+
+  it("deletes the Evolution instance by externalAccountId", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { status: "SUCCESS" }));
+
+    await provider.deleteInstance(CHANNEL_ID, INSTANCE_NAME);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://evolution.example.com/instance/delete/${INSTANCE_NAME}`,
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({ apikey: API_KEY }),
+      }),
+    );
+  });
+
+  it("treats a missing Evolution instance as already deleted", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(404, { message: "not found" }));
+    await expect(provider.deleteInstance(CHANNEL_ID, INSTANCE_NAME)).resolves.toBeUndefined();
+  });
+
+  it("still reports unexpected delete failures without leaking secrets", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(500, { error: `${API_KEY} ${WEBHOOK_SECRET}` }));
+    try {
+      await provider.deleteInstance(CHANNEL_ID, INSTANCE_NAME);
+      throw new Error("expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadGatewayException);
+      expect(errorText(error)).not.toContain(API_KEY);
+      expect(errorText(error)).not.toContain(WEBHOOK_SECRET);
+    }
+  });
 });
 
 describe("ConnectionProviderRegistry with Evolution", () => {
@@ -544,5 +575,9 @@ describe("ConnectionProviderRegistry with Evolution", () => {
     expect(sent.externalMessageId).toMatch(/^fake-/);
     expect(sent.remoteJid).toBe("5511999999999@s.whatsapp.net");
     expect(sent.status).toBe("SENT");
+
+    await expect(
+      registry.get("fake").deleteInstance("channel-test", created.externalInstanceId),
+    ).resolves.toBeUndefined();
   });
 });

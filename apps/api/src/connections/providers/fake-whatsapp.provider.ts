@@ -53,6 +53,10 @@ export class FakeWhatsAppProvider implements ConnectionProvider {
     this.clearQr(channelId);
   }
 
+  async deleteInstance(channelId: string, _externalInstanceId?: string): Promise<void> {
+    this.clearQr(channelId);
+  }
+
   async sendText(
     _channelId: string,
     _externalInstanceId: string,

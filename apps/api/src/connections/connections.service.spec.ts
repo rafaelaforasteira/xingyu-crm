@@ -40,6 +40,12 @@ function connection(overrides: Record<string, unknown> = {}) {
 describe("ConnectionsService", () => {
   let prisma: any;
   let service: ConnectionsService;
+  let providers: {
+    get: jest.Mock;
+    defaultProvider: jest.Mock;
+    deleteInstance: jest.Mock;
+    disconnect: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -54,9 +60,19 @@ describe("ConnectionsService", () => {
       auditLog: { create: jest.fn() },
       $transaction: jest.fn((callback) => callback(prisma)),
     };
+    providers = {
+      get: jest.fn(),
+      defaultProvider: jest.fn(),
+      deleteInstance: jest.fn().mockResolvedValue(undefined),
+      disconnect: jest.fn().mockResolvedValue(undefined),
+    };
+    providers.get.mockReturnValue({
+      deleteInstance: providers.deleteInstance,
+      disconnect: providers.disconnect,
+    });
     service = new ConnectionsService(
       prisma as PrismaService,
-      { get: jest.fn(), defaultProvider: jest.fn() } as unknown as ConnectionProviderRegistry,
+      providers as unknown as ConnectionProviderRegistry,
     );
   });
 
@@ -115,5 +131,43 @@ describe("ConnectionsService", () => {
         where: expect.objectContaining({ id: connectionId, organizationId: "org-b" }),
       }),
     );
+  });
+
+  it("archives by deleting the remote provider instance and soft-deleting the CRM channel", async () => {
+    prisma.channel.findFirst.mockResolvedValue(connection());
+    prisma.channel.update.mockResolvedValue({});
+    prisma.pipelineChannelConnection.updateMany.mockResolvedValue({ count: 1 });
+    prisma.auditLog.create.mockResolvedValue({});
+
+    const result = await service.archive(organizationId, connectionId, "admin-a");
+
+    expect(providers.deleteInstance).toHaveBeenCalledWith(connectionId, "fake-instance");
+    expect(providers.disconnect).not.toHaveBeenCalled();
+    expect(prisma.channel.update).toHaveBeenCalledWith({
+      where: { id: connectionId },
+      data: expect.objectContaining({
+        lifecycleStatus: ConnectionLifecycleStatus.ARCHIVED,
+        isActive: false,
+        status: "INACTIVE",
+        archivedAt: expect.any(Date),
+      }),
+    });
+    expect(prisma.pipelineChannelConnection.updateMany).toHaveBeenCalledWith({
+      where: { organizationId, channelId: connectionId, deletedAt: null },
+      data: expect.objectContaining({ active: false, deletedAt: expect.any(Date) }),
+    });
+    expect(result.status).toBe(ConnectionLifecycleStatus.ARCHIVED);
+  });
+
+  it("still soft-deletes in CRM when the remote instance id is already missing", async () => {
+    prisma.channel.findFirst.mockResolvedValue(connection({ externalAccountId: null }));
+    prisma.channel.update.mockResolvedValue({});
+    prisma.pipelineChannelConnection.updateMany.mockResolvedValue({ count: 0 });
+    prisma.auditLog.create.mockResolvedValue({});
+
+    await service.archive(organizationId, connectionId, "admin-a");
+
+    expect(providers.deleteInstance).not.toHaveBeenCalled();
+    expect(prisma.channel.update).toHaveBeenCalled();
   });
 });
