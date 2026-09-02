@@ -371,6 +371,7 @@ model Organization {
   campaigns                  Campaign[]
   automations                Automation[]
   automationVersions         AutomationVersion[]
+  automationDraftSnapshots  AutomationDraftSnapshot[]
   automationDomainEvents     AutomationDomainEvent[]
   automationJobs             AutomationJob[]
   automationWaits            AutomationWaitSubscription[]
@@ -1840,6 +1841,7 @@ model Automation {
   edges                AutomationEdge[]
   executions           AutomationExecution[]
   versions             AutomationVersion[]             @relation("AutomationVersions")
+  draftSnapshots       AutomationDraftSnapshot[]
   activeVersion        AutomationVersion?              @relation("AutomationActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
   jobs                 AutomationJob[]
   triggerSubscriptions AutomationTriggerSubscription[]
@@ -1869,6 +1871,23 @@ model AutomationVersion {
 
   @@unique([automationId, version])
   @@index([organizationId, publishedAt])
+}
+
+model AutomationDraftSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String
+  automationId   String
+  revision       Int
+  definition     Json
+  checksum       String
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  automation   Automation   @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@unique([automationId, revision])
+  @@index([organizationId, automationId, createdAt])
 }
 
 model AutomationNode {

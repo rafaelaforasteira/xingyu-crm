@@ -1,8 +1,9 @@
 "use client";
 
+import { CalendarDays, CalendarRange, Kanban, Radio, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/form-controls";
+import { FilterSelect } from "@/components/ui/filter-select";
 
 export type DashboardFilterState = {
   period: string;
@@ -24,7 +25,15 @@ export const DEFAULT_DASHBOARD_FILTERS: DashboardFilterState = {
   scope: "company",
 };
 
-const filterFieldClass = "flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground";
+const filterFieldClass = "flex min-w-0 flex-col gap-1.5 text-xs font-medium text-foreground/80";
+
+const periodOptions = [
+  { value: "today", label: "Hoje" },
+  { value: "7d", label: "Últimos 7 dias" },
+  { value: "30d", label: "Últimos 30 dias" },
+  { value: "month", label: "Mês atual" },
+  { value: "custom", label: "Período personalizado" },
+];
 
 export function DashboardFilters({
   value,
@@ -57,31 +66,25 @@ export function DashboardFilters({
   return (
     <section className="rounded-xl border border-border bg-card px-3 py-3 shadow-soft sm:px-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-        <label className={filterFieldClass}>
-          Período
-          <Select
+        <FilterSelect
+          label="Período"
+          icon={CalendarDays}
+          options={periodOptions}
             value={value.period}
-            onChange={(e) =>
+            onChange={(period) =>
               onChange({
                 ...value,
-                period: e.target.value,
-                ...(e.target.value !== "custom" ? { from: "", to: "" } : {}),
+                period,
+                ...(period !== "custom" ? { from: "", to: "" } : {}),
               })
             }
             aria-label="Filtrar por período"
-          >
-            <option value="today">Hoje</option>
-            <option value="7d">Últimos 7 dias</option>
-            <option value="30d">Últimos 30 dias</option>
-            <option value="month">Mês atual</option>
-            <option value="custom">Período personalizado</option>
-          </Select>
-        </label>
+        />
 
         {value.period === "custom" ? (
           <>
             <label className={filterFieldClass}>
-              De
+              <span className="flex items-center gap-1.5"><CalendarRange className="h-3.5 w-3.5 text-primary" />De</span>
               <Input
                 type="date"
                 value={value.from}
@@ -91,7 +94,7 @@ export function DashboardFilters({
               />
             </label>
             <label className={filterFieldClass}>
-              Até
+              <span className="flex items-center gap-1.5"><CalendarRange className="h-3.5 w-3.5 text-primary" />Até</span>
               <Input
                 type="date"
                 value={value.to}
@@ -103,55 +106,43 @@ export function DashboardFilters({
           </>
         ) : null}
 
-        <label className={filterFieldClass}>
-          Pipeline
-          <Select
+        <FilterSelect
+          label="Pipeline"
+          icon={Kanban}
+          options={[
+            { value: "", label: "Todos os pipelines" },
+            ...pipelines.map((pipeline) => ({ value: pipeline.id, label: pipeline.name })),
+          ]}
             value={value.pipelineId}
-            onChange={(e) => onChange({ ...value, pipelineId: e.target.value })}
+            onChange={(pipelineId) => onChange({ ...value, pipelineId })}
             aria-label="Filtrar por pipeline"
-          >
-            <option value="">Todos os pipelines</option>
-            {pipelines.map((pipeline) => (
-              <option key={pipeline.id} value={pipeline.id}>
-                {pipeline.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+        />
 
-        <label className={filterFieldClass}>
-          Responsável
-          <Select
+        <FilterSelect
+          label="Responsável"
+          icon={UserRound}
+          options={[
+            { value: "", label: canSeeTeam ? "Toda a equipe" : "Eu" },
+            ...users.map((user) => ({ value: user.id, label: user.name })),
+          ]}
             value={value.ownerId}
-            onChange={(e) => onChange({ ...value, ownerId: e.target.value })}
+            onChange={(ownerId) => onChange({ ...value, ownerId })}
             aria-label="Filtrar por responsável"
             disabled={!canSeeTeam && Boolean(value.ownerId)}
-          >
-            <option value="">{canSeeTeam ? "Toda a equipe" : "Eu"}</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+        />
 
         {channels.length > 0 ? (
-          <label className={filterFieldClass}>
-            Canal
-            <Select
+          <FilterSelect
+            label="Canal"
+            icon={Radio}
+            options={[
+              { value: "", label: "Todos os canais" },
+              ...channels.map((channel) => ({ value: channel, label: channel })),
+            ]}
               value={value.channel}
-              onChange={(e) => onChange({ ...value, channel: e.target.value })}
+              onChange={(channel) => onChange({ ...value, channel })}
               aria-label="Filtrar por canal"
-            >
-              <option value="">Todos os canais</option>
-              {channels.map((channel) => (
-                <option key={channel} value={channel}>
-                  {channel}
-                </option>
-              ))}
-            </Select>
-          </label>
+          />
         ) : null}
       </div>
 

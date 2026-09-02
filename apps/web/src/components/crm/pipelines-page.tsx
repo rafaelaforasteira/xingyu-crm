@@ -11,7 +11,11 @@ import {
   Copy,
   EllipsisVertical,
   ExternalLink,
+  Globe2,
+  Instagram,
   Kanban,
+  Mail,
+  MessageCircle,
   Pencil,
   Plus,
   Search,
@@ -34,7 +38,7 @@ import { ManualCreateLeadDialog } from "@/components/crm/manual-create-lead-dial
 import { DealWorkspaceDrawer } from "@/components/crm/deal-workspace";
 import { PipelineFormDialog } from "@/components/crm/pipeline-form-dialog";
 import { useUiStore } from "@/stores/ui";
-import type { Deal, Pipeline } from "@/lib/types";
+import type { Deal, Pipeline, PipelineChannelSummary } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,6 +49,8 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { resolvePipelineIcon } from "@/lib/pipeline-icons";
 import { useAuth } from "@/components/auth/auth-provider";
+import { Avatar } from "@/components/ui/avatar";
+import { WhatsAppIcon } from "@/components/crm/connections/whatsapp-icon";
 
 const KanbanBoard = dynamic(
   () => import("@/components/crm/kanban-board").then((mod) => ({ default: mod.KanbanBoard })),
@@ -55,6 +61,23 @@ const KanbanBoard = dynamic(
 
 type PipelineTab = "active" | "archived" | "favorites";
 type PipelineAction = "duplicate" | "favorite" | "archive" | "restore";
+
+function PipelineMetaIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+      {children}
+    </span>
+  );
+}
+
+function channelIcon(channel: PipelineChannelSummary) {
+  const value = `${channel.type ?? ""} ${channel.name}`.toLowerCase();
+  if (value.includes("whatsapp")) return <WhatsAppIcon className="h-3.5 w-3.5" />;
+  if (value.includes("instagram")) return <Instagram className="h-3.5 w-3.5" />;
+  if (value.includes("email") || value.includes("e-mail")) return <Mail className="h-3.5 w-3.5" />;
+  if (value.includes("web") || value.includes("site")) return <Globe2 className="h-3.5 w-3.5" />;
+  return <MessageCircle className="h-3.5 w-3.5" />;
+}
 
 function formatUpdatedAt(value?: string) {
   if (!value) return "—";
@@ -279,31 +302,49 @@ function PipelineCard({
           </div>
         </div>
 
-        <dl className="mt-4 space-y-2 text-xs">
-          <div className="flex items-start justify-between gap-3">
-            <dt className="flex items-center gap-1.5 text-muted-foreground">
-              <Wifi className="h-3.5 w-3.5" />
-              Canais
+        <dl className="mt-4 space-y-2.5 text-xs">
+          <div className="flex min-h-6 items-center justify-between gap-3">
+            <dt className="flex items-center gap-2 text-muted-foreground">
+              <PipelineMetaIcon><Wifi className="h-3 w-3" /></PipelineMetaIcon>
+              Canais conectados
             </dt>
-            <dd className="max-w-[65%] text-right">
-              {channels.length
-                ? channels.map((channel) => channel.name).join(", ")
-                : "Nenhum canal conectado"}
+            <dd className="flex max-w-[48%] items-center justify-end gap-1">
+              {channels.length ? channels.map((channel) => (
+                <span
+                  key={channel.id}
+                  title={channel.name}
+                  aria-label={channel.name}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:border-primary/30 hover:text-primary"
+                >
+                  {channelIcon(channel)}
+                </span>
+              )) : <span className="text-[11px] text-muted-foreground">Nenhum</span>}
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-3">
-            <dt className="flex items-center gap-1.5 text-muted-foreground">
-              <Users className="h-3.5 w-3.5" />
-              Equipe padrão
+          <div className="flex min-h-6 items-center justify-between gap-3">
+            <dt className="flex items-center gap-2 text-muted-foreground">
+              <PipelineMetaIcon><Users className="h-3 w-3" /></PipelineMetaIcon>
+              Equipe
             </dt>
-            <dd className="max-w-[65%] truncate text-right">
-              {pipeline.defaultTeam?.name ?? "Não definida"}
+            <dd className="max-w-[55%] truncate">
+              <Badge variant="secondary" className="max-w-full truncate px-2 py-0.5 text-[10px] font-medium">
+                {pipeline.defaultTeam?.name ?? "Não definida"}
+              </Badge>
             </dd>
           </div>
-          <div className="flex items-start justify-between gap-3">
-            <dt className="text-muted-foreground">Responsável padrão</dt>
-            <dd className="max-w-[65%] truncate text-right">
-              {pipeline.defaultOwner?.name ?? "Não definido"}
+          <div className="flex min-h-6 items-center justify-between gap-3">
+            <dt className="flex items-center gap-2 text-muted-foreground">
+              <PipelineMetaIcon><UsersRound className="h-3 w-3" /></PipelineMetaIcon>
+              Responsável padrão
+            </dt>
+            <dd className="flex max-w-[48%] items-center gap-1.5 truncate font-medium">
+              <Avatar
+                name={pipeline.defaultOwner?.name ?? "Não definido"}
+                src={pipeline.defaultOwner?.avatarUrl}
+                size="sm"
+                className="h-5 w-5 text-[8px]"
+              />
+              <span className="truncate">{pipeline.defaultOwner?.name ?? "Não definido"}</span>
             </dd>
           </div>
         </dl>

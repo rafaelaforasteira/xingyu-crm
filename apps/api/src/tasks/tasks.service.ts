@@ -33,6 +33,7 @@ const TASK_INCLUDE = {
   },
   pipeline: { select: { id: true, name: true, color: true } },
   stage: { select: { id: true, name: true, color: true } },
+  order: { select: { id: true, number: true } },
   statusDefinition: true,
 } satisfies Prisma.TaskInclude;
 

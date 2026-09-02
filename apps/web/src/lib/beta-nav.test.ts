@@ -5,7 +5,7 @@ describe("beta navigation", () => {
   it("exposes the expandable Pipelines module", () => {
     const items = BETA_SINGLE_PIPELINE_NAV_GROUPS.flatMap((group) => group.items);
     expect(items).toHaveLength(4);
-    expect(items[0]).toMatchObject({ href: "/dashboard", label: "Dashboard" });
+    expect(items[0]).toMatchObject({ href: "/dashboard", label: "Dados" });
     expect(items[1]).toMatchObject({ href: "/tasks", label: "Tarefas" });
     expect(items[2]?.href).toBe("/pipelines");
     expect(items[2]?.label).toBe("Pipelines");

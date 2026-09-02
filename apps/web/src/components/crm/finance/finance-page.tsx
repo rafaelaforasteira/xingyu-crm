@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   BadgeDollarSign,
   Banknote,
+  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
   Download,
@@ -25,7 +26,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label, Select } from "@/components/ui/form-controls";
+import { Label } from "@/components/ui/form-controls";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -160,7 +162,21 @@ export function FinancePage() {
       <section className="rounded-xl border border-border bg-card p-3 shadow-soft">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="grid flex-1 gap-3 sm:grid-cols-3">
-            <div><Label>Período</Label><Select value={period} onChange={(event) => replace({ period: event.target.value, from: null, to: null })}><option value="today">Hoje</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias</option><option value="month">Este mês</option><option value="previous-month">Mês anterior</option><option value="custom">Personalizado</option></Select></div>
+            <FilterSelect
+              label="Período"
+              icon={CalendarDays}
+              value={period}
+              aria-label="Filtrar financeiro por período"
+              options={[
+                { value: "today", label: "Hoje" },
+                { value: "7d", label: "Últimos 7 dias" },
+                { value: "30d", label: "Últimos 30 dias" },
+                { value: "month", label: "Este mês" },
+                { value: "previous-month", label: "Mês anterior" },
+                { value: "custom", label: "Personalizado" },
+              ]}
+              onChange={(value) => replace({ period: value, from: null, to: null })}
+            />
             {period === "custom" ? <><div><Label>Início</Label><Input type="date" value={from} onChange={(event) => replace({ from: event.target.value || null })} /></div><div><Label>Fim</Label><Input type="date" value={to} onChange={(event) => replace({ to: event.target.value || null })} /></div></> : <div className="sm:col-span-2 flex items-end"><p className="pb-2 text-xs text-muted-foreground">Visão por competência do pedido. Recebimentos são conciliados pelos pagamentos associados.</p></div>}
           </div>
           {data ? <Badge variant={data.closing.ready ? "success" : "warning"} className="mb-1 w-fit">{data.closing.ready ? "Período pronto para fechar" : "Período com pendências"}</Badge> : null}

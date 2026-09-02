@@ -450,6 +450,11 @@ export class DashboardService {
           orderedAt: { gte: start, lte: end },
           ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
           ...(filters.channel ? { channel: filters.channel } : {}),
+          ...(filters.pipelineId
+            ? { deal: { pipelineId: filters.pipelineId } }
+            : filters.allowedPipelineIds
+              ? { OR: [{ deal: { pipelineId: { in: filters.allowedPipelineIds } } }, { dealId: null }] }
+              : {}),
         },
         _sum: { finalValue: true },
         _avg: { finalValue: true },
@@ -463,6 +468,11 @@ export class DashboardService {
           orderedAt: { gte: prevStart, lt: prevEnd },
           ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
           ...(filters.channel ? { channel: filters.channel } : {}),
+          ...(filters.pipelineId
+            ? { deal: { pipelineId: filters.pipelineId } }
+            : filters.allowedPipelineIds
+              ? { OR: [{ deal: { pipelineId: { in: filters.allowedPipelineIds } } }, { dealId: null }] }
+              : {}),
         },
         _sum: { finalValue: true },
       }),
@@ -735,23 +745,70 @@ export class DashboardService {
         ...notDeleted,
         orderedAt: { gte: start, lte: end },
         status: { in: ["PAYMENT_APPROVED", "DELIVERED", "COMPLETED", "NATIONAL_TRANSPORT"] },
+        ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
+        ...(filters.channel ? { channel: filters.channel } : {}),
+        ...(filters.pipelineId
+          ? { deal: { pipelineId: filters.pipelineId } }
+          : filters.allowedPipelineIds
+            ? { OR: [{ deal: { pipelineId: { in: filters.allowedPipelineIds } } }, { dealId: null }] }
+            : {}),
       },
       select: { finalValue: true, orderedAt: true, channel: true },
       take: 500,
     });
 
+    const previousMonthStart = new Date(start);
+    previousMonthStart.setUTCMonth(previousMonthStart.getUTCMonth() - 1);
+    const previousMonthEnd = new Date(end);
+    previousMonthEnd.setUTCMonth(previousMonthEnd.getUTCMonth() - 1);
+    const previousMonthOrders = await this.prisma.order.findMany({
+      where: {
+        organizationId,
+        ...notDeleted,
+        orderedAt: { gte: previousMonthStart, lte: previousMonthEnd },
+        status: { in: ["PAYMENT_APPROVED", "DELIVERED", "COMPLETED", "NATIONAL_TRANSPORT"] },
+        ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
+        ...(filters.channel ? { channel: filters.channel } : {}),
+        ...(filters.pipelineId
+          ? { deal: { pipelineId: filters.pipelineId } }
+          : filters.allowedPipelineIds
+            ? { OR: [{ deal: { pipelineId: { in: filters.allowedPipelineIds } } }, { dealId: null }] }
+            : {}),
+      },
+      select: { finalValue: true, orderedAt: true },
+      take: 500,
+    });
+
     const dayCount = Math.min(
-      14,
-      Math.max(7, Math.ceil((end.getTime() - start.getTime()) / 86_400_000)),
+      90,
+      Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86_400_000)),
     );
     const revenueByPeriod = Array.from({ length: dayCount }).map((_, i) => {
       const day = new Date(end);
       day.setUTCDate(day.getUTCDate() - (dayCount - 1 - i));
       const key = day.toISOString().slice(0, 10);
-      const value = orders
-        .filter((o) => o.orderedAt.toISOString().slice(0, 10) === key)
-        .reduce((sum, o) => sum + decimal(o.finalValue), 0);
-      return { label: key.slice(5), value };
+      const dayOrders = orders.filter((o) => o.orderedAt.toISOString().slice(0, 10) === key);
+      const value = dayOrders.reduce((sum, o) => sum + decimal(o.finalValue), 0);
+      const dayOfMonth = day.getUTCDate();
+      const previousDay = new Date(day);
+      previousDay.setUTCMonth(previousDay.getUTCMonth() - 1);
+      const comparable = previousDay.getUTCDate() === dayOfMonth;
+      const previousKey = comparable ? previousDay.toISOString().slice(0, 10) : null;
+      const matchingPreviousOrders = previousKey
+        ? previousMonthOrders.filter((o) => o.orderedAt.toISOString().slice(0, 10) === previousKey)
+        : [];
+      return {
+        label: key.slice(5),
+        date: key,
+        value,
+        orders: dayOrders.length,
+        previousLabel: previousKey,
+        previousValue: comparable
+          ? matchingPreviousOrders.reduce((sum, o) => sum + decimal(o.finalValue), 0)
+          : null,
+        previousOrders: comparable ? matchingPreviousOrders.length : null,
+        comparable,
+      };
     });
 
     const contacts = await this.prisma.contact.findMany({
@@ -1061,15 +1118,136 @@ export class DashboardService {
   }
 
   async commercial(organizationId: string, filters: DashboardFilters) {
-    const [metrics, charts] = await Promise.all([
+    const { start, end } = resolvePeriod(filters.period, filters.from, filters.to);
+    const dealScope = this.dealScope(organizationId, filters);
+    const pipelineWhere: Prisma.PipelineWhereInput = {
+      organizationId,
+      ...notDeleted,
+      archived: false,
+      ...(filters.pipelineId ? { id: filters.pipelineId } : filters.allowedPipelineIds ? { id: { in: filters.allowedPipelineIds } } : {}),
+    };
+    const orderScope: Prisma.OrderWhereInput = {
+      organizationId,
+      ...notDeleted,
+      orderedAt: { gte: start, lte: end },
+      status: { in: ["PAYMENT_APPROVED", "DELIVERED", "COMPLETED", "NATIONAL_TRANSPORT"] },
+      ...(filters.ownerId ? { ownerId: filters.ownerId } : {}),
+      ...(filters.channel ? { channel: filters.channel } : {}),
+      ...(filters.pipelineId
+        ? { deal: { pipelineId: filters.pipelineId } }
+        : filters.allowedPipelineIds
+          ? { OR: [{ deal: { pipelineId: { in: filters.allowedPipelineIds } } }, { dealId: null }] }
+          : {}),
+      ...(filters.teamId ? { deal: { teamId: filters.teamId } } : {}),
+    };
+    const [metrics, charts, pipelines, openDeals, closedDeals, confirmedOrders] = await Promise.all([
       this.metrics(organizationId, filters),
       this.charts(organizationId, filters),
+      this.prisma.pipeline.findMany({
+        where: pipelineWhere,
+        select: { id: true, name: true, color: true, position: true },
+        orderBy: { position: "asc" },
+      }),
+      this.prisma.deal.findMany({
+        where: { ...dealScope, status: "OPEN" },
+        select: {
+          id: true,
+          name: true,
+          leadSequence: true,
+          pipelineId: true,
+          value: true,
+          priority: true,
+          lastInteractionAt: true,
+          updatedAt: true,
+          stage: { select: { name: true, probability: true, color: true } },
+          contact: { select: { firstName: true, lastName: true } },
+          owner: { select: { id: true, name: true, avatarUrl: true } },
+        },
+        take: 1000,
+      }),
+      this.prisma.deal.findMany({
+        where: { ...dealScope, status: { in: ["WON", "LOST"] }, closedAt: { gte: start, lte: end } },
+        select: { pipelineId: true, status: true },
+        take: 2000,
+      }),
+      this.prisma.order.findMany({
+        where: orderScope,
+        select: { finalValue: true, deal: { select: { pipelineId: true } } },
+        take: 2000,
+      }),
     ]);
+    const pipelinePerformance = pipelines.map((pipeline) => {
+      const active = openDeals.filter((deal) => deal.pipelineId === pipeline.id);
+      const closed = closedDeals.filter((deal) => deal.pipelineId === pipeline.id);
+      const won = closed.filter((deal) => deal.status === "WON").length;
+      const lost = closed.filter((deal) => deal.status === "LOST").length;
+      const orders = confirmedOrders.filter((order) => order.deal?.pipelineId === pipeline.id);
+      const revenue = orders.reduce((sum, order) => sum + decimal(order.finalValue), 0);
+      return {
+        id: pipeline.id,
+        name: pipeline.name,
+        color: pipeline.color,
+        openDeals: active.length,
+        openValue: active.reduce((sum, deal) => sum + decimal(deal.value), 0),
+        revenue,
+        conversionRate: closedDealConversionRate(won, lost),
+        averageTicket: orders.length ? Math.round((revenue / orders.length) * 100) / 100 : 0,
+      };
+    });
+    const unassignedOrders = confirmedOrders.filter((order) => !order.deal?.pipelineId);
+    if (unassignedOrders.length) {
+      const revenue = unassignedOrders.reduce((sum, order) => sum + decimal(order.finalValue), 0);
+      pipelinePerformance.push({
+        id: "",
+        name: "Sem pipeline vinculado",
+        color: "#94a3b8",
+        openDeals: 0,
+        openValue: 0,
+        revenue,
+        conversionRate: null,
+        averageTicket: Math.round((revenue / unassignedOrders.length) * 100) / 100,
+      });
+    }
+    const now = new Date();
+    const opportunity = (deal: (typeof openDeals)[number]) => {
+      const stageName = deal.stage.name.toLocaleLowerCase("pt-BR");
+      const inferredProbability = stageName.includes("fecha")
+        ? 85
+        : stageName.includes("proposta")
+          ? 65
+          : stageName.includes("negocia")
+            ? 40
+            : stageName.includes("qualifica")
+              ? 20
+              : 10;
+      return ({
+      id: deal.id,
+      pipelineId: deal.pipelineId,
+      name: deal.name,
+      leadSequence: deal.leadSequence,
+      value: decimal(deal.value),
+      priority: deal.priority,
+      stage: deal.stage,
+      owner: deal.owner,
+      contactName: `${deal.contact?.firstName ?? ""} ${deal.contact?.lastName ?? ""}`.trim() || null,
+      probability: deal.stage.probability ?? inferredProbability,
+      idleDays: Math.max(0, Math.floor((now.getTime() - (deal.lastInteractionAt ?? deal.updatedAt).getTime()) / 86_400_000)),
+      });
+    };
+    const opportunities = openDeals.map(opportunity);
     return {
       metrics,
       funnel: charts.funnel,
       funnelStats: charts.funnelStats,
       revenueByPeriod: charts.revenueByPeriod,
+      pipelinePerformance,
+      topOpportunities: [...opportunities]
+        .sort((a, b) => b.probability - a.probability || b.value - a.value)
+        .slice(0, 5),
+      stalledOpportunities: opportunities
+        .filter((deal) => deal.idleDays >= 3)
+        .sort((a, b) => b.idleDays - a.idleDays || b.value - a.value)
+        .slice(0, 5),
       availability: {
         stageEntries: "READY",
         stageConversion: "TRACKING_FROM_NOW",

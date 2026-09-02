@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { ChartNoAxesCombined, Rows3 } from "lucide-react";
 import { dashboardApi } from "@/lib/api";
-import { Label, Select } from "@/components/ui/form-controls";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { AnalyticsChart } from "./analytics-charts";
 
 const matrix: Record<string, Array<{ value: string; label: string }>> = {
@@ -53,39 +54,38 @@ export function DimensionExplorer({ query }: { query: Record<string, string | un
         : (value: number) => new Intl.NumberFormat("pt-BR").format(value);
   return (
     <section className="space-y-3 rounded-xl border bg-card p-4" data-testid="dimension-explorer">
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <Label>Métrica</Label>
-          <Select value={metric} onChange={(event) => changeMetric(event.target.value)}>
-            <option value="revenue">Receita</option>
-            <option value="orders">Pedidos</option>
-            <option value="leads">Leads</option>
-            <option value="conversion">Conversão</option>
-          </Select>
-        </div>
-        <div>
-          <Label>Dimensão</Label>
-          <Select value={dimension} onChange={(event) => setDimension(event.target.value)}>
-            {dimensions.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <p className="pb-2 text-xs text-muted-foreground">
-          Somente combinações com fonte confiável e ACL compatível.
-        </p>
+      <div className="grid max-w-2xl gap-3 sm:grid-cols-2">
+        <FilterSelect
+          label="Métrica"
+          icon={ChartNoAxesCombined}
+          value={metric}
+          onChange={changeMetric}
+          options={[
+            { value: "revenue", label: "Receita" },
+            { value: "orders", label: "Pedidos" },
+            { value: "leads", label: "Leads" },
+            { value: "conversion", label: "Conversão" },
+          ]}
+        />
+        <FilterSelect
+          label="Dimensão"
+          icon={Rows3}
+          value={dimension}
+          onChange={setDimension}
+          options={dimensions}
+        />
       </div>
       <AnalyticsChart
         title="Explorar dados"
         data={
-          (result.data?.rows ?? []).filter((row) => row.value != null) as Array<{
+          (result.data?.rows ?? []).filter((row) => row.value != null && Number(row.value) > 0) as Array<{
             label: string;
             value: number;
           }>
         }
+        kind="horizontal-bar"
         valueFormatter={format}
+        emptyMessage="Nenhum resultado para esta combinação."
       />
     </section>
   );

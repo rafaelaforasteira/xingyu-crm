@@ -11,9 +11,9 @@ import { Label, Select } from "@/components/ui/form-controls";
 import { Popover } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { pipelinesApi, settingsApi, tasksApi } from "@/lib/api";
+import { dealsApi, ordersApi, pipelinesApi, settingsApi, tasksApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import type { Task, TaskStatusDefinition, UserRef } from "@/lib/types";
+import type { Deal, Task, TaskStatusDefinition, UserRef } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatLeadTaskDue, isTaskDone, sortLeadTasks } from "./lead-task-utils";
 
@@ -22,7 +22,14 @@ export type LeadLinks = {
   dealId?: string;
   pipelineId?: string;
   stageId?: string;
+  orderId?: string;
 };
+
+export function formatRelatedLead(deal: Pick<Deal, "leadSequence" | "name">) {
+  const name = deal.name.replace(/^Lead\s*#\d+\s*·\s*/i, "");
+  const code = deal.leadSequence == null ? "—" : String(deal.leadSequence).padStart(4, "0");
+  return `Lead #${code} · ${name}`;
+}
 
 export function TaskStatusButton({
   task,
@@ -195,6 +202,7 @@ export function CreateTaskDialog({
     assigneeId: "",
     date: "",
     time: "",
+    related: "",
   });
   const [error, setError] = React.useState("");
   React.useEffect(() => {
@@ -206,8 +214,19 @@ export function CreateTaskDialog({
         assigneeId: owner?.id ?? "",
         date: "",
         time: "",
+        related: links.orderId ? `order:${links.orderId}` : links.dealId ? `deal:${links.dealId}` : "",
       });
-  }, [open, defaultStatus?.id, owner?.id, initialDescription]);
+  }, [open, defaultStatus?.id, owner?.id, initialDescription, links.dealId, links.orderId]);
+  const dealsQuery = useQuery({
+    queryKey: ["task-related", "deals"],
+    queryFn: () => dealsApi.list({ pageSize: 50 }),
+    enabled: open,
+  });
+  const ordersQuery = useQuery({
+    queryKey: ["task-related", "orders"],
+    queryFn: () => ordersApi.list({ pageSize: 50 }),
+    enabled: open,
+  });
   const create = useMutation({
     mutationFn: () => {
       const title = form.title.trim();
@@ -215,6 +234,7 @@ export function CreateTaskDialog({
       const dueAt = form.date
         ? new Date(`${form.date}T${form.time || "12:00"}`).toISOString()
         : undefined;
+      const [relatedType, relatedId] = form.related.split(":");
       return tasksApi.create({
         title,
         description: form.description.trim() || undefined,
@@ -223,6 +243,8 @@ export function CreateTaskDialog({
         dueAt,
         sourceNoteId,
         ...links,
+        dealId: relatedType === "deal" ? relatedId : undefined,
+        orderId: relatedType === "order" ? relatedId : undefined,
       });
     },
     onSuccess: (task) => {
@@ -263,6 +285,30 @@ export function CreateTaskDialog({
           />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="lead-task-related">Relacionado</Label>
+            <Select
+              id="lead-task-related"
+              value={form.related}
+              onChange={(e) => setForm({ ...form, related: e.target.value })}
+            >
+              <option value="">Sem vínculo</option>
+              <optgroup label="Leads">
+                {(dealsQuery.data?.data ?? []).map((deal) => (
+                  <option key={deal.id} value={`deal:${deal.id}`}>
+                    {formatRelatedLead(deal)}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Pedidos">
+                {(ordersQuery.data?.data ?? []).map((order) => (
+                  <option key={order.id} value={`order:${order.id}`}>
+                    Pedido #{order.number}
+                  </option>
+                ))}
+              </optgroup>
+            </Select>
+          </div>
           <div>
             <Label htmlFor="lead-task-status">Status</Label>
             <Select

@@ -833,6 +833,7 @@ export interface Task {
   stageId?: string | null;
   stage?: { id: string; name: string; color?: string | null } | null;
   orderId?: string | null;
+  order?: Pick<Order, "id" | "number"> | null;
   createdAt: string;
   completedAt?: string | null;
 }

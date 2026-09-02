@@ -88,6 +88,8 @@ export class AutomationActionDto {
 export class UpdateAutomationDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) name?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsIn(["ORGANIZATION", "PIPELINE"]) scopeType?: string;
+  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() scopeId?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() enabled?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsString() triggerType?: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() triggerConfig?: Record<string, unknown>;

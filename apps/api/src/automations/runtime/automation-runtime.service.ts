@@ -3,7 +3,12 @@ import { Injectable, Logger } from "@nestjs/common";
 import { Prisma } from "@xingyu/database";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AUTOMATION_LIMITS, DOMAIN_EVENT_TYPES, JOB_TYPES } from "../domain/constants";
-import { isRecord, parseDefinition, type WorkflowDefinition, type WorkflowNode } from "../domain/definition";
+import {
+  isRecord,
+  parseDefinition,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from "../domain/definition";
 import { evaluateGroup } from "../domain/conditions";
 import { truncateJson } from "../domain/redaction";
 import { compileLegacyConfig, readLegacyConfig } from "../catalog/legacy-compiler";
@@ -30,7 +35,9 @@ export class AutomationRuntimeService {
     snapshot: Record<string, unknown>;
     dryRun: boolean;
   }) {
-    const trigger = input.definition.nodes.find((node) => parseNodeType(node.type).type.startsWith("trigger."));
+    const trigger = input.definition.nodes.find((node) =>
+      parseNodeType(node.type).type.startsWith("trigger."),
+    );
     if (!trigger) throw new Error("Adicione um gatilho antes de testar.");
     const execution = await this.prisma.automationExecution.create({
       data: {
@@ -48,7 +55,12 @@ export class AutomationRuntimeService {
         } as Prisma.InputJsonValue,
       },
     });
-    await this.queue.startJob(input.organizationId, execution.id, input.automationId, `test:${execution.id}`);
+    await this.queue.startJob(
+      input.organizationId,
+      execution.id,
+      input.automationId,
+      `test:${execution.id}`,
+    );
     return execution;
   }
 
@@ -73,14 +85,27 @@ export class AutomationRuntimeService {
       include: { automation: true, version: true },
     });
     for (const subscription of subscriptions) {
-      if (subscription.automation.status !== "ACTIVE" || subscription.automation.deletedAt || subscription.automation.archivedAt) {
+      if (
+        subscription.automation.status !== "ACTIVE" ||
+        subscription.automation.deletedAt ||
+        subscription.automation.archivedAt
+      ) {
         continue;
       }
-      if (event.origin === "AUTOMATION" && !this.allowReentry(subscription.version.definition, subscription.automation.id, event.correlationId)) {
+      if (
+        event.origin === "AUTOMATION" &&
+        !this.allowReentry(
+          subscription.version.definition,
+          subscription.automation.id,
+          event.correlationId,
+        )
+      ) {
         continue;
       }
       const definition = parseDefinition(subscription.version.definition);
-      const trigger = definition.nodes.find((node) => getCatalogEntry(node.type)?.eventType === event.eventType);
+      const trigger = definition.nodes.find(
+        (node) => getCatalogEntry(node.type)?.eventType === event.eventType,
+      );
       if (!trigger) continue;
       if (!this.matchesTriggerConfig(trigger, event)) continue;
       const snapshot = await this.buildSnapshot(event);
@@ -103,11 +128,14 @@ export class AutomationRuntimeService {
       where: { id: executionId },
       include: { version: true, automation: true },
     });
-    if (!execution || ["CANCELED", "SUCCEEDED", "FAILED", "TIMED_OUT"].includes(execution.status)) return;
+    if (!execution || ["CANCELED", "SUCCEEDED", "FAILED", "TIMED_OUT"].includes(execution.status))
+      return;
     const definition = execution.version
       ? parseDefinition(execution.version.definition)
       : this.definitionFromAutomation(execution.automation);
-    const trigger = definition.nodes.find((node) => parseNodeType(node.type).type.startsWith("trigger."));
+    const trigger = definition.nodes.find((node) =>
+      parseNodeType(node.type).type.startsWith("trigger."),
+    );
     const startNodeId = execution.currentNodeId ?? trigger?.id;
     if (!startNodeId) {
       await this.finish(execution.id, "FAILED", "Fluxo sem gatilho.");
@@ -121,7 +149,8 @@ export class AutomationRuntimeService {
       where: { id: executionId },
       include: { version: true, automation: true },
     });
-    if (!execution || ["CANCELED", "SUCCEEDED", "FAILED", "TIMED_OUT"].includes(execution.status)) return;
+    if (!execution || ["CANCELED", "SUCCEEDED", "FAILED", "TIMED_OUT"].includes(execution.status))
+      return;
     const definition = execution.version
       ? parseDefinition(execution.version.definition)
       : this.definitionFromAutomation(execution.automation);
@@ -143,7 +172,11 @@ export class AutomationRuntimeService {
   async retry(organizationId: string, executionId: string, fromFailed = true) {
     const execution = await this.prisma.automationExecution.findFirst({
       where: { id: executionId, organizationId },
-      include: { nodeExecutions: { orderBy: { startedAt: "desc" } }, version: true, automation: true },
+      include: {
+        nodeExecutions: { orderBy: { startedAt: "desc" } },
+        version: true,
+        automation: true,
+      },
     });
     if (!execution) return null;
     const failed = execution.nodeExecutions.find((item) => item.status === "FAILED");
@@ -151,7 +184,7 @@ export class AutomationRuntimeService {
       where: { id: execution.id },
       data: { status: "QUEUED", error: null, finishedAt: null, retryCount: { increment: 1 } },
     });
-    const nodeId = fromFailed ? failed?.nodeId ?? execution.currentNodeId : undefined;
+    const nodeId = fromFailed ? (failed?.nodeId ?? execution.currentNodeId) : undefined;
     await this.queue.enqueue({
       organizationId,
       automationId: execution.automationId,
@@ -176,7 +209,12 @@ export class AutomationRuntimeService {
     const subjectType = input.event.subjectType ?? input.event.aggregateType;
     const subjectId = input.event.subjectId ?? input.event.aggregateId;
     const active = await this.prisma.automationExecution.findFirst({
-      where: { automationId: input.automationId, subjectType, subjectId, status: { in: ["QUEUED", "RUNNING", "WAITING"] } },
+      where: {
+        automationId: input.automationId,
+        subjectType,
+        subjectId,
+        status: { in: ["QUEUED", "RUNNING", "WAITING"] },
+      },
     });
     if (settings.concurrency === "skipIfActive" || settings.reentry === "skipIfActive") {
       if (active) return;
@@ -222,11 +260,19 @@ export class AutomationRuntimeService {
         } as Prisma.InputJsonValue,
       },
     });
-    await this.queue.startJob(input.organizationId, execution.id, input.automationId, `start:${execution.id}`);
+    await this.queue.startJob(
+      input.organizationId,
+      execution.id,
+      input.automationId,
+      `start:${execution.id}`,
+    );
   }
 
   private async runFrom(
-    execution: AutomationExecution & { version: { definition: Prisma.JsonValue } | null; automation: { triggerType: string; config: Prisma.JsonValue | null } },
+    execution: AutomationExecution & {
+      version: { definition: Prisma.JsonValue } | null;
+      automation: { triggerType: string; config: Prisma.JsonValue | null };
+    },
     definition: WorkflowDefinition,
     nodeId: string,
     incomingHandle: string,
@@ -234,8 +280,12 @@ export class AutomationRuntimeService {
     let currentId: string | null = nodeId;
     let handle = incomingHandle;
     let steps = 0;
-    const context = (execution.context && typeof execution.context === "object" ? execution.context : {}) as Record<string, unknown>;
-    const nodesOut = (context.nodes && typeof context.nodes === "object" ? context.nodes : {}) as Record<string, unknown>;
+    const context = (
+      execution.context && typeof execution.context === "object" ? execution.context : {}
+    ) as Record<string, unknown>;
+    const nodesOut = (
+      context.nodes && typeof context.nodes === "object" ? context.nodes : {}
+    ) as Record<string, unknown>;
     while (currentId && steps < AUTOMATION_LIMITS.maxStepsPerExecution) {
       steps += 1;
       const node = definition.nodes.find((item) => item.id === currentId);
@@ -261,22 +311,27 @@ export class AutomationRuntimeService {
         },
       });
       try {
-        const result = await this.actions.execute(node.type, (node.config ?? {}) as Record<string, unknown>, {
-          organizationId: execution.organizationId ?? "",
-          executionId: execution.id,
-          automationId: execution.automationId,
-          nodeId: node.id,
-          dryRun,
-          actorId: (context.trigger as { actorId?: string } | undefined)?.actorId,
-          context: { ...context, nodes: nodesOut, now: new Date().toISOString() },
-        });
+        const result = await this.actions.execute(
+          node.type,
+          (node.config ?? {}) as Record<string, unknown>,
+          {
+            organizationId: execution.organizationId ?? "",
+            executionId: execution.id,
+            automationId: execution.automationId,
+            nodeId: node.id,
+            dryRun,
+            actorId: (context.trigger as { actorId?: string } | undefined)?.actorId,
+            context: { ...context, nodes: nodesOut, now: new Date().toISOString() },
+          },
+        );
         nodesOut[node.id] = { output: result.output };
         if (node.config && typeof (node.config as { name?: string }).name === "string") {
           const vars = (context.variables ?? {}) as Record<string, unknown>;
           vars[(node.config as { name: string }).name] = result.output;
           context.variables = vars;
         }
-        const nodeStatus = result.stop === "FAILED" ? "FAILED" : result.stop === "SKIPPED" ? "SKIPPED" : "SUCCEEDED";
+        const nodeStatus =
+          result.stop === "FAILED" ? "FAILED" : result.stop === "SKIPPED" ? "SKIPPED" : "SUCCEEDED";
         await this.prisma.automationNodeExecution.update({
           where: { id: nodeExec.id },
           data: {
@@ -297,10 +352,22 @@ export class AutomationRuntimeService {
         context.nodes = nodesOut;
         await this.prisma.automationExecution.update({
           where: { id: execution.id },
-          data: { context: context as Prisma.InputJsonValue, currentNodeId: node.id, status: "RUNNING" },
+          data: {
+            context: context as Prisma.InputJsonValue,
+            currentNodeId: node.id,
+            status: "RUNNING",
+          },
         });
         if (result.stop) {
-          await this.finish(execution.id, result.stop === "SUCCEEDED" ? "SUCCEEDED" : result.stop === "SKIPPED" ? "SKIPPED" : "FAILED", result.error ?? null);
+          await this.finish(
+            execution.id,
+            result.stop === "SUCCEEDED"
+              ? "SUCCEEDED"
+              : result.stop === "SKIPPED"
+                ? "SKIPPED"
+                : "FAILED",
+            result.error ?? null,
+          );
           return;
         }
         if (result.delayUntil) {
@@ -330,14 +397,21 @@ export class AutomationRuntimeService {
               eventType: result.wait.eventType,
               subjectType: result.wait.subjectType ?? null,
               subjectId: result.wait.subjectId ?? null,
-              resumeNodeIds: { received: this.nextNode(definition, node.id, "received"), timeout: this.nextNode(definition, node.id, "timeout") } as Prisma.InputJsonValue,
+              resumeNodeIds: {
+                received: this.nextNode(definition, node.id, "received"),
+                timeout: this.nextNode(definition, node.id, "timeout"),
+              } as Prisma.InputJsonValue,
               timeoutHandle: result.wait.timeoutHandle,
               expiresAt: result.wait.timeoutAt ?? null,
             },
           });
           await this.prisma.automationExecution.update({
             where: { id: execution.id },
-            data: { status: "WAITING", waitingUntil: result.wait.timeoutAt ?? null, currentNodeId: node.id },
+            data: {
+              status: "WAITING",
+              waitingUntil: result.wait.timeoutAt ?? null,
+              currentNodeId: node.id,
+            },
           });
           if (result.wait.timeoutAt) {
             await this.queue.enqueue({
@@ -362,7 +436,12 @@ export class AutomationRuntimeService {
         const message = error instanceof Error ? error.message : String(error);
         await this.prisma.automationNodeExecution.update({
           where: { id: nodeExec.id },
-          data: { status: "FAILED", errorMessage: message, errorCode: "NODE_FAILED", finishedAt: new Date() },
+          data: {
+            status: "FAILED",
+            errorMessage: message,
+            errorCode: "NODE_FAILED",
+            finishedAt: new Date(),
+          },
         });
         await this.finish(execution.id, "FAILED", message);
         return;
@@ -377,7 +456,10 @@ export class AutomationRuntimeService {
     });
     if (!wait) return;
     const resume = (wait.resumeNodeIds as { timeout?: string })?.timeout;
-    await this.prisma.automationWaitSubscription.update({ where: { id: wait.id }, data: { status: "TIMEOUT", resumedAt: new Date() } });
+    await this.prisma.automationWaitSubscription.update({
+      where: { id: wait.id },
+      data: { status: "TIMEOUT", resumedAt: new Date() },
+    });
     if (resume) await this.continueExecution(executionId, resume, "timeout");
     else await this.finish(executionId, "TIMED_OUT", "Tempo de espera esgotado.");
   }
@@ -388,15 +470,15 @@ export class AutomationRuntimeService {
         organizationId: event.organizationId,
         eventType: event.eventType,
         status: "WAITING",
-        OR: [
-          { subjectId: event.subjectId ?? event.aggregateId },
-          { subjectId: null },
-        ],
+        OR: [{ subjectId: event.subjectId ?? event.aggregateId }, { subjectId: null }],
       },
     });
     for (const wait of waits) {
       const resume = (wait.resumeNodeIds as { received?: string })?.received;
-      await this.prisma.automationWaitSubscription.update({ where: { id: wait.id }, data: { status: "RESUMED", resumedAt: new Date() } });
+      await this.prisma.automationWaitSubscription.update({
+        where: { id: wait.id },
+        data: { status: "RESUMED", resumedAt: new Date() },
+      });
       if (resume) {
         await this.queue.enqueue({
           organizationId: event.organizationId,
@@ -417,11 +499,18 @@ export class AutomationRuntimeService {
   }
 
   private async nextAttempt(executionId: string, nodeId: string) {
-    const count = await this.prisma.automationNodeExecution.count({ where: { executionId, nodeId } });
+    const count = await this.prisma.automationNodeExecution.count({
+      where: { executionId, nodeId },
+    });
     return count + 1;
   }
 
-  private nodeLogMessage(node: WorkflowNode, status: string, error?: string | null, branch?: string) {
+  private nodeLogMessage(
+    node: WorkflowNode,
+    status: string,
+    error?: string | null,
+    branch?: string,
+  ) {
     const label = node.label || parseNodeType(node.type).type;
     if (status === "FAILED") return `${label} falhou: ${error ?? "erro desconhecido"}`;
     if (status === "SKIPPED") return `${label} não continuou neste caminho.`;
@@ -435,11 +524,19 @@ export class AutomationRuntimeService {
       data: { status, error, finishedAt: new Date() },
     });
     await this.prisma.automationExecutionLog.create({
-      data: { executionId, level: error ? "error" : "info", message: error ?? `Execução ${status.toLowerCase()}` },
+      data: {
+        executionId,
+        level: error ? "error" : "info",
+        message: error ?? `Execução ${status.toLowerCase()}`,
+      },
     });
   }
 
-  private allowReentry(definition: Prisma.JsonValue, automationId: string, correlationId: string | null) {
+  private allowReentry(
+    definition: Prisma.JsonValue,
+    automationId: string,
+    correlationId: string | null,
+  ) {
     const parsed = parseDefinition(definition);
     if (parsed.settings?.allowAutomationReentry) return true;
     if (correlationId?.includes(automationId)) return false;
@@ -450,19 +547,57 @@ export class AutomationRuntimeService {
     const config = node.config ?? {};
     const payload = (event.payload ?? {}) as Record<string, unknown>;
     if (config.pipelineId && config.pipelineId !== payload.pipelineId) return false;
-    if (config.toStageId && config.toStageId !== payload.stageId && config.toStageId !== payload.toStageId) return false;
+    if (config.stageId && config.stageId !== payload.stageId) return false;
+    if (
+      config.toStageId &&
+      config.toStageId !== payload.stageId &&
+      config.toStageId !== payload.toStageId
+    )
+      return false;
     if (config.fromStageId && config.fromStageId !== payload.fromStageId) return false;
     if (config.status && config.status !== payload.status) return false;
+    if (
+      config.hour &&
+      String(config.hour).padStart(2, "0") !== String(payload.hour).padStart(2, "0")
+    )
+      return false;
+    if (
+      config.minute &&
+      String(config.minute).padStart(2, "0") !== String(payload.minute).padStart(2, "0")
+    )
+      return false;
+    if (
+      Array.isArray(config.weekdays) &&
+      config.weekdays.length &&
+      !config.weekdays.includes(payload.weekday)
+    )
+      return false;
+    if (config.tagId && config.tagId !== payload.tagId) return false;
+    if (
+      config.field &&
+      (!Array.isArray(payload.changedFields) || !payload.changedFields.includes(config.field))
+    )
+      return false;
+    if (config.toValue !== undefined) {
+      const after = payload.after as Record<string, unknown> | undefined;
+      if (String(after?.[String(config.field)]) !== String(config.toValue)) return false;
+    }
     return true;
   }
 
-  private definitionFromAutomation(automation: { triggerType: string; config: Prisma.JsonValue | null; draftDefinition?: Prisma.JsonValue | null }) {
+  private definitionFromAutomation(automation: {
+    triggerType: string;
+    config: Prisma.JsonValue | null;
+    draftDefinition?: Prisma.JsonValue | null;
+  }) {
     if (automation.draftDefinition) return parseDefinition(automation.draftDefinition);
     return compileLegacyConfig(automation.triggerType, readLegacyConfig(automation.config));
   }
 
   private async processLegacyAutomations(event: AutomationDomainEvent) {
-    const legacyType = Object.entries(DOMAIN_EVENT_TYPES).find(([, value]) => value === event.eventType)?.[0];
+    const legacyType = Object.entries(DOMAIN_EVENT_TYPES).find(
+      ([, value]) => value === event.eventType,
+    )?.[0];
     if (!legacyType || !["DEAL_CREATED", "DEAL_STAGE_CHANGED"].includes(legacyType)) return;
     const automations = await this.prisma.automation.findMany({
       where: {
@@ -475,8 +610,13 @@ export class AutomationRuntimeService {
       },
     });
     for (const automation of automations) {
-      const definition = compileLegacyConfig(automation.triggerType, readLegacyConfig(automation.config));
-      const trigger = definition.nodes.find((node) => parseNodeType(node.type).type.startsWith("trigger."));
+      const definition = compileLegacyConfig(
+        automation.triggerType,
+        readLegacyConfig(automation.config),
+      );
+      const trigger = definition.nodes.find((node) =>
+        parseNodeType(node.type).type.startsWith("trigger."),
+      );
       if (!trigger) continue;
       const snapshot = await this.buildSnapshot(event);
       await this.enroll({
@@ -493,13 +633,23 @@ export class AutomationRuntimeService {
 
   private async buildSnapshot(event: AutomationDomainEvent) {
     const payload = (event.payload ?? {}) as Record<string, unknown>;
-    const dealId = String(payload.dealId ?? (event.aggregateType === "deal" ? event.aggregateId : "") ?? "");
-    const orderId = String(payload.orderId ?? (event.aggregateType === "order" ? event.aggregateId : "") ?? "");
+    const dealId = String(
+      payload.dealId ?? (event.aggregateType === "deal" ? event.aggregateId : "") ?? "",
+    );
+    const orderId = String(
+      payload.orderId ?? (event.aggregateType === "order" ? event.aggregateId : "") ?? "",
+    );
     const contactId = String(payload.contactId ?? "");
     const deal = dealId
       ? await this.prisma.deal.findFirst({
           where: { id: dealId, organizationId: event.organizationId, deletedAt: null },
-          include: { contact: true, stage: true, pipeline: true, owner: { select: { id: true, name: true } }, tags: { include: { tag: true } } },
+          include: {
+            contact: true,
+            stage: true,
+            pipeline: true,
+            owner: { select: { id: true, name: true } },
+            tags: { include: { tag: true } },
+          },
         })
       : null;
     const order = orderId
@@ -606,9 +756,19 @@ export class AutomationRuntimeService {
         dryRun: input.dryRun,
         context: input.context,
       });
-      return { ok: true, durationMs: Date.now() - started, output: truncateJson(result.output).value, error: result.error ?? null };
+      return {
+        ok: true,
+        durationMs: Date.now() - started,
+        output: truncateJson(result.output).value,
+        error: result.error ?? null,
+      };
     } catch (error) {
-      return { ok: false, durationMs: Date.now() - started, output: null, error: error instanceof Error ? error.message : String(error) };
+      return {
+        ok: false,
+        durationMs: Date.now() - started,
+        output: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 }

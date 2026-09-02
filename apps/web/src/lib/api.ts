@@ -185,7 +185,7 @@ async function request<T>(
       signal: controller.signal,
     });
   } catch {
-    throw new ApiError("NÃ£o foi possÃ­vel conectar Ã  API do Xingyu CRM.", 0);
+    throw new ApiError("Não foi possível conectar à API do Xingyu CRM.", 0);
   } finally {
     clearTimeout(timeout);
   }
@@ -217,7 +217,7 @@ async function request<T>(
       response.status === 503
         ? "O banco de dados local nÃ£o estÃ¡ disponÃ­vel. Inicie o ambiente com pnpm dev:local."
         : response.status >= 500
-          ? "O Xingyu CRM encontrou um erro ao processar a solicitaÃ§Ã£o."
+          ? "O Xingyu CRM encontrou um erro ao processar a solicitação."
           : (serverMessage ?? `Erro ${response.status}`);
     throw new ApiError(message, response.status, body);
   }
@@ -492,6 +492,7 @@ export const pipelineChannelsApi = {
 };
 
 export const dealsApi = {
+  list: (query?: Record<string, QueryValue>) => api.get<PaginatedResponse<Deal>>("/deals", query),
   get: (id: string) => api.get<Deal>(`/deals/${id}`),
   create: (data: Partial<Deal>) => api.post<Deal>("/deals", data),
   lookupManualLead: (query: { pipelineId: string; phone?: string; email?: string }) =>
@@ -723,10 +724,14 @@ export const automationsApi = {
   archive: (id: string) => api.post<Automation>(`/automations/${id}/archive`, {}),
   export: (id: string) => api.get<Record<string, unknown>>(`/automations/${id}/export`),
   versions: (id: string) => api.get<Array<{ id: string; version: number; createdAt: string; createdById?: string | null }>>(`/automations/${id}/versions`),
+  draftSnapshots: (id: string) => api.get<Array<{ id: string; revision: number; checksum: string; createdAt: string; createdById?: string | null }>>(`/automations/${id}/draft-snapshots`),
+  compareDraftSnapshot: (id: string, snapshotId: string) => api.get<{ addedNodes: Array<{ id: string; label?: string; type: string }>; removedNodes: Array<{ id: string; label?: string; type: string }>; changedNodes: Array<{ id: string; label?: string; type: string }>; edgeDelta: number }>(`/automations/${id}/draft-snapshots/${snapshotId}/compare`),
+  restoreDraftSnapshot: (id: string, snapshotId: string) => api.post<Automation>(`/automations/${id}/draft-snapshots/${snapshotId}/restore`, {}),
   restoreVersion: (id: string, versionId: string) => api.post<Automation>(`/automations/${id}/versions/${versionId}/restore`, {}),
   remove: (id: string) => api.delete<Automation>(`/automations/${id}`),
   executions: (id: string, query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<import("./types").AutomationExecution>>(`/automations/${id}/executions`, query),
+  analytics: (id: string) => api.get<{ total: number; succeeded: number; failed: number; waiting: number; canceled: number; successRate: number; averageDurationMs: number; conversions: number; attributedRevenue: number; failedNodes: Array<{ nodeId: string; nodeType: string; count: number }> }>(`/automations/${id}/analytics`),
   allExecutions: (query?: Record<string, QueryValue>) =>
     api.get<PaginatedResponse<import("./types").AutomationExecution>>("/automations/executions", query),
   getExecution: (executionId: string) => api.get<import("./types").AutomationExecution>(`/automations/executions/${executionId}`),

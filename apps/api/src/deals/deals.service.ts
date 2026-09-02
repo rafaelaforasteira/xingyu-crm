@@ -453,8 +453,10 @@ export class DealsService {
   async update(organizationId: string, id: string, dto: UpdateDealDto, userId: string) {
     let previousStageId: string | null = null;
     let ownerChangedFrom: string | null | undefined;
+    let beforeUpdate: Record<string, unknown> = {};
     const updated = await this.prisma.$transaction(async (tx) => {
       const deal = await this.requireDeal(tx, organizationId, id);
+      beforeUpdate = { ...deal };
       await this.requireOrganizationUser(tx, organizationId, userId);
 
       const pipelineId = dto.pipelineId ?? deal.pipelineId;
@@ -558,6 +560,31 @@ export class DealsService {
           fromOwnerId: ownerChangedFrom,
           ownerId: updated.ownerId,
           contactId: updated.contactId,
+        },
+        subjectType: "deal",
+        subjectId: updated.id,
+      });
+    }
+    const ignoredFields = new Set(["pipelineId", "stageId", "ownerId"]);
+    const changedFields = Object.keys(dto).filter(
+      (field) => !ignoredFields.has(field) && beforeUpdate[field] !== updated[field as keyof typeof updated],
+    );
+    if (changedFields.length) {
+      await this.domainEvents?.emitStandalone({
+        organizationId,
+        eventType: DOMAIN_EVENT_TYPES.DEAL_UPDATED,
+        aggregateType: "deal",
+        aggregateId: updated.id,
+        origin: "USER",
+        actorId: userId,
+        payload: {
+          dealId: updated.id,
+          pipelineId: updated.pipelineId,
+          stageId: updated.stageId,
+          contactId: updated.contactId,
+          changedFields,
+          before: Object.fromEntries(changedFields.map((field) => [field, beforeUpdate[field]])),
+          after: Object.fromEntries(changedFields.map((field) => [field, updated[field as keyof typeof updated]])),
         },
         subjectType: "deal",
         subjectId: updated.id,

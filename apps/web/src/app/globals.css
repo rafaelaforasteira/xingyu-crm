@@ -213,19 +213,460 @@
   --automation-success: 152 45% 42%;
   --automation-warning: 38 84% 52%;
   --automation-error: 0 72% 58%;
+  --automation-grid: 240 6% 22%;
+  --automation-edge-idle: 250 13% 42%;
+  --automation-edge-primary: 262 42% 62%;
+  --automation-edge-secondary: 260 34% 58%;
+  --automation-edge-active: 264 72% 67%;
+  --automation-edge-packet: 270 100% 91%;
+  --automation-edge-success: 152 54% 48%;
+  --automation-edge-warning: 38 88% 58%;
+  --automation-edge-error: 0 72% 62%;
+  --automation-edge-label-bg: 240 8% 13%;
+  --xy-selection-background-color: hsl(var(--automation-accent) / 0.2);
+  --xy-selection-border: 2px solid hsl(var(--automation-accent) / 0.95);
 }
 
-.automation-studio .react-flow__edge-path {
-  stroke: hsl(var(--automation-border));
-  stroke-width: 1.5;
+.automation-studio.automation-studio-light {
+  --automation-canvas: 240 20% 97%;
+  --automation-surface: 0 0% 100%;
+  --automation-surface-2: 240 18% 95%;
+  --automation-elevated: 0 0% 100%;
+  --automation-border: 240 12% 84%;
+  --automation-border-selected: 262 55% 54%;
+  --automation-text: 240 15% 13%;
+  --automation-text-2: 240 7% 42%;
+  --automation-accent: 262 58% 54%;
+  --automation-success: 152 50% 36%;
+  --automation-warning: 36 90% 43%;
+  --automation-error: 0 68% 50%;
+  --automation-grid: 240 10% 86%;
+  --automation-edge-idle: 245 12% 68%;
+  --automation-edge-primary: 262 48% 54%;
+  --automation-edge-secondary: 260 32% 58%;
+  --automation-edge-active: 264 66% 55%;
+  --automation-edge-packet: 266 72% 36%;
+  --automation-edge-success: 152 50% 36%;
+  --automation-edge-warning: 36 90% 43%;
+  --automation-edge-error: 0 68% 50%;
+  --automation-edge-label-bg: 0 0% 100%;
+  --xy-selection-background-color: hsl(var(--automation-accent) / 0.12);
+  --xy-selection-border: 2px solid hsl(var(--automation-accent) / 0.85);
 }
 
-.automation-studio .react-flow__connection-line {
-  stroke: hsl(var(--automation-accent));
+.automation-studio,
+.automation-studio * {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--automation-accent) / 0.48) transparent;
+}
+
+.automation-studio *::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.automation-studio *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.automation-studio *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: hsl(var(--automation-accent) / 0.42);
+  background-clip: padding-box;
+}
+
+.automation-studio *::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--automation-accent) / 0.7);
+  background-clip: padding-box;
+}
+
+.automation-studio *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.automation-studio .react-flow__selection {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px hsl(var(--automation-canvas) / 0.5),
+    0 0 20px hsl(var(--automation-accent) / 0.18);
+}
+
+/* Keep the drag-selection marquee visible, but remove the persistent group box.
+ * Selected widgets already communicate the selection with their own accent border. */
+.automation-studio .react-flow__nodesselection-rect {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.automation-studio .organic-flow-edge,
+.automation-studio .organic-connection-preview {
+  --organic-edge-color: hsl(var(--automation-edge-primary));
+  --organic-edge-secondary: hsl(var(--automation-edge-secondary));
+}
+
+.automation-studio .organic-flow-edge[data-tone="success"] {
+  --organic-edge-color: hsl(var(--automation-edge-success));
+  --organic-edge-secondary: hsl(var(--automation-edge-success));
+}
+
+.automation-studio .organic-flow-edge[data-tone="error"] {
+  --organic-edge-color: hsl(var(--automation-edge-error));
+  --organic-edge-secondary: hsl(var(--automation-edge-error));
+}
+
+.automation-studio .organic-flow-edge[data-status="running"] {
+  --organic-edge-color: hsl(var(--automation-edge-active));
+}
+
+.automation-studio .organic-flow-edge[data-status="waiting"] {
+  --organic-edge-color: hsl(var(--automation-edge-warning));
+}
+
+.automation-studio .organic-flow-edge[data-status="success"] {
+  --organic-edge-color: hsl(var(--automation-edge-success));
+}
+
+.automation-studio .organic-flow-edge[data-status="failed"] {
+  --organic-edge-color: hsl(var(--automation-edge-error));
+}
+
+.automation-studio .organic-edge-ambient,
+.automation-studio .organic-edge-fiber,
+.automation-studio .organic-edge-core,
+.automation-studio .organic-edge-packet,
+.automation-studio .organic-edge-hitbox,
+.automation-studio .organic-connection-preview path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.automation-studio .organic-edge-ambient {
+  stroke: var(--organic-edge-color);
+  stroke-width: 8;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.automation-studio .organic-edge-fiber {
+  stroke: var(--organic-edge-secondary);
+  stroke-width: 0.65;
+  opacity: 0.16;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: organic-fiber-breathe var(--organic-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--organic-phase, 0ms);
+  transition: opacity 180ms ease;
+}
+
+.automation-studio .organic-edge-fiber[data-fiber="2"] {
+  --organic-drift: -0.55px;
+  opacity: 0.12;
+  animation-duration: 6.7s;
+}
+
+.automation-studio .organic-edge-fiber[data-fiber="3"] {
+  --organic-drift: 0.8px;
+  opacity: 0.09;
+  animation-duration: 5.3s;
+}
+
+.automation-studio .organic-edge-fiber[data-fiber="4"] {
+  --organic-drift: -0.7px;
+  opacity: 0.06;
+  animation-duration: 7.4s;
+}
+
+.automation-studio .organic-edge-core {
+  stroke: var(--organic-edge-color);
+  stroke-width: 1.15;
+  opacity: 0.62;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    stroke-width 180ms ease;
+}
+
+.automation-studio .organic-edge-arrow {
+  fill: var(--organic-edge-color);
+}
+
+.automation-studio .organic-edge-packet {
+  stroke-width: 3.2;
+  stroke-dasharray: 24 176;
+  opacity: 0.95;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px hsl(var(--automation-edge-active) / 0.55));
+  animation: organic-energy-packet 1.35s linear infinite;
+}
+
+.automation-studio .organic-edge-junction {
+  fill: var(--organic-edge-color);
+  opacity: 0.55;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--organic-edge-color));
+  transition: opacity 180ms ease;
+}
+
+.automation-studio .organic-edge-junction-core {
+  fill: hsl(var(--automation-edge-packet));
+  opacity: 0.7;
+}
+
+.automation-studio .organic-edge-hitbox {
+  stroke: transparent;
+  stroke-width: 22;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.automation-studio .organic-flow-edge:hover .organic-edge-ambient,
+.automation-studio .organic-flow-edge.is-selected .organic-edge-ambient,
+.automation-studio .organic-flow-edge[data-status="running"] .organic-edge-ambient {
+  opacity: 0.1;
+}
+
+.automation-studio .organic-flow-edge:hover .organic-edge-core,
+.automation-studio .organic-flow-edge.is-selected .organic-edge-core {
+  stroke-width: 1.4;
+  opacity: 0.92;
+}
+
+.automation-studio .organic-flow-edge:hover .organic-edge-fiber,
+.automation-studio .organic-flow-edge.is-selected .organic-edge-fiber {
+  opacity: 0.28;
+}
+
+.automation-studio .organic-flow-edge[data-status="waiting"] .organic-edge-junction-target {
+  animation: organic-junction-wait 2.4s ease-in-out infinite;
+}
+
+.automation-studio .organic-flow-edge[data-status="failed"] .organic-edge-junction-target {
+  opacity: 0.9;
+}
+
+.automation-studio .organic-flow-edge[data-status="skipped"] {
+  opacity: 0.28;
+}
+
+.automation-studio .organic-edge-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: hsl(var(--automation-text-2));
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.automation-studio .organic-edge-label > span,
+.automation-studio .organic-edge-label > button {
+  border: 1px solid hsl(var(--automation-border) / 0.75);
+  background: hsl(var(--automation-edge-label-bg) / 0.9);
+  box-shadow: 0 2px 7px hsl(var(--automation-canvas) / 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.automation-studio .organic-edge-label > span {
+  border-radius: 999px;
+  padding: 2px 5px;
+}
+
+.automation-studio .organic-edge-label > button {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 999px;
+  color: hsl(var(--automation-text-2));
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.2;
+  transition:
+    opacity 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.automation-studio .organic-edge-label > button:hover,
+.automation-studio .organic-edge-label > button:focus-visible {
+  border-color: hsl(var(--automation-border-selected));
+  color: hsl(var(--automation-accent));
+  opacity: 1;
+}
+
+.automation-studio .organic-connection-preview .organic-edge-ambient {
+  opacity: 0.08;
+}
+
+.automation-studio .organic-connection-preview .organic-edge-core {
+  opacity: 0.86;
+}
+
+.automation-studio .automation-receptor {
+  display: grid;
+  place-items: center;
+  position: absolute !important;
+  opacity: 1;
+  z-index: 4;
+}
+
+.automation-studio select {
+  color-scheme: dark;
+}
+
+.automation-studio select option {
+  background: hsl(var(--automation-surface));
+  color: hsl(var(--automation-text));
+}
+
+/* Form controls embedded in automation widgets use the canvas palette instead
+ * of the application's light card defaults. Keep this scoped to executable
+ * nodes so inline editors for notes and frames retain their own appearance. */
+.automation-studio :is(.react-flow__node-automation, aside) input:not([type="checkbox"]):not([type="radio"]),
+.automation-studio :is(.react-flow__node-automation, aside) select,
+.automation-studio :is(.react-flow__node-automation, aside) textarea {
+  border-color: hsl(var(--automation-border));
+  background: hsl(var(--automation-surface));
+  color: hsl(var(--automation-text));
+  box-shadow: inset 0 1px 0 hsl(var(--automation-text) / 0.025);
+  color-scheme: dark;
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input::placeholder,
+.automation-studio :is(.react-flow__node-automation, aside) textarea::placeholder {
+  color: hsl(var(--automation-text-2) / 0.72);
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input:not([type="checkbox"]):not([type="radio"]):hover,
+.automation-studio :is(.react-flow__node-automation, aside) select:hover,
+.automation-studio :is(.react-flow__node-automation, aside) textarea:hover {
+  border-color: hsl(var(--automation-accent) / 0.52);
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+.automation-studio :is(.react-flow__node-automation, aside) select:focus-visible,
+.automation-studio :is(.react-flow__node-automation, aside) textarea:focus-visible {
+  border-color: hsl(var(--automation-accent));
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--automation-accent) / 0.14);
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input:disabled,
+.automation-studio :is(.react-flow__node-automation, aside) select:disabled,
+.automation-studio :is(.react-flow__node-automation, aside) textarea:disabled {
+  border-color: hsl(var(--automation-border) / 0.72);
+  background: hsl(var(--automation-surface-2));
+  color: hsl(var(--automation-text-2));
+  opacity: 0.72;
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input[type="checkbox"],
+.automation-studio :is(.react-flow__node-automation, aside) input[type="radio"] {
+  accent-color: hsl(var(--automation-accent));
+  color-scheme: dark;
+}
+
+.automation-studio.automation-studio-light :is(.react-flow__node-automation, aside) input,
+.automation-studio.automation-studio-light :is(.react-flow__node-automation, aside) select,
+.automation-studio.automation-studio-light :is(.react-flow__node-automation, aside) textarea {
+  color-scheme: light;
+}
+
+.automation-studio .automation-receptor.react-flow__handle-left {
+  top: 50% !important;
+  right: auto !important;
+  left: -12px !important;
+  transform: translateY(-50%) !important;
+}
+
+.automation-studio .automation-receptor.react-flow__handle-right {
+  top: 50%;
+  right: -12px !important;
+  left: auto !important;
+  transform: translateY(-50%) !important;
+}
+
+.automation-studio .automation-receptor::after {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--automation-edge-idle));
+  box-shadow:
+    0 0 0 1px hsl(var(--automation-surface)),
+    0 0 5px hsl(var(--automation-edge-primary) / 0.3);
+  content: "";
+  transition:
+    width 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.automation-studio .automation-receptor-accent::after {
+  background: hsl(var(--automation-edge-primary));
+}
+
+.automation-studio .automation-receptor-success::after {
+  background: hsl(var(--automation-edge-success));
+}
+
+.automation-studio .automation-receptor-error::after {
+  background: hsl(var(--automation-edge-error));
+}
+
+.automation-studio .automation-receptor:hover::after,
+.automation-studio .automation-receptor.connectingfrom::after,
+.automation-studio .automation-receptor.connectingto::after {
+  width: 10px;
+  box-shadow:
+    0 0 0 1px hsl(var(--automation-surface)),
+    0 0 9px hsl(var(--automation-edge-active) / 0.65);
+}
+
+@keyframes organic-energy-packet {
+  to {
+    stroke-dashoffset: -200;
+  }
+}
+
+@keyframes organic-fiber-breathe {
+  0%,
+  100% {
+    stroke-dashoffset: 0;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.22;
+    stroke-dashoffset: 1.5;
+    transform: translateY(var(--organic-drift, 0.6px));
+  }
+}
+
+@keyframes organic-junction-wait {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
 .automation-studio .react-flow__background {
   background: hsl(var(--automation-canvas));
+  z-index: 0;
+  pointer-events: none;
+}
+
+.automation-studio .react-flow__renderer {
+  z-index: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

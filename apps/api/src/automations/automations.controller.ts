@@ -130,6 +130,30 @@ export class AutomationsController {
     return this.automationsService.saveDraft(orgId, id, user.id, dto);
   }
 
+  @Get(":id/draft-snapshots")
+  draftSnapshots(@OrganizationId() orgId: string, @Param("id") id: string) {
+    return this.automationsService.draftSnapshots(orgId, id);
+  }
+
+  @Post(":id/draft-snapshots/:snapshotId/restore")
+  restoreDraftSnapshot(
+    @OrganizationId() orgId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Param("snapshotId") snapshotId: string,
+  ) {
+    return this.automationsService.restoreDraftSnapshot(orgId, id, snapshotId, user.id);
+  }
+
+  @Get(":id/draft-snapshots/:snapshotId/compare")
+  compareDraftSnapshot(
+    @OrganizationId() orgId: string,
+    @Param("id") id: string,
+    @Param("snapshotId") snapshotId: string,
+  ) {
+    return this.automationsService.compareDraftSnapshot(orgId, id, snapshotId);
+  }
+
   @Post(":id/validate")
   validate(@OrganizationId() orgId: string, @Param("id") id: string) {
     return this.automationsService.validate(orgId, id);
@@ -224,5 +248,10 @@ export class AutomationsController {
     @Query() query: PaginationQueryDto,
   ) {
     return this.automationsService.listExecutions(orgId, id, query);
+  }
+
+  @Get(":id/analytics")
+  analytics(@OrganizationId() orgId: string, @Param("id") id: string) {
+    return this.automationsService.analytics(orgId, id);
   }
 }

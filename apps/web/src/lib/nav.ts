@@ -44,7 +44,7 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
     id: "overview",
     label: "Visão geral",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Dados", icon: LayoutDashboard },
       { href: "/pipelines", label: "Negócios", icon: Kanban, countKey: "openDeals", exact: true },
       { href: "/inbox", label: "Conversas", icon: Inbox, countKey: "waitingConversations" },
       { href: "/tasks", label: "Tarefas", icon: CheckSquare, countKey: "tasksToday" },
@@ -105,7 +105,7 @@ export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
     id: "beta",
     label: "Principal",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Dados", icon: LayoutDashboard },
       { href: "/tasks", label: "Tarefas", icon: CheckSquare },
       {
         href: "/pipelines",
@@ -125,7 +125,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "overview",
     label: "Visão geral",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Dados", icon: LayoutDashboard },
       { href: "/tasks", label: "Tarefas", icon: CheckSquare },
     ],
   },

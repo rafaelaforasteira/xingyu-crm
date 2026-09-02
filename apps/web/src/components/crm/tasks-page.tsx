@@ -6,6 +6,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarClock,
+  CalendarDays,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -13,10 +15,11 @@ import {
   Filter,
   Plus,
   Search,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth/auth-provider";
-import { CreateTaskDialog, TaskStatusButton } from "@/components/crm/conversation/lead-tasks";
+import { CreateTaskDialog, formatRelatedLead, TaskStatusButton } from "@/components/crm/conversation/lead-tasks";
 import { ErrorBanner, PageHeader } from "@/components/crm/page-header";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +37,7 @@ import { cn } from "@/lib/utils";
 import { TaskWorkspace } from "@/components/crm/task-workspace";
 
 type Scope = "mine" | "team" | "all";
-type State = "open" | "completed";
+type State = "" | "open" | "completed";
 type Due = "" | "overdue" | "today" | "upcoming" | "no-date";
 
 const DUE_OPTIONS: Array<{ value: Due; label: string }> = [
@@ -61,15 +64,158 @@ function dueLabel(task: Task) {
   if (!task.dueAt) return "Sem data";
   const due = new Date(task.dueAt);
   const bucket = dueBucket(task);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const dayDistance = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
   const time = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(due);
   if (bucket === "today") return `Hoje · ${time}`;
-  if (bucket === "overdue")
-    return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(due);
+  if (dayDistance === 1) return "Amanhã";
+  if (bucket === "overdue") {
+    const days = Math.abs(dayDistance);
+    return `${days} ${days === 1 ? "dia" : "dias"} atrás`;
+  }
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+    month: "short",
   }).format(due);
+}
+
+function TaskAssigneePicker({
+  task,
+  users,
+  onUpdate,
+}: {
+  task: Task;
+  users: Array<{ id: string; name: string; avatarUrl?: string | null }>;
+  onUpdate: (data: Partial<Task>) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState("");
+  const filtered = users.filter((member) =>
+    member.name.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")),
+  );
+  const choose = (assigneeId: string | null) => {
+    onUpdate({ assigneeId });
+    setOpen(false);
+    setSearch("");
+  };
+  return (
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      align="start"
+      contentWidth={290}
+      aria-label={`Escolher responsável de ${task.title}`}
+      trigger={
+        <button
+          type="button"
+          className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-primary/10"
+          title={task.assignee?.name ? `Responsável: ${task.assignee.name}` : "Adicionar responsável"}
+          onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}
+        >
+          {task.assignee ? (
+            <Avatar name={task.assignee.name} src={task.assignee.avatarUrl} size="sm" />
+          ) : (
+            <UserRound className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+      }
+    >
+      <div className="border-b border-border/70 p-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="h-9 bg-muted/30 pl-9"
+            placeholder="Buscar responsável..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            autoFocus
+          />
+        </div>
+      </div>
+      <div className="max-h-72 overflow-y-auto p-2">
+        <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Responsáveis</p>
+        <button type="button" className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted" onClick={() => choose(null)}>
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted"><UserRound className="h-4 w-4 text-muted-foreground" /></span>
+          <span className="flex-1">Sem responsável</span>
+          {!task.assigneeId ? <Check className="h-4 w-4 text-primary" /> : null}
+        </button>
+        {filtered.map((member) => (
+          <button key={member.id} type="button" className={cn("flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted", task.assigneeId === member.id && "bg-primary/10")} onClick={() => choose(member.id)}>
+            <Avatar name={member.name} src={member.avatarUrl} size="sm" />
+            <span className="min-w-0 flex-1 truncate">{member.name}</span>
+            {task.assigneeId === member.id ? <Check className="h-4 w-4 text-primary" /> : null}
+          </button>
+        ))}
+      </div>
+    </Popover>
+  );
+}
+
+function TaskDatePicker({ task, overdue, onUpdate }: { task: Task; overdue: boolean; onUpdate: (data: Partial<Task>) => void }) {
+  const [open, setOpen] = React.useState(false);
+  const initial = task.dueAt ? new Date(task.dueAt) : new Date();
+  const [month, setMonth] = React.useState(() => new Date(initial.getFullYear(), initial.getMonth(), 1));
+  React.useEffect(() => {
+    if (open) {
+      const current = task.dueAt ? new Date(task.dueAt) : new Date();
+      setMonth(new Date(current.getFullYear(), current.getMonth(), 1));
+    }
+  }, [open, task.dueAt]);
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstWeekday = new Date(year, monthIndex, 1).getDay();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const cells = Array.from({ length: 42 }, (_, index) => {
+    const day = index - firstWeekday + 1;
+    return day >= 1 && day <= daysInMonth ? day : null;
+  });
+  const selected = task.dueAt ? new Date(task.dueAt) : null;
+  const today = new Date();
+  const selectDay = (day: number) => {
+    onUpdate({ dueAt: new Date(year, monthIndex, day, 12).toISOString() });
+    setOpen(false);
+  };
+  return (
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      align="start"
+      contentWidth={284}
+      aria-label={`Escolher data de ${task.title}`}
+      trigger={
+        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-primary/10" title={task.dueAt ? `Data: ${dueLabel(task)}` : "Selecionar data"} onClick={(event) => { event.stopPropagation(); setOpen((value) => !value); }}>
+          <CalendarDays className={cn("h-4 w-4 text-muted-foreground", overdue && "text-destructive")} />
+        </button>
+      }
+    >
+      <div className="p-3">
+        <div className="mb-3 flex items-center justify-between">
+          <strong className="text-sm capitalize">{new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(month)}</strong>
+          <div className="flex gap-1">
+            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label="Mês anterior" onClick={() => setMonth(new Date(year, monthIndex - 1, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label="Próximo mês" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))}><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-muted-foreground">
+          {['D','S','T','Q','Q','S','S'].map((label, index) => <span key={`${label}-${index}`} className="py-1">{label}</span>)}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((day, index) => {
+            if (!day) return <span key={index} className="h-8" />;
+            const isSelected = selected && selected.getFullYear() === year && selected.getMonth() === monthIndex && selected.getDate() === day;
+            const isToday = today.getFullYear() === year && today.getMonth() === monthIndex && today.getDate() === day;
+            return <button key={index} type="button" className={cn("h-8 rounded-lg text-xs transition hover:bg-primary/10 hover:text-primary", isToday && !isSelected && "border border-primary/30 font-semibold text-primary", isSelected && "bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground")} onClick={() => selectDay(day)}>{day}</button>;
+          })}
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t border-border/70 pt-3">
+          <Button type="button" size="sm" variant="ghost" className="text-muted-foreground" onClick={() => { onUpdate({ dueAt: null }); setOpen(false); }}>Limpar</Button>
+          <Button type="button" size="sm" variant="ghost" className="text-primary" onClick={() => { const now = new Date(); onUpdate({ dueAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12).toISOString() }); setOpen(false); }}>Hoje</Button>
+        </div>
+      </div>
+    </Popover>
+  );
 }
 
 function TaskRow({
@@ -86,62 +232,47 @@ function TaskRow({
   pending: boolean;
   onStatus: (status: TaskStatusDefinition) => void;
   onOpen: () => void;
-  users: Array<{ id: string; name: string }>;
+  users: Array<{ id: string; name: string; avatarUrl?: string | null }>;
   onUpdate: (data: Partial<Task>) => void;
 }) {
-  const dealHref =
-    task.dealId && task.pipelineId ? `/pipelines/${task.pipelineId}/deals/${task.dealId}` : null;
-  const leadCode = task.deal && "leadSequence" in task.deal ? task.deal.leadSequence : null;
-  const contactName =
-    task.contact?.name ||
-    [task.contact?.firstName, task.contact?.lastName].filter(Boolean).join(" ");
   const overdue = dueBucket(task) === "overdue" && task.statusDefinition?.category !== "DONE";
+  const related = task.order
+    ? { href: `/orders?order=${task.order.id}`, label: `Pedido #${task.order.number}` }
+    : task.deal
+      ? {
+          href: `/pipelines/${task.deal.pipelineId}/deals/${task.deal.id}`,
+          label: task.contact?.name
+            ? `Lead #${task.deal.leadSequence == null ? "—" : String(task.deal.leadSequence).padStart(4, "0")} · ${task.contact.name}`
+            : formatRelatedLead(task.deal),
+        }
+      : null;
   return (
-    <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter") onOpen(); }} className="grid min-w-0 cursor-pointer grid-cols-[32px_minmax(0,1fr)] gap-2 border-b border-border/60 px-3 py-3 transition hover:bg-muted/30 last:border-0 sm:grid-cols-[32px_minmax(0,1fr)_minmax(110px,0.5fr)_120px] sm:items-center lg:px-4">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => { if (event.key === "Enter") onOpen(); }}
+      className="grid min-w-0 cursor-pointer items-center gap-2 border-b border-border/60 px-4 py-2 transition hover:bg-primary/[0.035] last:border-0"
+      style={{ gridTemplateColumns: "28px minmax(280px, 620px) 34px 34px minmax(0, 1fr)" }}
+    >
       <div onClick={(event) => event.stopPropagation()}>
         <TaskStatusButton task={task} statuses={statuses} pending={pending} onChange={onStatus} />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium" title={task.title}>
-          {task.title}
-        </p>
-        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
-          {dealHref ? (
-            <Link href={dealHref} className="font-medium text-primary hover:underline">
-              Lead #{String(leadCode ?? "—").padStart(4, "0")}
-            </Link>
-          ) : (
-            <span>Tarefa avulsa</span>
-          )}
-          {contactName ? (
-            <>
-              <span>·</span>
-              <span className="truncate">{contactName}</span>
-            </>
-          ) : null}
-          {task.pipeline?.name ? (
-            <>
-              <span>·</span>
-              <span className="truncate">{task.pipeline.name}</span>
-            </>
-          ) : null}
-          {task.stage?.name ? (
-            <>
-              <span>·</span>
-              <span className="truncate">{task.stage.name}</span>
-            </>
-          ) : null}
-        </div>
+        <p className="truncate text-[13px] font-medium text-foreground" title={task.title}>{task.title}</p>
+        {related ? (
+          <Link
+            href={related.href}
+            onClick={(event) => event.stopPropagation()}
+            className="mt-0.5 block truncate text-[11px] text-muted-foreground transition hover:text-primary hover:underline"
+          >
+            Relacionado: {related.label}
+          </Link>
+        ) : null}
       </div>
-      <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-        <Avatar name={task.assignee?.name ?? "?"} src={task.assignee?.avatarUrl} size="sm" />
-        <Select aria-label={`Responsável de ${task.title}`} className="h-8 text-xs" value={task.assigneeId ?? ""} onChange={(event) => onUpdate({ assigneeId: event.target.value })}>
-          {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-        </Select>
-      </div>
-      <div onClick={(event) => event.stopPropagation()}>
-        <Input aria-label={`Data de ${task.title}`} className={cn("h-8 text-xs", overdue && "text-destructive")} type="datetime-local" value={task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : ""} title={dueLabel(task)} onChange={(event) => onUpdate({ dueAt: event.target.value ? new Date(event.target.value).toISOString() : null })} />
-      </div>
+      <div onClick={(event) => event.stopPropagation()}><TaskAssigneePicker task={task} users={users} onUpdate={onUpdate} /></div>
+      <div onClick={(event) => event.stopPropagation()}><TaskDatePicker task={task} overdue={overdue} onUpdate={onUpdate} /></div>
+      <span className="hidden lg:block" aria-hidden="true" />
     </div>
   );
 }
@@ -153,7 +284,7 @@ export function TasksPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const scope = (params.get("scope") as Scope) || "mine";
-  const state = (params.get("state") as State) || "open";
+  const state = (params.get("state") as State) || "";
   const due = (params.get("due") as Due) || "";
   const pipelineId = params.get("pipeline") || "";
   const stageId = params.get("stage") || "";
@@ -201,7 +332,7 @@ export function TasksPage() {
     queryFn: () =>
       tasksApi.list({
         scope,
-        state,
+        state: state || undefined,
         due: due || undefined,
         pipelineId: pipelineId || undefined,
         stageId: stageId || undefined,
@@ -213,7 +344,8 @@ export function TasksPage() {
         pageSize: 50,
       }),
     placeholderData: (previous) => previous,
-    retry: false,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 2_000),
   });
   const statusesQuery = useQuery({
     queryKey: queryKeys.tasks.statuses,
@@ -287,9 +419,7 @@ export function TasksPage() {
       if (match) setSelectedTask(match);
     }
   }, [params, selectedTask, tasks]);
-  const visibleStatuses = statuses.filter((status) =>
-    state === "completed" ? status.category === "DONE" : status.category !== "DONE",
-  );
+  const visibleStatuses = statuses;
   const legacyCategory = (task: Task) =>
     task.status === "COMPLETED" || task.status === "DONE" || task.status === "CANCELLED"
       ? "DONE"
@@ -303,9 +433,15 @@ export function TasksPage() {
       (!task.statusDefinitionId && legacyCategory(task) === status.category),
     ),
   }));
-  const activeFilters = [pipelineId, stageId, assigneeId, statusId, priority].filter(
-    Boolean,
-  ).length;
+  const activeFilters = [
+    state,
+    due,
+    pipelineId,
+    stageId,
+    assigneeId,
+    statusId,
+    priority,
+  ].filter(Boolean).length;
 
   return (
     <div data-testid="tasks-page">
@@ -320,50 +456,21 @@ export function TasksPage() {
         }
       />
       <div className="space-y-4">
-        <Tabs
-          value={scope}
-          onValueChange={(value) => replace({ scope: value === "mine" ? null : value, page: null })}
-        >
-          <TabsList>
-            <TabsTrigger value="mine">Minhas tarefas</TabsTrigger>
-            <TabsTrigger value="team" className={!teamAvailable ? "hidden" : undefined}>
-              Equipe
-            </TabsTrigger>
-            <TabsTrigger value="all">Todas</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border bg-card p-1">
-            <Button
-              size="sm"
-              variant={state === "open" ? "secondary" : "ghost"}
-              onClick={() => replace({ state: null, due: null, page: null })}
-            >
-              Abertas
-            </Button>
-            <Button
-              size="sm"
-              variant={state === "completed" ? "secondary" : "ghost"}
-              onClick={() => replace({ state: "completed", due: null, page: null })}
-            >
-              Concluídas
-            </Button>
-          </div>
-          {state === "open"
-            ? DUE_OPTIONS.map((option) => (
-                <Button
-                  key={option.value || "all"}
-                  size="sm"
-                  variant={due === option.value ? "secondary" : "ghost"}
-                  onClick={() => replace({ due: option.value || null, page: null })}
-                >
-                  {option.label}
-                </Button>
-              ))
-            : null}
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="relative min-w-0 flex-1 sm:max-w-md">
+        <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+          <Tabs
+            className="shrink-0"
+            value={scope}
+            onValueChange={(value) => replace({ scope: value === "mine" ? null : value, page: null })}
+          >
+            <TabsList>
+              <TabsTrigger value="mine">Minhas tarefas</TabsTrigger>
+              <TabsTrigger value="team" className={!teamAvailable ? "hidden" : undefined}>
+                Equipe
+              </TabsTrigger>
+              <TabsTrigger value="all">Todas</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="relative w-full min-w-[220px] sm:w-72 lg:w-80">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9"
@@ -377,14 +484,69 @@ export function TasksPage() {
             open={filtersOpen}
             onOpenChange={setFiltersOpen}
             align="end"
+            contentWidth={380}
+            aria-label="Filtrar tarefas"
             trigger={
-              <Button variant="outline" onClick={() => setFiltersOpen((value) => !value)}>
-                <Filter className="h-4 w-4" />
-                Filtros{activeFilters ? <Badge className="ml-1">{activeFilters}</Badge> : null}
+              <Button
+                className="h-10 w-10 shrink-0 rounded-full p-0 hover:bg-primary/10"
+                variant="ghost"
+                aria-label="Filtrar tarefas"
+                title="Filtrar tarefas"
+                onClick={() => setFiltersOpen((value) => !value)}
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+                  <Filter className="h-4 w-4" />
+                </span>
               </Button>
             }
           >
-            <div className="space-y-3 p-3">
+            <div className="space-y-4 p-4">
+              <div>
+                <Label className="mb-2 block">Situação</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    size="sm"
+                    variant={state === "" ? "secondary" : "outline"}
+                    onClick={() => replace({ state: null, due: null, page: null })}
+                  >
+                    Todas
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={state === "open" ? "secondary" : "outline"}
+                    onClick={() => replace({ state: "open", due: null, page: null })}
+                  >
+                    Abertas
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={state === "completed" ? "secondary" : "outline"}
+                    onClick={() => replace({ state: "completed", due: null, page: null })}
+                  >
+                    Concluídas
+                  </Button>
+                </div>
+              </div>
+              {state !== "completed" ? (
+                <div>
+                  <Label className="mb-2 block">Prazo</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {DUE_OPTIONS.map((option) => (
+                      <Button
+                        key={option.value || "all"}
+                        size="sm"
+                        variant={due === option.value ? "secondary" : "outline"}
+                        onClick={() => replace({ due: option.value || null, page: null })}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="border-t border-border/70 pt-4">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Filtros avançados</p>
+              </div>
               <div>
                 <Label>Pipeline</Label>
                 <Select
@@ -472,6 +634,8 @@ export function TasksPage() {
                       assignee: null,
                       status: null,
                       priority: null,
+                      state: null,
+                      due: null,
                       page: null,
                     })
                   }
@@ -503,9 +667,7 @@ export function TasksPage() {
             onAction={() => setCreateOpen(true)}
           />
         ) : null}
-        {groups
-          .filter((group) => group.tasks.length)
-          .map((group) => (
+        {groups.map((group) => (
             <section
               key={group.key}
               className="overflow-hidden rounded-xl border border-border bg-card shadow-soft"
@@ -513,9 +675,11 @@ export function TasksPage() {
               <button type="button" className="flex w-full items-center gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-left" onClick={() => setCollapsed((value) => ({ ...value, [group.key]: !value[group.key] }))}>
                 <ChevronDown className={cn("h-4 w-4 transition-transform", collapsed[group.key] && "-rotate-90")} style={{ color: group.color }} />
                 <h2 className="text-xs font-bold uppercase tracking-wide">{group.label}</h2>
-                <Badge variant="outline">{group.tasks.length}</Badge>
+                <Badge variant="outline" title={`Exibindo ${Math.min(group.tasks.length, 3)} de ${group.tasks.length}`}>
+                  {Math.min(group.tasks.length, 3)}
+                </Badge>
               </button>
-              {!collapsed[group.key] ? group.tasks.map((task) => (
+              {!collapsed[group.key] ? group.tasks.slice(0, 3).map((task) => (
                 <TaskRow
                   key={task.id}
                   task={task}

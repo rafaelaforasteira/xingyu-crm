@@ -52,14 +52,14 @@ export function Dialog({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
-          "relative z-10 w-full rounded-xl border border-border bg-card shadow-drawer",
+          "relative z-10 w-full rounded-xl border border-border bg-card text-card-foreground shadow-drawer",
           wide ? "max-w-2xl" : "max-w-lg",
           className,
         )}
       >
         <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <h2 id={titleId} className="text-base font-semibold">
+            <h2 id={titleId} className="text-base font-semibold text-card-foreground">
               {title}
             </h2>
             {description ? (
@@ -71,7 +71,7 @@ export function Dialog({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 shrink-0"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-card-foreground"
             onClick={() => onOpenChange(false)}
             aria-label="Fechar diálogo"
           >

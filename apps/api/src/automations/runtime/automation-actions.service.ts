@@ -25,7 +25,13 @@ export interface ActionResult {
   output: Record<string, unknown>;
   simulated?: boolean;
   delayUntil?: Date;
-  wait?: { eventType: string; subjectType?: string; subjectId?: string; timeoutAt?: Date; timeoutHandle: string };
+  wait?: {
+    eventType: string;
+    subjectType?: string;
+    subjectId?: string;
+    timeoutAt?: Date;
+    timeoutHandle: string;
+  };
   stop?: "SUCCEEDED" | "FAILED" | "SKIPPED";
   error?: string;
   branch?: string;
@@ -39,11 +45,19 @@ export class AutomationActionsService {
     private readonly events: DomainEventsService,
   ) {}
 
-  async execute(type: string, config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  async execute(
+    type: string,
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const interpolated = interpolateRecord(config, ctx.context);
     const kind = parseNodeType(type).type;
     if (ctx.dryRun && this.isSideEffect(kind)) {
-      return { output: { simulated: true, action: kind, config: interpolated }, simulated: true, branch: "out" };
+      return {
+        output: { simulated: true, action: kind, config: interpolated },
+        simulated: true,
+        branch: "out",
+      };
     }
     switch (kind) {
       case "logic.filter":
@@ -63,9 +77,17 @@ export class AutomationActionsService {
       case "logic.stop":
         return { output: { stopped: true }, stop: "SUCCEEDED" };
       case "logic.stopError":
-        return { output: { stopped: true }, stop: "FAILED", error: String(interpolated.message ?? "Encerrado com erro pela automação.") };
+        return {
+          output: { stopped: true },
+          stop: "FAILED",
+          error: String(interpolated.message ?? "Encerrado com erro pela automação."),
+        };
       case "logic.delay":
-        return { output: { delay: true }, delayUntil: this.delayUntil(interpolated, ctx.context), branch: "out" };
+        return {
+          output: { delay: true },
+          delayUntil: this.delayUntil(interpolated, ctx.context),
+          branch: "out",
+        };
       case "logic.waitForEvent":
         return this.waitForEvent(interpolated, ctx);
       case "logic.loop":
@@ -84,6 +106,12 @@ export class AutomationActionsService {
         return this.moveStage(interpolated, ctx);
       case "action.deal.assignOwner":
         return this.assignOwner(interpolated, ctx);
+      case "action.deal.assignRoundRobin":
+        return this.assignRoundRobin(interpolated, ctx);
+      case "action.deal.updateField":
+        return this.updateDealField(interpolated, ctx);
+      case "action.contact.updateField":
+        return this.updateContactField(interpolated, ctx);
       case "action.deal.addTag":
         return this.addTag(interpolated, ctx);
       case "action.deal.removeTag":
@@ -113,23 +141,47 @@ export class AutomationActionsService {
   }
 
   private dealId(ctx: ActionContext, config: Record<string, unknown>) {
-    return String(config.dealId ?? this.path(ctx.context, "current.deal.id") ?? this.path(ctx.context, "trigger.deal.id") ?? "");
+    return String(
+      config.dealId ??
+        this.path(ctx.context, "current.deal.id") ??
+        this.path(ctx.context, "trigger.deal.id") ??
+        "",
+    );
   }
 
   private orderId(ctx: ActionContext, config: Record<string, unknown>) {
-    return String(config.orderId ?? this.path(ctx.context, "current.order.id") ?? this.path(ctx.context, "trigger.order.id") ?? "");
+    return String(
+      config.orderId ??
+        this.path(ctx.context, "current.order.id") ??
+        this.path(ctx.context, "trigger.order.id") ??
+        "",
+    );
   }
 
   private path(source: unknown, path: string) {
-    return path.split(".").reduce<unknown>((acc, key) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[key] : undefined), source);
+    return path
+      .split(".")
+      .reduce<unknown>(
+        (acc, key) =>
+          acc && typeof acc === "object" ? (acc as Record<string, unknown>)[key] : undefined,
+        source,
+      );
   }
 
-  private switchBranch(config: Record<string, unknown>, context: Record<string, unknown>): ActionResult {
+  private switchBranch(
+    config: Record<string, unknown>,
+    context: Record<string, unknown>,
+  ): ActionResult {
     const field = String(config.field ?? "");
     const actual = String(this.path(context, field) ?? "");
-    const cases = Array.isArray(config.cases) ? (config.cases as Array<{ value: string; handle: string }>) : [];
+    const cases = Array.isArray(config.cases)
+      ? (config.cases as Array<{ value: string; handle: string }>)
+      : [];
     const match = cases.find((item) => String(item.value) === actual);
-    return { output: { value: actual, handle: match?.handle ?? "default" }, branch: match?.handle ?? "default" };
+    return {
+      output: { value: actual, handle: match?.handle ?? "default" },
+      branch: match?.handle ?? "default",
+    };
   }
 
   private randomSplit(config: Record<string, unknown>): ActionResult {
@@ -147,7 +199,7 @@ export class AutomationActionsService {
     const minutes = Number(config.durationMinutes ?? 0);
     const hours = Number(config.durationHours ?? 0);
     const days = Number(config.durationDays ?? 0);
-    const ms = (((days * 24 + hours) * 60 + minutes) || 5) * 60_000;
+    const ms = ((days * 24 + hours) * 60 + minutes || 5) * 60_000;
     return new Date(Date.now() + ms);
   }
 
@@ -158,7 +210,9 @@ export class AutomationActionsService {
       wait: {
         eventType: String(config.eventType ?? ""),
         subjectType: config.subjectType ? String(config.subjectType) : undefined,
-        subjectId: config.subjectId ? String(interpolate(config.subjectId, ctx.context)) : String(this.path(ctx.context, "trigger.aggregateId") ?? ""),
+        subjectId: config.subjectId
+          ? String(interpolate(config.subjectId, ctx.context))
+          : String(this.path(ctx.context, "trigger.aggregateId") ?? ""),
         timeoutAt: new Date(Date.now() + Math.max(1, timeoutMinutes) * 60_000),
         timeoutHandle: "timeout",
       },
@@ -171,7 +225,10 @@ export class AutomationActionsService {
     return { output: { items: list, count: list.length }, branch: list.length ? "item" : "done" };
   }
 
-  private async findContact(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async findContact(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const phone = config.phone ? normalizePhone(String(config.phone)) : null;
     const email = config.email ? String(config.email).toLowerCase() : null;
     const id = config.contactId ? String(config.contactId) : null;
@@ -181,14 +238,22 @@ export class AutomationActionsService {
         deletedAt: null,
         ...(id ? { id } : {}),
         ...(phone || email
-          ? { OR: [...(phone ? [{ phone }, { whatsapp: phone }] : []), ...(email ? [{ email }] : [])] }
+          ? {
+              OR: [
+                ...(phone ? [{ phone }, { whatsapp: phone }] : []),
+                ...(email ? [{ email }] : []),
+              ],
+            }
           : {}),
       },
     });
     return { output: { found: Boolean(contact), contact }, branch: "out" };
   }
 
-  private async findDeal(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async findDeal(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const id = this.dealId(ctx, config);
     const deal = id
       ? await this.prisma.deal.findFirst({
@@ -199,8 +264,16 @@ export class AutomationActionsService {
     return { output: { found: Boolean(deal), deal }, branch: "out" };
   }
 
-  private async findOrder(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
-    const contactId = String(config.contactId ?? this.path(ctx.context, "current.contact.id") ?? this.path(ctx.context, "trigger.contactId") ?? "");
+  private async findOrder(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
+    const contactId = String(
+      config.contactId ??
+        this.path(ctx.context, "current.contact.id") ??
+        this.path(ctx.context, "trigger.contactId") ??
+        "",
+    );
     const id = this.orderId(ctx, config);
     const orders = await this.prisma.order.findMany({
       where: {
@@ -212,10 +285,16 @@ export class AutomationActionsService {
       take: 20,
       include: { payments: true },
     });
-    return { output: { found: orders.length > 0, orders, order: orders[0] ?? null }, branch: "out" };
+    return {
+      output: { found: orders.length > 0, orders, order: orders[0] ?? null },
+      branch: "out",
+    };
   }
 
-  private async findDuplicates(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async findDuplicates(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const dealId = this.dealId(ctx, config);
     const deal = await this.prisma.deal.findFirst({
       where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null },
@@ -231,10 +310,7 @@ export class AutomationActionsService {
         id: { not: deal.id },
         contact: {
           deletedAt: null,
-          OR: [
-            ...(phone ? [{ phone }, { whatsapp: phone }] : []),
-            ...(email ? [{ email }] : []),
-          ],
+          OR: [...(phone ? [{ phone }, { whatsapp: phone }] : []), ...(email ? [{ email }] : [])],
         },
       },
       include: { pipeline: true, stage: true, owner: { select: { id: true, name: true } } },
@@ -243,10 +319,16 @@ export class AutomationActionsService {
     const ignoreAfterSales = config.ignoreAfterSales !== false;
     const filtered = matches.filter((item) => {
       const hay = `${item.pipeline?.name ?? ""} ${item.stage?.name ?? ""}`.toLowerCase();
-      if (ignoreAfterSales && (hay.includes("pós") || hay.includes("pos-venda") || hay.includes("after"))) return false;
+      if (
+        ignoreAfterSales &&
+        (hay.includes("pós") || hay.includes("pos-venda") || hay.includes("after"))
+      )
+        return false;
       return true;
     });
-    const otherOwner = filtered.filter((item) => item.ownerId && deal.ownerId && item.ownerId !== deal.ownerId);
+    const otherOwner = filtered.filter(
+      (item) => item.ownerId && deal.ownerId && item.ownerId !== deal.ownerId,
+    );
     return {
       output: {
         found: filtered.length > 0,
@@ -258,36 +340,71 @@ export class AutomationActionsService {
     };
   }
 
-  private async moveStage(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async moveStage(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const dealId = this.dealId(ctx, config);
     const targetStageId = String(config.stageId ?? config.targetStageId ?? "");
-    const deal = await this.prisma.deal.findFirst({ where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null } });
+    const deal = await this.prisma.deal.findFirst({
+      where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null },
+    });
     if (!deal) throw new Error("Lead não encontrado para mover de etapa.");
     if (!targetStageId) throw new Error("Selecione a etapa de destino.");
-    if (deal.stageId === targetStageId) return { output: { unchanged: true, dealId }, branch: "out" };
+    const fromPipelineId = String(config.fromPipelineId ?? "");
+    const fromStageId = String(config.fromStageId ?? "");
+    if (fromPipelineId && deal.pipelineId !== fromPipelineId) {
+      return {
+        output: { unchanged: true, dealId, reason: "pipeline-origin-mismatch" },
+        branch: "out",
+      };
+    }
+    if (fromStageId && deal.stageId !== fromStageId) {
+      return {
+        output: { unchanged: true, dealId, reason: "stage-origin-mismatch" },
+        branch: "out",
+      };
+    }
+    if (deal.stageId === targetStageId)
+      return { output: { unchanged: true, dealId }, branch: "out" };
     const stage = await this.prisma.pipelineStage.findFirst({
       where: {
         id: targetStageId,
         organizationId: ctx.organizationId,
         deletedAt: null,
         archived: false,
-        ...(config.pipelineId ? { pipelineId: String(config.pipelineId) } : { pipelineId: deal.pipelineId }),
+        ...(config.pipelineId
+          ? { pipelineId: String(config.pipelineId) }
+          : { pipelineId: deal.pipelineId }),
       },
     });
     if (!stage) throw new Error("A etapa selecionada não existe neste pipeline.");
     const now = new Date();
-    const status = stage.isWon || stage.type === PipelineStageType.WON
-      ? DealStatus.WON
-      : stage.isLost || stage.type === PipelineStageType.LOST
-        ? DealStatus.LOST
-        : DealStatus.OPEN;
+    const status =
+      stage.isWon || stage.type === PipelineStageType.WON
+        ? DealStatus.WON
+        : stage.isLost || stage.type === PipelineStageType.LOST
+          ? DealStatus.LOST
+          : DealStatus.OPEN;
     await this.prisma.$transaction(async (tx) => {
       await tx.deal.update({
         where: { id: deal.id },
-        data: { stageId: stage.id, enteredStageAt: now, status, closedAt: status === DealStatus.OPEN ? null : now },
+        data: {
+          stageId: stage.id,
+          enteredStageAt: now,
+          status,
+          closedAt: status === DealStatus.OPEN ? null : now,
+        },
       });
       await tx.dealStageHistory.create({
-        data: { dealId: deal.id, stageId: stage.id, fromStageId: deal.stageId, movedById: ctx.actorId ?? null, movedAt: now, note: "Movido por automação" },
+        data: {
+          dealId: deal.id,
+          stageId: stage.id,
+          fromStageId: deal.stageId,
+          movedById: ctx.actorId ?? null,
+          movedAt: now,
+          note: "Movido por automação",
+        },
       });
       await tx.activity.create({
         data: {
@@ -297,7 +414,12 @@ export class AutomationActionsService {
           dealId: deal.id,
           contactId: deal.contactId,
           actorId: null,
-          metadata: { automationId: ctx.automationId, executionId: ctx.executionId, nodeId: ctx.nodeId, origin: "AUTOMATION" },
+          metadata: {
+            automationId: ctx.automationId,
+            executionId: ctx.executionId,
+            nodeId: ctx.nodeId,
+            origin: "AUTOMATION",
+          },
         },
       });
       await this.events.emit(tx, {
@@ -307,23 +429,48 @@ export class AutomationActionsService {
         aggregateId: deal.id,
         origin: "AUTOMATION",
         correlationId: ctx.executionId,
-        payload: { dealId: deal.id, pipelineId: deal.pipelineId, stageId: stage.id, fromStageId: deal.stageId, contactId: deal.contactId },
-        metadata: { automationId: ctx.automationId, executionId: ctx.executionId, nodeId: ctx.nodeId },
+        payload: {
+          dealId: deal.id,
+          pipelineId: deal.pipelineId,
+          stageId: stage.id,
+          fromStageId: deal.stageId,
+          contactId: deal.contactId,
+        },
+        metadata: {
+          automationId: ctx.automationId,
+          executionId: ctx.executionId,
+          nodeId: ctx.nodeId,
+        },
         subjectType: "deal",
         subjectId: deal.id,
         deduplicationKey: `${ctx.executionId}:${ctx.nodeId}:deal.stage.changed`,
       });
     });
-    return { output: { dealId: deal.id, fromStageId: deal.stageId, stageId: stage.id, stageName: stage.name }, branch: "out" };
+    return {
+      output: {
+        dealId: deal.id,
+        fromStageId: deal.stageId,
+        stageId: stage.id,
+        stageName: stage.name,
+      },
+      branch: "out",
+    };
   }
 
-  private async assignOwner(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async assignOwner(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const dealId = this.dealId(ctx, config);
-    const deal = await this.prisma.deal.findFirst({ where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null } });
+    const deal = await this.prisma.deal.findFirst({
+      where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null },
+    });
     if (!deal) throw new Error("Lead não encontrado para alterar responsável.");
     let ownerId = config.ownerId ? String(config.ownerId) : deal.ownerId;
     if (config.mode === "channelOwner") {
-      const channelId = String(this.path(ctx.context, "trigger.channelId") ?? config.channelId ?? "");
+      const channelId = String(
+        this.path(ctx.context, "trigger.channelId") ?? config.channelId ?? "",
+      );
       if (channelId) {
         const channel = await this.prisma.channel.findFirst({
           where: { id: channelId, organizationId: ctx.organizationId, deletedAt: null },
@@ -334,7 +481,12 @@ export class AutomationActionsService {
     }
     if (!ownerId) throw new Error("Nenhum responsável pôde ser definido.");
     const owner = await this.prisma.user.findFirst({
-      where: { id: ownerId, organizationId: ctx.organizationId, deletedAt: null, deactivatedAt: null },
+      where: {
+        id: ownerId,
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+        deactivatedAt: null,
+      },
       select: { id: true, name: true },
     });
     if (!owner) throw new Error("O responsável selecionado está inativo ou não existe.");
@@ -347,7 +499,11 @@ export class AutomationActionsService {
           title: `Automação definiu responsável: ${owner.name}`,
           dealId: deal.id,
           actorId: null,
-          metadata: { automationId: ctx.automationId, executionId: ctx.executionId, origin: "AUTOMATION" },
+          metadata: {
+            automationId: ctx.automationId,
+            executionId: ctx.executionId,
+            origin: "AUTOMATION",
+          },
         },
       });
       await this.events.emit(tx, {
@@ -358,7 +514,11 @@ export class AutomationActionsService {
         origin: "AUTOMATION",
         correlationId: ctx.executionId,
         payload: { dealId: deal.id, ownerId: owner.id, contactId: deal.contactId },
-        metadata: { automationId: ctx.automationId, executionId: ctx.executionId, nodeId: ctx.nodeId },
+        metadata: {
+          automationId: ctx.automationId,
+          executionId: ctx.executionId,
+          nodeId: ctx.nodeId,
+        },
         subjectType: "deal",
         subjectId: deal.id,
         deduplicationKey: `${ctx.executionId}:${ctx.nodeId}:deal.owner.changed`,
@@ -367,10 +527,96 @@ export class AutomationActionsService {
     return { output: { ownerId: owner.id, ownerName: owner.name }, branch: "out" };
   }
 
+  private async assignRoundRobin(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
+    const dealId = this.dealId(ctx, config);
+    const deal = await this.prisma.deal.findFirst({
+      where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null },
+    });
+    if (!deal) throw new Error("Lead não encontrado para distribuir.");
+    const candidates = await this.prisma.user.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+        deactivatedAt: null,
+        status: "ACTIVE",
+        ...(config.teamId ? { teamId: String(config.teamId) } : {}),
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    if (!candidates.length) throw new Error("Nenhum usuário ativo está disponível para distribuição.");
+    const counts = await this.prisma.deal.groupBy({
+      by: ["ownerId"],
+      where: {
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+        status: "OPEN",
+        ownerId: { in: candidates.map((candidate) => candidate.id) },
+      },
+      _count: { _all: true },
+    });
+    const loads = new Map(counts.map((item) => [item.ownerId, item._count._all]));
+    const selected = [...candidates].sort(
+      (a, b) => (loads.get(a.id) ?? 0) - (loads.get(b.id) ?? 0) || a.id.localeCompare(b.id),
+    )[0]!;
+    return this.assignOwner({ ...config, ownerId: selected.id, mode: "specific" }, ctx);
+  }
+
+  private async updateDealField(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
+    const allowed = new Set(["name", "value", "priority", "status", "source", "campaign", "lostReason"]);
+    const field = String(config.field ?? "");
+    if (!allowed.has(field)) throw new Error("Selecione um campo permitido do lead.");
+    const dealId = this.dealId(ctx, config);
+    const deal = await this.prisma.deal.findFirst({ where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null } });
+    if (!deal) throw new Error("Lead não encontrado para atualização.");
+    let value: unknown = config.value ?? null;
+    if (field === "value") value = Number(value);
+    await this.prisma.deal.update({ where: { id: deal.id }, data: { [field]: value } as never });
+    await this.events.emitStandalone({
+      organizationId: ctx.organizationId, eventType: DOMAIN_EVENT_TYPES.DEAL_UPDATED,
+      aggregateType: "deal", aggregateId: deal.id, origin: "AUTOMATION", correlationId: ctx.executionId,
+      payload: { dealId: deal.id, pipelineId: deal.pipelineId, stageId: deal.stageId, contactId: deal.contactId, changedFields: [field], before: { [field]: deal[field as keyof typeof deal] }, after: { [field]: value } },
+      subjectType: "deal", subjectId: deal.id,
+      deduplicationKey: `${ctx.executionId}:${ctx.nodeId}:deal.updated:${field}`,
+    });
+    return { output: { dealId: deal.id, field, value }, branch: "out" };
+  }
+
+  private async updateContactField(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
+    const allowed = new Set(["firstName", "lastName", "phone", "whatsapp", "email", "city", "state", "country", "status", "source", "campaign", "observations", "nextContactAt"]);
+    const field = String(config.field ?? "");
+    if (!allowed.has(field)) throw new Error("Selecione um campo permitido do contato.");
+    const contactId = String(config.contactId ?? this.path(ctx.context, "current.contact.id") ?? this.path(ctx.context, "trigger.contactId") ?? "");
+    const contact = await this.prisma.contact.findFirst({ where: { id: contactId, organizationId: ctx.organizationId, deletedAt: null } });
+    if (!contact) throw new Error("Contato não encontrado para atualização.");
+    let value: unknown = config.value ?? null;
+    if (field === "nextContactAt" && value) value = new Date(String(value));
+    await this.prisma.contact.update({ where: { id: contact.id }, data: { [field]: value } as never });
+    await this.events.emitStandalone({
+      organizationId: ctx.organizationId, eventType: DOMAIN_EVENT_TYPES.CONTACT_UPDATED,
+      aggregateType: "contact", aggregateId: contact.id, origin: "AUTOMATION", correlationId: ctx.executionId,
+      payload: { contactId: contact.id, changedFields: [field], before: { [field]: contact[field as keyof typeof contact] }, after: { [field]: value } },
+      subjectType: "contact", subjectId: contact.id,
+      deduplicationKey: `${ctx.executionId}:${ctx.nodeId}:contact.updated:${field}`,
+    });
+    return { output: { contactId: contact.id, field, value }, branch: "out" };
+  }
+
   private async addTag(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
     const dealId = this.dealId(ctx, config);
     const tagId = String(config.tagId ?? "");
-    const tag = await this.prisma.tag.findFirst({ where: { id: tagId, organizationId: ctx.organizationId, deletedAt: null } });
+    const tag = await this.prisma.tag.findFirst({
+      where: { id: tagId, organizationId: ctx.organizationId, deletedAt: null },
+    });
     if (!tag) throw new Error("Tag não encontrada nesta organização.");
     await this.prisma.$transaction(async (tx) => {
       await tx.dealTag.createMany({ data: [{ dealId, tagId }], skipDuplicates: true });
@@ -381,7 +627,12 @@ export class AutomationActionsService {
           title: `Automação adicionou a tag ${tag.name}`,
           dealId,
           actorId: null,
-          metadata: { automationId: ctx.automationId, executionId: ctx.executionId, tagId, origin: "AUTOMATION" },
+          metadata: {
+            automationId: ctx.automationId,
+            executionId: ctx.executionId,
+            tagId,
+            origin: "AUTOMATION",
+          },
         },
       });
       await this.events.emit(tx, {
@@ -392,7 +643,11 @@ export class AutomationActionsService {
         origin: "AUTOMATION",
         correlationId: ctx.executionId,
         payload: { dealId, tagId, tagName: tag.name },
-        metadata: { automationId: ctx.automationId, executionId: ctx.executionId, nodeId: ctx.nodeId },
+        metadata: {
+          automationId: ctx.automationId,
+          executionId: ctx.executionId,
+          nodeId: ctx.nodeId,
+        },
         subjectType: "deal",
         subjectId: dealId,
         deduplicationKey: `${ctx.executionId}:${ctx.nodeId}:deal.tag.added:${tagId}`,
@@ -401,28 +656,65 @@ export class AutomationActionsService {
     return { output: { tagId, tagName: tag.name }, branch: "out" };
   }
 
-  private async removeTag(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async removeTag(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const dealId = this.dealId(ctx, config);
     const tagId = String(config.tagId ?? "");
-    await this.prisma.dealTag.deleteMany({ where: { dealId, tagId } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.dealTag.deleteMany({ where: { dealId, tagId } });
+      await this.events.emit(tx, {
+        organizationId: ctx.organizationId,
+        eventType: DOMAIN_EVENT_TYPES.DEAL_TAG_REMOVED,
+        aggregateType: "deal",
+        aggregateId: dealId,
+        origin: "AUTOMATION",
+        correlationId: ctx.executionId,
+        payload: { dealId, tagId },
+        metadata: {
+          automationId: ctx.automationId,
+          executionId: ctx.executionId,
+          nodeId: ctx.nodeId,
+        },
+        subjectType: "deal",
+        subjectId: dealId,
+        deduplicationKey: `${ctx.executionId}:${ctx.nodeId}:deal.tag.removed:${tagId}`,
+      });
+    });
     return { output: { tagId, removed: true }, branch: "out" };
   }
 
-  private async createTask(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async createTask(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const title = String(config.title ?? "").trim();
     if (!title) throw new Error("Informe o título da tarefa.");
     const key = `${ctx.executionId}:${ctx.nodeId}:task:${title}`;
-    const existing = await this.prisma.automationIdempotency.findUnique({ where: { organizationId_key: { organizationId: ctx.organizationId, key } } });
+    const existing = await this.prisma.automationIdempotency.findUnique({
+      where: { organizationId_key: { organizationId: ctx.organizationId, key } },
+    });
     if (existing?.result && typeof existing.result === "object") {
       return { output: existing.result as Record<string, unknown>, branch: "out" };
     }
     const status = await this.prisma.taskStatusDefinition.findFirst({
-      where: { organizationId: ctx.organizationId, deletedAt: null, archived: false, active: true, category: "OPEN" },
+      where: {
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+        archived: false,
+        active: true,
+        category: "OPEN",
+      },
       orderBy: { position: "asc" },
     });
     if (!status) throw new Error("Nenhum status aberto de tarefa está configurado.");
     const dealId = this.dealId(ctx, config) || null;
-    const deal = dealId ? await this.prisma.deal.findFirst({ where: { id: dealId, organizationId: ctx.organizationId } }) : null;
+    const deal = dealId
+      ? await this.prisma.deal.findFirst({
+          where: { id: dealId, organizationId: ctx.organizationId },
+        })
+      : null;
     const dueInMinutes = Number(config.dueInMinutes ?? 0);
     const task = await this.prisma.task.create({
       data: {
@@ -435,7 +727,8 @@ export class AutomationActionsService {
         priority: (typeof config.priority === "string" ? config.priority : "MEDIUM") as never,
         dueAt: dueInMinutes > 0 ? new Date(Date.now() + dueInMinutes * 60_000) : null,
         assigneeId: (config.assigneeId as string) || deal?.ownerId || ctx.actorId || null,
-        contactId: deal?.contactId ?? (this.path(ctx.context, "current.contact.id") as string) ?? null,
+        contactId:
+          deal?.contactId ?? (this.path(ctx.context, "current.contact.id") as string) ?? null,
         dealId: deal?.id ?? null,
         orderId: this.orderId(ctx, config) || null,
         pipelineId: deal?.pipelineId ?? null,
@@ -450,15 +743,31 @@ export class AutomationActionsService {
         taskId: task.id,
         dealId: deal?.id,
         actorId: null,
-        metadata: { automationId: ctx.automationId, executionId: ctx.executionId, origin: "AUTOMATION" },
+        metadata: {
+          automationId: ctx.automationId,
+          executionId: ctx.executionId,
+          origin: "AUTOMATION",
+        },
       },
     });
     const output = { taskId: task.id, title };
-    await this.prisma.automationIdempotency.create({ data: { organizationId: ctx.organizationId, key, executionId: ctx.executionId, result: output as Prisma.InputJsonValue } }).catch(() => undefined);
+    await this.prisma.automationIdempotency
+      .create({
+        data: {
+          organizationId: ctx.organizationId,
+          key,
+          executionId: ctx.executionId,
+          result: output as Prisma.InputJsonValue,
+        },
+      })
+      .catch(() => undefined);
     return { output, branch: "out" };
   }
 
-  private async createNote(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async createNote(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const body = String(config.body ?? "").trim();
     if (!body) throw new Error("Informe o texto da nota.");
     const dealId = this.dealId(ctx, config) || null;
@@ -477,27 +786,44 @@ export class AutomationActionsService {
         title: "Nota criada pela automação",
         dealId,
         actorId: null,
-        metadata: { automationId: ctx.automationId, executionId: ctx.executionId, noteId: note.id, origin: "AUTOMATION" },
+        metadata: {
+          automationId: ctx.automationId,
+          executionId: ctx.executionId,
+          noteId: note.id,
+          origin: "AUTOMATION",
+        },
       },
     });
     return { output: { noteId: note.id }, branch: "out" };
   }
 
-  private async updateOrderStatus(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async updateOrderStatus(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const orderId = this.orderId(ctx, config);
     const status = String(config.status ?? "");
     if (!orderId || !status) throw new Error("Pedido ou status não configurado.");
-    const order = await this.prisma.order.findFirst({ where: { id: orderId, organizationId: ctx.organizationId, deletedAt: null } });
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, organizationId: ctx.organizationId, deletedAt: null },
+    });
     if (!order) throw new Error("Pedido não encontrado.");
     await this.prisma.order.update({ where: { id: order.id }, data: { status: status as never } });
     return { output: { orderId: order.id, status }, branch: "out" };
   }
 
-  private async notifyUser(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async notifyUser(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const title = String(config.title ?? "").trim();
     if (!title) throw new Error("Informe o título da notificação.");
     const dealId = this.dealId(ctx, config);
-    const deal = dealId ? await this.prisma.deal.findFirst({ where: { id: dealId, organizationId: ctx.organizationId } }) : null;
+    const deal = dealId
+      ? await this.prisma.deal.findFirst({
+          where: { id: dealId, organizationId: ctx.organizationId },
+        })
+      : null;
     const userId = String(config.userId ?? deal?.ownerId ?? ctx.actorId ?? "");
     if (!userId) throw new Error("Não há usuário para notificar.");
     const href = deal ? `/pipelines?dealId=${deal.id}` : config.href ? String(config.href) : null;
@@ -516,36 +842,73 @@ export class AutomationActionsService {
     return { output: { userId, title }, branch: "out" };
   }
 
-  private async sendWhatsApp(config: Record<string, unknown>, ctx: ActionContext): Promise<ActionResult> {
+  private async sendWhatsApp(
+    config: Record<string, unknown>,
+    ctx: ActionContext,
+  ): Promise<ActionResult> {
     const body = String(config.body ?? "").trim();
     if (!body) throw new Error("Informe a mensagem.");
     const channelId = String(config.channelId ?? this.path(ctx.context, "trigger.channelId") ?? "");
     if (!channelId) throw new Error("Selecione um canal do Connections Center.");
     const channel = await this.prisma.channel.findFirst({
-      where: { id: channelId, organizationId: ctx.organizationId, deletedAt: null, archivedAt: null },
+      where: {
+        id: channelId,
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+        archivedAt: null,
+      },
     });
     if (!channel?.provider || !channel.externalAccountId) {
       throw new Error("Não foi possível enviar a mensagem porque o canal está desconectado.");
     }
-    const contactId = String(config.contactId ?? this.path(ctx.context, "current.contact.id") ?? this.path(ctx.context, "trigger.contactId") ?? "");
+    const contactId = String(
+      config.contactId ??
+        this.path(ctx.context, "current.contact.id") ??
+        this.path(ctx.context, "trigger.contactId") ??
+        "",
+    );
     const contact = contactId
-      ? await this.prisma.contact.findFirst({ where: { id: contactId, organizationId: ctx.organizationId } })
+      ? await this.prisma.contact.findFirst({
+          where: { id: contactId, organizationId: ctx.organizationId },
+        })
       : null;
-    const destination = normalizePhone(String(config.phone ?? contact?.whatsapp ?? contact?.phone ?? ""));
+    const destination = normalizePhone(
+      String(config.phone ?? contact?.whatsapp ?? contact?.phone ?? ""),
+    );
     if (!destination) throw new Error("O contato não possui telefone para envio.");
     const key = `${ctx.executionId}:${ctx.nodeId}:wa:${destination}:${body}`;
-    const existing = await this.prisma.automationIdempotency.findUnique({ where: { organizationId_key: { organizationId: ctx.organizationId, key } } });
-    if (existing) return { output: { duplicate: true, ...(existing.result as object) }, branch: "out" };
+    const existing = await this.prisma.automationIdempotency.findUnique({
+      where: { organizationId_key: { organizationId: ctx.organizationId, key } },
+    });
+    if (existing)
+      return { output: { duplicate: true, ...(existing.result as object) }, branch: "out" };
     const provider = this.providers.get(channel.provider);
     const sent = await provider.sendText(channel.id, channel.externalAccountId, destination, body);
-    const output = { channelId: channel.id, destination, externalMessageId: sent.externalMessageId };
-    await this.prisma.automationIdempotency.create({ data: { organizationId: ctx.organizationId, key, executionId: ctx.executionId, result: output as Prisma.InputJsonValue } }).catch(() => undefined);
+    const output = {
+      channelId: channel.id,
+      destination,
+      externalMessageId: sent.externalMessageId,
+    };
+    await this.prisma.automationIdempotency
+      .create({
+        data: {
+          organizationId: ctx.organizationId,
+          key,
+          executionId: ctx.executionId,
+          result: output as Prisma.InputJsonValue,
+        },
+      })
+      .catch(() => undefined);
     return { output, branch: "out" };
   }
 
   private async httpRequest(config: Record<string, unknown>): Promise<ActionResult> {
-    const headers = (config.headers && typeof config.headers === "object" ? config.headers : {}) as Record<string, string>;
-    const safeHeaders = Object.fromEntries(Object.entries(headers).filter(([key]) => !/authorization|cookie/i.test(key)));
+    const headers = (
+      config.headers && typeof config.headers === "object" ? config.headers : {}
+    ) as Record<string, string>;
+    const safeHeaders = Object.fromEntries(
+      Object.entries(headers).filter(([key]) => !/authorization|cookie/i.test(key)),
+    );
     const result = await safeFetch(String(config.url ?? ""), {
       method: String(config.method ?? "GET"),
       headers: safeHeaders,

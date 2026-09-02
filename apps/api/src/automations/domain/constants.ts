@@ -44,11 +44,13 @@ export const AUTOMATION_STATUSES = ["DRAFT", "ACTIVE", "PAUSED", "ARCHIVED", "IN
 
 export const DOMAIN_EVENT_TYPES = {
   DEAL_CREATED: "deal.created",
+  DEAL_UPDATED: "deal.updated",
   DEAL_STAGE_CHANGED: "deal.stage.changed",
   DEAL_OWNER_CHANGED: "deal.owner.changed",
   DEAL_TAG_ADDED: "deal.tag.added",
   DEAL_TAG_REMOVED: "deal.tag.removed",
   CONTACT_CREATED: "contact.created",
+  CONTACT_UPDATED: "contact.updated",
   ORDER_CREATED: "order.created",
   ORDER_STATUS_CHANGED: "order.status.changed",
   ORDER_PAYMENT_CONFIRMED: "order.payment.confirmed",
@@ -58,6 +60,8 @@ export const DOMAIN_EVENT_TYPES = {
   CONNECTION_DISCONNECTED: "connection.disconnected",
   TASK_CREATED: "task.created",
   TASK_COMPLETED: "task.completed",
+  TASK_DUE: "task.due",
+  TASK_OVERDUE: "task.overdue",
   WEBHOOK_RECEIVED: "webhook.received",
   MANUAL_RUN: "manual.run",
   SCHEDULE_TICK: "schedule.tick",

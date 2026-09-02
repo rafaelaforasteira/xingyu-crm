@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronDown, Star } from "lucide-react";
+import { Check, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/form-controls";
 import { Popover } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,7 +35,7 @@ export function PipelineIdentityFields({
 
   return (
     <>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <Label htmlFor="pipeline-description">Descrição</Label>
         <Textarea
           id="pipeline-description"
@@ -63,35 +62,29 @@ export function PipelineIdentityFields({
         </div>
       </div>
 
-      <fieldset className="space-y-2">
-        <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Identidade visual
-        </legend>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(8rem,1fr)_6.5rem]">
-          <div className="space-y-1">
-            <Label htmlFor="pipeline-color">Cor</Label>
-            <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-2 focus-within:ring-2 focus-within:ring-ring">
+      <fieldset className="rounded-xl border border-border bg-muted/20 p-4">
+        <legend className="sr-only">Identidade visual</legend>
+        <div className="flex items-end gap-8">
+          <div className="min-w-0 space-y-1.5">
+            <Label htmlFor="pipeline-color" className="block">Cor</Label>
+            <label
+              className="relative block h-10 w-10 cursor-pointer rounded-full border-4 border-card shadow-[0_0_0_1px_hsl(var(--border))] transition-transform hover:scale-105 focus-within:ring-2 focus-within:ring-primary/25"
+              style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(color) ? color : "#7c3aed" }}
+            >
               <input
                 id="pipeline-color"
                 type="color"
                 aria-label="Escolher cor do pipeline"
-                className="h-7 w-8 cursor-pointer border-0 bg-transparent p-0"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 value={/^#[0-9a-f]{6}$/i.test(color) ? color : "#7c3aed"}
                 onChange={(event) => onChange("color", event.target.value.toUpperCase())}
               />
-              <Input
-                aria-label="Código da cor"
-                className="h-8 border-0 px-1 font-mono shadow-none focus-visible:ring-0"
-                value={color}
-                maxLength={7}
-                onChange={(event) => onChange("color", event.target.value.toUpperCase())}
-              />
-            </div>
+            </label>
             {errors?.color ? <p className="text-xs text-destructive">{errors.color}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <Label>Ícone</Label>
+          <div className="space-y-1.5">
+            <Label className="block">Ícone</Label>
             <Popover
               open={iconPickerOpen}
               onOpenChange={setIconPickerOpen}
@@ -101,14 +94,14 @@ export function PipelineIdentityFields({
               trigger={
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
+                  size="icon"
                   aria-label="Escolher ícone do pipeline"
                   aria-expanded={iconPickerOpen}
-                  className="h-10 w-full justify-between"
+                  className="h-10 w-10 rounded-full border border-border bg-card p-0 text-primary shadow-sm hover:border-primary/35 hover:bg-primary/5"
                   onClick={() => setIconPickerOpen((current) => !current)}
                 >
                   <SelectedIcon className="h-5 w-5" style={{ color }} />
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 </Button>
               }
             >
@@ -141,19 +134,22 @@ export function PipelineIdentityFields({
             {errors?.icon ? <p className="text-xs text-destructive">{errors.icon}</p> : null}
           </div>
 
-          <div className="space-y-1">
-            <Label>Favorito</Label>
-            <Button
+          <div className="space-y-1.5">
+            <Label className="block">Preferência</Label>
+            <button
               type="button"
-              variant={favorite ? "secondary" : "outline"}
-              className="h-10 w-full"
+              className={cn(
+                "flex h-10 w-10 items-center justify-center rounded-full border bg-card transition-colors",
+                favorite
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border text-muted-foreground shadow-sm hover:border-primary/35 hover:bg-primary/5 hover:text-primary",
+              )}
               aria-label={favorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
               aria-pressed={favorite}
-              title={favorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
               onClick={() => onChange("favorite", !favorite)}
             >
-              <Star className={cn("h-5 w-5", favorite && "fill-current text-primary")} />
-            </Button>
+              <Star className={cn("h-5 w-5", favorite && "fill-current")} />
+            </button>
           </div>
         </div>
       </fieldset>

@@ -181,18 +181,64 @@ export class AutomationsService {
       throw new ConflictException("Esta automação foi alterada por outra pessoa. Recarregue o rascunho para continuar.");
     }
     const definition = parseDefinition(dto.definition);
-    return this.prisma.automation.update({
-      where: { id },
-      data: {
-        draftDefinition: definition as unknown as Prisma.InputJsonValue,
-        revision: { increment: 1 },
-        updatedById: userId,
-        triggerType: this.primaryTrigger(definition),
-        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-        ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
-        ...(dto.settings ? { settings: dto.settings as Prisma.InputJsonValue } : {}),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const previous = this.definitionOf(current);
+      const previousChecksum = checksumDefinition(previous);
+      const lastSnapshot = await tx.automationDraftSnapshot.findFirst({ where: { automationId: id }, orderBy: { revision: "desc" } });
+      if (lastSnapshot?.checksum !== previousChecksum) {
+        await tx.automationDraftSnapshot.create({
+          data: { organizationId, automationId: id, revision: current.revision, definition: previous as unknown as Prisma.InputJsonValue, checksum: previousChecksum, createdById: current.updatedById ?? userId },
+        });
+      }
+      const updated = await tx.automation.update({
+        where: { id },
+        data: {
+          draftDefinition: definition as unknown as Prisma.InputJsonValue,
+          revision: { increment: 1 },
+          updatedById: userId,
+          triggerType: this.primaryTrigger(definition),
+          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+          ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
+          ...(dto.settings ? { settings: dto.settings as Prisma.InputJsonValue } : {}),
+        },
+      });
+      const stale = await tx.automationDraftSnapshot.findMany({ where: { automationId: id }, orderBy: { createdAt: "desc" }, skip: 30, select: { id: true } });
+      if (stale.length) await tx.automationDraftSnapshot.deleteMany({ where: { id: { in: stale.map((item) => item.id) } } });
+      return updated;
     });
+  }
+
+  async draftSnapshots(organizationId: string, id: string) {
+    await this.requireAutomation(organizationId, id);
+    return this.prisma.automationDraftSnapshot.findMany({ where: { organizationId, automationId: id }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, revision: true, checksum: true, createdById: true, createdAt: true } });
+  }
+
+  async restoreDraftSnapshot(organizationId: string, id: string, snapshotId: string, userId: string) {
+    const current = await this.requireAutomation(organizationId, id);
+    const snapshot = await this.prisma.automationDraftSnapshot.findFirst({ where: { id: snapshotId, automationId: id, organizationId } });
+    if (!snapshot) throw new NotFoundException("Rascunho histórico não encontrado");
+    const currentDefinition = this.definitionOf(current);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.automationDraftSnapshot.create({ data: { organizationId, automationId: id, revision: current.revision, definition: currentDefinition as unknown as Prisma.InputJsonValue, checksum: checksumDefinition(currentDefinition), createdById: userId } }).catch(() => undefined);
+      return tx.automation.update({ where: { id }, data: { draftDefinition: snapshot.definition as Prisma.InputJsonValue, revision: { increment: 1 }, updatedById: userId, status: "DRAFT" } });
+    });
+  }
+
+  async compareDraftSnapshot(organizationId: string, id: string, snapshotId: string) {
+    const current = await this.requireAutomation(organizationId, id);
+    const snapshot = await this.prisma.automationDraftSnapshot.findFirst({ where: { id: snapshotId, automationId: id, organizationId } });
+    if (!snapshot) throw new NotFoundException("Rascunho histórico não encontrado");
+    const before = parseDefinition(snapshot.definition);
+    const after = this.definitionOf(current);
+    const beforeNodes = new Map(before.nodes.map((node) => [node.id, node]));
+    const afterNodes = new Map(after.nodes.map((node) => [node.id, node]));
+    return {
+      snapshot: { id: snapshot.id, revision: snapshot.revision, createdAt: snapshot.createdAt },
+      addedNodes: after.nodes.filter((node) => !beforeNodes.has(node.id)).map((node) => ({ id: node.id, label: node.label, type: node.type })),
+      removedNodes: before.nodes.filter((node) => !afterNodes.has(node.id)).map((node) => ({ id: node.id, label: node.label, type: node.type })),
+      changedNodes: after.nodes.filter((node) => beforeNodes.has(node.id) && JSON.stringify(beforeNodes.get(node.id)) !== JSON.stringify(node)).map((node) => ({ id: node.id, label: node.label, type: node.type })),
+      edgeDelta: after.edges.length - before.edges.length,
+    };
   }
 
   async validate(organizationId: string, id: string) {
@@ -339,6 +385,15 @@ export class AutomationsService {
   }
 
   async update(organizationId: string, id: string, userId: string, dto: UpdateAutomationDto) {
+    await this.requireAutomation(organizationId, id);
+    if (dto.scopeType === "PIPELINE") {
+      if (!dto.scopeId) throw new BadRequestException("Selecione um pipeline para este contexto.");
+      const pipeline = await this.prisma.pipeline.findFirst({
+        where: { id: dto.scopeId, organizationId, ...notDeleted },
+        select: { id: true },
+      });
+      if (!pipeline) throw new BadRequestException("Pipeline não encontrado ou indisponível.");
+    }
     if (dto.triggerType || dto.actions || dto.conditions || dto.triggerConfig) {
       const current = await this.requireAutomation(organizationId, id);
       const config = {
@@ -354,6 +409,10 @@ export class AutomationsService {
       data: {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
         ...(dto.description !== undefined ? { description: dto.description.trim() || null } : {}),
+        ...(dto.scopeType !== undefined ? { scopeType: dto.scopeType } : {}),
+        ...(dto.scopeType !== undefined || dto.scopeId !== undefined
+          ? { scopeId: dto.scopeType === "PIPELINE" ? dto.scopeId : null }
+          : {}),
         ...(dto.enabled !== undefined ? { status: dto.enabled ? "ACTIVE" : "PAUSED" } : {}),
         updatedById: userId,
       },
@@ -457,6 +516,18 @@ export class AutomationsService {
       this.prisma.automationExecution.count({ where }),
     ]);
     return paginate(data, total, page, pageSize);
+  }
+
+  async analytics(organizationId: string, automationId: string) {
+    await this.requireAutomation(organizationId, automationId);
+    const executions = await this.prisma.automationExecution.findMany({ where: { organizationId, automationId }, select: { id: true, status: true, subjectType: true, subjectId: true, startedAt: true, finishedAt: true } });
+    const dealIds = [...new Set(executions.filter((item) => item.subjectType === "deal" && item.subjectId).map((item) => item.subjectId!))];
+    const wonDeals = dealIds.length ? await this.prisma.deal.findMany({ where: { organizationId, id: { in: dealIds }, status: "WON", deletedAt: null }, select: { id: true, value: true } }) : [];
+    const failedNodes = await this.prisma.automationNodeExecution.groupBy({ by: ["nodeId", "nodeType"], where: { organizationId, execution: { automationId }, status: "FAILED" }, _count: { _all: true }, orderBy: { _count: { nodeId: "desc" } }, take: 8 });
+    const completed = executions.filter((item) => item.finishedAt);
+    const durations = completed.map((item) => item.finishedAt!.getTime() - item.startedAt.getTime());
+    const count = (status: string) => executions.filter((item) => item.status === status || (status === "SUCCEEDED" && item.status === "SUCCESS")).length;
+    return { total: executions.length, succeeded: count("SUCCEEDED"), failed: count("FAILED"), waiting: count("WAITING"), canceled: count("CANCELED"), successRate: executions.length ? Math.round((count("SUCCEEDED") / executions.length) * 100) : 0, averageDurationMs: durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : 0, conversions: wonDeals.length, attributedRevenue: wonDeals.reduce((sum, deal) => sum + Number(deal.value ?? 0), 0), failedNodes: failedNodes.map((item) => ({ nodeId: item.nodeId, nodeType: item.nodeType, count: item._count._all })) };
   }
 
   async recentExecutions(organizationId: string) {

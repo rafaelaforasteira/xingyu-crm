@@ -13,8 +13,10 @@ import type { Pipeline, PipelineInput } from "@/lib/types";
 import { PipelineIdentityFields, PIPELINE_DESCRIPTION_MAX_LENGTH } from "./pipeline-identity-fields";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Label, Select } from "@/components/ui/form-controls";
+import { Label } from "@/components/ui/form-controls";
 import { Input } from "@/components/ui/input";
+import { FilterSelect } from "@/components/ui/filter-select";
+import { Settings2, UserRound, UsersRound } from "lucide-react";
 
 const pipelineSchema = z.object({
   name: z.string().trim().min(2, "Informe um nome com pelo menos 2 caracteres.").max(120),
@@ -87,11 +89,18 @@ export function PipelineFormDialog({ open, onOpenChange, pipeline, onSaved }: {
     else form.setValue(field, String(value), { shouldDirty: true, shouldValidate: true });
   };
 
-  return <Dialog open={open} onOpenChange={onOpenChange} title={pipeline ? "Editar pipeline" : "Criar pipeline"} description="Defina a identidade e os padrões operacionais deste funil." wide>
-    <form className="max-h-[calc(100vh-10rem)] space-y-5 overflow-y-auto pr-1" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
-      <div className="space-y-1">
+  return <Dialog
+    open={open}
+    onOpenChange={onOpenChange}
+    title={pipeline ? "Editar pipeline" : "Criar pipeline"}
+    description="Configure as informações principais deste funil."
+    className="max-w-xl overflow-hidden"
+  >
+    <form className="-mx-5 -my-4 flex max-h-[calc(100dvh-8rem)] min-w-0 flex-col" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
+      <div className="min-w-0 space-y-5 overflow-y-auto px-5 py-5 scrollbar-thin">
+      <div className="min-w-0 space-y-1.5">
         <Label htmlFor="pipeline-name">Nome</Label>
-        <Input id="pipeline-name" autoFocus placeholder="Ex.: Vendas consultivas" {...form.register("name")} />
+        <Input id="pipeline-name" className="h-10 min-w-0" autoFocus placeholder="Ex.: Vendas consultivas" {...form.register("name")} />
         {form.formState.errors.name ? <p className="text-xs text-destructive">{form.formState.errors.name.message}</p> : null}
       </div>
 
@@ -104,32 +113,52 @@ export function PipelineFormDialog({ open, onOpenChange, pipeline, onSaved }: {
         onChange={setIdentityValue}
       />
 
-      <fieldset className="space-y-2">
-        <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Padrões operacionais</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label htmlFor="pipeline-team">Equipe padrão</Label>
-            <Select id="pipeline-team" {...form.register("defaultTeamId")}>
-              <option value="">Sem equipe padrão</option>
-              {pipeline?.defaultTeamId && !settings.data?.teams.some((team) => team.id === pipeline.defaultTeamId) ? <option value={pipeline.defaultTeamId}>{pipeline.defaultTeam?.name ?? "Equipe atual (sem acesso)"}</option> : null}
-              {settings.data?.teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-            </Select>
+      <fieldset className="min-w-0 rounded-xl border border-border bg-muted/20 p-4">
+        <legend className="sr-only">Padrões operacionais</legend>
+        <div className="mb-4 flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Settings2 className="h-4 w-4" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Padrões operacionais</p>
+            <p className="text-xs text-muted-foreground">Defina vínculos automáticos para novos negócios.</p>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="pipeline-owner">Responsável padrão</Label>
-            <Select id="pipeline-owner" {...form.register("defaultOwnerId")}>
-              <option value="">Sem responsável padrão</option>
-              {pipeline?.defaultOwnerId && !settings.data?.users.some((user) => user.id === pipeline.defaultOwnerId) ? <option value={pipeline.defaultOwnerId}>{pipeline.defaultOwner?.name ?? "Responsável atual (sem acesso)"}</option> : null}
-              {settings.data?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-            </Select>
-          </div>
+        </div>
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+          <FilterSelect
+            label="Equipe padrão"
+            icon={UsersRound}
+            value={form.watch("defaultTeamId")}
+            options={[
+              { value: "", label: "Sem equipe padrão" },
+              ...(pipeline?.defaultTeamId && !settings.data?.teams.some((team) => team.id === pipeline.defaultTeamId)
+                ? [{ value: pipeline.defaultTeamId, label: pipeline.defaultTeam?.name ?? "Equipe atual (sem acesso)" }]
+                : []),
+              ...(settings.data?.teams.map((team) => ({ value: team.id, label: team.name })) ?? []),
+            ]}
+            onChange={(value) => form.setValue("defaultTeamId", value, { shouldDirty: true, shouldValidate: true })}
+          />
+          <FilterSelect
+            label="Responsável padrão"
+            icon={UserRound}
+            value={form.watch("defaultOwnerId")}
+            options={[
+              { value: "", label: "Sem responsável padrão" },
+              ...(pipeline?.defaultOwnerId && !settings.data?.users.some((user) => user.id === pipeline.defaultOwnerId)
+                ? [{ value: pipeline.defaultOwnerId, label: pipeline.defaultOwner?.name ?? "Responsável atual (sem acesso)" }]
+                : []),
+              ...(settings.data?.users.map((user) => ({ value: user.id, label: user.name })) ?? []),
+            ]}
+            onChange={(value) => form.setValue("defaultOwnerId", value, { shouldDirty: true, shouldValidate: true })}
+          />
         </div>
       </fieldset>
 
       {settings.error ? <p className="text-xs text-muted-foreground">Equipes e responsáveis não puderam ser carregados. Você ainda pode salvar sem alterar esses vínculos.</p> : null}
-      <div className="sticky bottom-0 flex justify-end gap-2 border-t border-border bg-card pt-4">
+      </div>
+      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border bg-card px-5 py-4">
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-        <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Salvando…" : pipeline ? "Salvar" : "Criar pipeline"}</Button>
+        <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Salvando…" : pipeline ? "Salvar alterações" : "Criar pipeline"}</Button>
       </div>
     </form>
   </Dialog>;

@@ -36,6 +36,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const hideGlobalHeader = shouldHideGlobalHeader(pathname);
+  const hideGlobalSidebar = Boolean(
+    pathname && /^\/automations\/(?!new(?:\/|$))[^/]+/.test(pathname),
+  );
 
   return (
     <div
@@ -43,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       data-app-shell="true"
       data-testid="beta-app-shell"
     >
-      <Sidebar />
+      {hideGlobalSidebar ? null : <Sidebar />}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {hideGlobalHeader ? null : <Header />}
         <main
@@ -51,9 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           data-operation-mode={hideGlobalHeader ? "core" : "default"}
           className={cn(
             "flex min-h-0 flex-1 flex-col",
-            hideGlobalHeader
-              ? "overflow-hidden p-0"
-              : "overflow-auto p-4 sm:p-6",
+            hideGlobalHeader ? "overflow-hidden p-0" : "overflow-auto p-4 sm:p-6",
           )}
         >
           {children}

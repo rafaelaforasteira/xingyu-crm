@@ -125,7 +125,10 @@ export class ContactsService {
   }
 
   async update(organizationId: string, id: string, dto: UpdateContactDto) {
-    await this.requireContact(organizationId, id);
+    const previous = await this.prisma.contact.findFirst({
+      where: { id, organizationId, ...notDeleted },
+    });
+    if (!previous) throw new NotFoundException(`Contact ${id} not found`);
     const { tagIds, notes, ...data } = dto as UpdateContactDto & {
       notes?: string;
       tagIds?: string[];
@@ -152,6 +155,27 @@ export class ContactsService {
         owner: { select: { id: true, name: true } },
       },
     });
+    const changedFields = Object.keys({ ...data, ...(notes !== undefined ? { observations: notes } : {}) })
+      .filter((field) => previous[field as keyof typeof previous] !== updated[field as keyof typeof updated]);
+    if (changedFields.length) {
+      await this.prisma.automationDomainEvent.create({
+        data: {
+          organizationId,
+          eventType: "contact.updated",
+          aggregateType: "contact",
+          aggregateId: updated.id,
+          origin: "USER",
+          payload: {
+            contactId: updated.id,
+            changedFields,
+            before: Object.fromEntries(changedFields.map((field) => [field, previous[field as keyof typeof previous]])),
+            after: Object.fromEntries(changedFields.map((field) => [field, updated[field as keyof typeof updated]])),
+          },
+          subjectType: "contact",
+          subjectId: updated.id,
+        },
+      });
+    }
     return toContactResponse(updated);
   }
 
