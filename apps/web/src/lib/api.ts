@@ -709,6 +709,10 @@ export const automationsApi = {
   metrics: () => api.get<{ active: number; running: number; waiting: number; failed: number }>("/automations/metrics"),
   runtimeHealth: () => api.get<{ status: string; lastBeatAt: string; ageMs: number }>("/automations/runtime/health"),
   catalog: () => api.get<import("./types").AutomationNodeCatalogItem[]>("/automations/node-catalog"),
+  assignmentUsers: () => api.get<Array<{ id: string; name: string }>>("/automations/options/users"),
+  assignmentTags: () => api.get<Array<{ id: string; name: string; color?: string }>>("/automations/options/tags"),
+  createAssignmentTag: (name: string) =>
+    api.post<{ id: string; name: string; color?: string }>("/automations/options/tags", { name }),
   templates: () => api.get<import("./types").AutomationTemplateCard[]>("/automations/templates"),
   get: (id: string) => api.get<Automation>(`/automations/${id}`),
   create: (data: Record<string, unknown>) => api.post<Automation>("/automations", data),

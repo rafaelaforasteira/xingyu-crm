@@ -101,7 +101,7 @@ export const SYSTEM_TEMPLATES: SystemTemplate[] = [
         node("m1", "action.deal.moveStage@1", 80, 220, {}, "Mover para Pós-venda"),
         node("k1", "action.task.create@1", 80, 360, { title: "Conferir endereço e separar pedido {{order.number}}" }, "Criar tarefa"),
         node("n1", "action.notify.user@1", 80, 500, { title: "Pagamento confirmado", body: "Pedido {{order.number}} pronto para operação." }, "Notificar"),
-        node("o1", "action.order.updateStatus@1", 80, 640, { status: "SEPARATING" }, "Atualizar pedido"),
+        node("o1", "action.order.updateStatus@1", 80, 640, { entityType: "ORDER", status: "SEPARATING" }, "Alterar status"),
       ],
       edges: [
         edge("e1", "t1", "m1"),

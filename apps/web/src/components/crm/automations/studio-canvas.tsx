@@ -263,7 +263,7 @@ export function StudioCanvas({
   catalog?: AutomationNodeCatalogItem[];
   pipelines?: Pipeline[];
   users?: Array<{ id: string; name: string }>;
-  tags?: Array<{ id: string; name: string }>;
+  tags?: Array<{ id: string; name: string; color?: string }>;
   readOnly?: boolean;
   theme: "dark" | "light";
   onChange: (definition: WorkflowDefinition) => void;

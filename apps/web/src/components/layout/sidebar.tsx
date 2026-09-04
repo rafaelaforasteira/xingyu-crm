@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight, ListChecks, Settings, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Settings, X, type LucideIcon } from "lucide-react";
 import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
@@ -191,22 +191,79 @@ function PipelinesNavSection({
               </Link>
             );
           })}
-          <Link
-            href={`${PIPELINES_HREF}?view=leads`}
-            onClick={() => onNavigate(`${PIPELINES_HREF}?view=leads`)}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-sidebar-muted transition-colors hover:bg-white/5 hover:text-white"
-          >
-            <ListChecks className="h-3.5 w-3.5" />
-            Todos os leads
-          </Link>
         </div>
       ) : null}
     </div>
   );
 }
 
+function StaticPipelineNavSection({
+  item,
+  collapsed,
+  pathname,
+  currentHref,
+  pendingHref,
+  onNavigate,
+  onPrefetch,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  pathname: string;
+  currentHref: string;
+  pendingHref: string | null;
+  onNavigate: (href: string) => void;
+  onPrefetch: (href: string) => void;
+}) {
+  const sectionActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+  const [expanded, setExpanded] = React.useState(sectionActive);
+  const [customPipelines, setCustomPipelines] = React.useState<Record<string, { name?: string; color?: string }>>({});
+  const Icon = item.icon;
+
+  React.useEffect(() => {
+    if (sectionActive) setExpanded(true);
+  }, [sectionActive]);
+
+  React.useEffect(() => {
+    const load = () => {
+      try { setCustomPipelines(JSON.parse(localStorage.getItem("xingyu:journey-pipelines") ?? "{}")); }
+      catch { setCustomPipelines({}); }
+    };
+    load();
+    window.addEventListener("xingyu:journey-pipelines-updated", load);
+    return () => window.removeEventListener("xingyu:journey-pipelines-updated", load);
+  }, []);
+
+  if (collapsed) {
+    return <SidebarNavLink href={item.href} label={item.label} icon={Icon} collapsed active={sectionActive} onNavigate={onNavigate} onPrefetch={onPrefetch} />;
+  }
+
+  return (
+    <div className="space-y-0.5">
+      <div className={cn("flex items-center gap-1 rounded-[11px]", sectionActive && "bg-white/5")}>
+        <Link href={item.href} onClick={() => onNavigate(item.href)} className={cn("flex min-w-0 flex-1 items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors", sectionActive ? "text-white" : "text-sidebar-foreground/75 hover:text-white")}>
+          <Icon className="h-4 w-4 shrink-0" /><span className="truncate">{item.label}</span>
+        </Link>
+        <button type="button" aria-expanded={expanded} aria-label={expanded ? `Recolher ${item.label}` : `Expandir ${item.label}`} onClick={() => setExpanded((value) => !value)} className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-muted transition hover:bg-white/10 hover:text-white">
+          <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+        </button>
+      </div>
+      {expanded ? <div className="ml-3 space-y-0.5 border-l border-white/10 pl-2">{item.children?.map((child) => {
+        const active = currentHref === child.href || pendingHref === child.href;
+        const ChildIcon = child.icon;
+        const config = customPipelines[child.href] ?? {};
+        const color = config.color ?? child.color ?? "#8B5CF6";
+        const label = config.name ?? child.label;
+        const index = (item.children?.findIndex((candidate) => candidate.href === child.href) ?? 0) + 1;
+        const numberedLabel = `${String(index).padStart(2, "0")}. ${label}`;
+        return <Link key={child.href} href={child.href} title={numberedLabel} onClick={() => onNavigate(child.href)} onMouseEnter={() => onPrefetch(child.href)} className={cn("flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors", active ? "bg-white/10 text-white" : "text-sidebar-foreground/65 hover:bg-white/5 hover:text-white")}>{ChildIcon ? <ChildIcon className="h-3.5 w-3.5 shrink-0" style={{ color }} /> : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-70"/>}<span className="min-w-0 flex-1 truncate">{numberedLabel}</span></Link>;
+      })}</div> : null}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
   const [pendingHref, setPendingHref] = React.useState<string | null>(null);
@@ -323,6 +380,22 @@ export function Sidebar() {
                       item={item}
                       collapsed={collapsed}
                       pathname={pathname}
+                      pendingHref={pendingHref}
+                      onNavigate={handleNavigate}
+                      onPrefetch={handlePrefetch}
+                    />
+                  );
+                }
+
+                if (item.children?.length) {
+                  const query = searchParams.toString();
+                  return (
+                    <StaticPipelineNavSection
+                      key={`${group.id}-${item.label}`}
+                      item={item}
+                      collapsed={collapsed}
+                      pathname={pathname}
+                      currentHref={`${pathname}${query ? `?${query}` : ""}`}
                       pendingHref={pendingHref}
                       onNavigate={handleNavigate}
                       onPrefetch={handlePrefetch}

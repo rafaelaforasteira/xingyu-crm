@@ -121,7 +121,7 @@ export class AutomationActionsService {
       case "action.note.create":
         return this.createNote(interpolated, ctx);
       case "action.order.updateStatus":
-        return this.updateOrderStatus(interpolated, ctx);
+        return this.updateRelatedStatus(interpolated, ctx);
       case "action.notify.user":
         return this.notifyUser(interpolated, ctx);
       case "action.whatsapp.send":
@@ -229,10 +229,15 @@ export class AutomationActionsService {
     config: Record<string, unknown>,
     ctx: ActionContext,
   ): Promise<ActionResult> {
-    const phone = config.phone ? normalizePhone(String(config.phone)) : null;
-    const email = config.email ? String(config.email).toLowerCase() : null;
-    const id = config.contactId ? String(config.contactId) : null;
-    const contact = await this.prisma.contact.findFirst({
+    const searchBy = String(config.searchBy ?? "");
+    const searchValue = String(config.searchValue ?? "").trim();
+    if (!["phone", "email", "contactId"].includes(searchBy) || !searchValue) {
+      throw new Error("Configure como o contato deve ser buscado.");
+    }
+    const phone = searchBy === "phone" ? normalizePhone(searchValue) : null;
+    const email = searchBy === "email" ? searchValue.toLowerCase() : null;
+    const id = searchBy === "contactId" ? searchValue : null;
+    const contacts = await this.prisma.contact.findMany({
       where: {
         organizationId: ctx.organizationId,
         deletedAt: null,
@@ -246,48 +251,70 @@ export class AutomationActionsService {
             }
           : {}),
       },
+      orderBy: { createdAt: String(config.matchStrategy ?? "newest") === "oldest" ? "asc" : "desc" },
+      take: 2,
     });
-    return { output: { found: Boolean(contact), contact }, branch: "out" };
+    if (contacts.length > 1 && config.matchStrategy === "error") {
+      throw new Error("Mais de um contato corresponde à busca.");
+    }
+    const contact = contacts[0] ?? null;
+    return {
+      output: { found: Boolean(contact), contact },
+      branch: contact ? "found" : "notFound",
+    };
   }
 
   private async findDeal(
     config: Record<string, unknown>,
     ctx: ActionContext,
   ): Promise<ActionResult> {
-    const id = this.dealId(ctx, config);
-    const deal = id
-      ? await this.prisma.deal.findFirst({
-          where: { id, organizationId: ctx.organizationId, deletedAt: null },
-          include: { stage: true, pipeline: true, tags: true, contact: true },
-        })
-      : null;
-    return { output: { found: Boolean(deal), deal }, branch: "out" };
+    const searchBy = String(config.searchBy ?? "");
+    const searchValue = String(config.searchValue ?? "").trim();
+    if (!["dealId", "contactId"].includes(searchBy) || !searchValue) {
+      throw new Error("Configure como o lead deve ser buscado.");
+    }
+    const deals = await this.prisma.deal.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        deletedAt: null,
+        ...(searchBy === "dealId" ? { id: searchValue } : { contactId: searchValue }),
+      },
+      include: { stage: true, pipeline: true, tags: true, contact: true },
+      orderBy: { createdAt: String(config.matchStrategy ?? "newest") === "oldest" ? "asc" : "desc" },
+      take: 2,
+    });
+    if (deals.length > 1 && config.matchStrategy === "error") {
+      throw new Error("Mais de um lead corresponde à busca.");
+    }
+    const deal = deals[0] ?? null;
+    return { output: { found: Boolean(deal), deal }, branch: deal ? "found" : "notFound" };
   }
 
   private async findOrder(
     config: Record<string, unknown>,
     ctx: ActionContext,
   ): Promise<ActionResult> {
-    const contactId = String(
-      config.contactId ??
-        this.path(ctx.context, "current.contact.id") ??
-        this.path(ctx.context, "trigger.contactId") ??
-        "",
-    );
-    const id = this.orderId(ctx, config);
+    const searchBy = String(config.searchBy ?? "");
+    const searchValue = String(config.searchValue ?? "").trim();
+    if (!["orderId", "contactId"].includes(searchBy) || !searchValue) {
+      throw new Error("Configure como o pedido deve ser buscado.");
+    }
     const orders = await this.prisma.order.findMany({
       where: {
         organizationId: ctx.organizationId,
         deletedAt: null,
-        ...(id ? { id } : contactId ? { contactId } : { id: "__none__" }),
+        ...(searchBy === "orderId" ? { id: searchValue } : { contactId: searchValue }),
       },
-      orderBy: { createdAt: "desc" },
-      take: 20,
+      orderBy: { createdAt: String(config.matchStrategy ?? "newest") === "oldest" ? "asc" : "desc" },
+      take: config.matchStrategy === "error" ? 2 : 1,
       include: { payments: true },
     });
+    if (orders.length > 1 && config.matchStrategy === "error") {
+      throw new Error("Mais de um pedido corresponde à busca.");
+    }
     return {
       output: { found: orders.length > 0, orders, order: orders[0] ?? null },
-      branch: "out",
+      branch: orders.length ? "found" : "notFound",
     };
   }
 
@@ -536,13 +563,32 @@ export class AutomationActionsService {
       where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null },
     });
     if (!deal) throw new Error("Lead não encontrado para distribuir.");
+    const pipelineId = String(config.pipelineId ?? "");
+    if (!pipelineId) throw new Error("Selecione o pipeline da distribuição.");
+    const pipeline = await this.prisma.pipeline.findFirst({
+      where: { id: pipelineId, organizationId: ctx.organizationId, deletedAt: null, archived: false },
+      select: { accessMode: true },
+    });
+    if (!pipeline) throw new Error("Pipeline da distribuição não encontrado.");
+    const excludedUserIds = Array.isArray(config.excludedUserIds)
+      ? config.excludedUserIds.map(String).filter(Boolean)
+      : [];
     const candidates = await this.prisma.user.findMany({
       where: {
         organizationId: ctx.organizationId,
         deletedAt: null,
         deactivatedAt: null,
         status: "ACTIVE",
-        ...(config.teamId ? { teamId: String(config.teamId) } : {}),
+        ...(excludedUserIds.length ? { id: { notIn: excludedUserIds } } : {}),
+        ...(pipeline.accessMode === "RESTRICTED"
+          ? {
+              OR: [
+                { authRole: "ADMIN" },
+                { pipelineAccesses: { some: { pipelineId } } },
+                { team: { pipelineAccesses: { some: { pipelineId } } } },
+              ],
+            }
+          : {}),
       },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
@@ -554,6 +600,7 @@ export class AutomationActionsService {
         organizationId: ctx.organizationId,
         deletedAt: null,
         status: "OPEN",
+        pipelineId,
         ownerId: { in: candidates.map((candidate) => candidate.id) },
       },
       _count: { _all: true },
@@ -698,17 +745,18 @@ export class AutomationActionsService {
     if (existing?.result && typeof existing.result === "object") {
       return { output: existing.result as Record<string, unknown>, branch: "out" };
     }
+    const requestedStatusId = String(config.statusDefinitionId ?? "").trim();
     const status = await this.prisma.taskStatusDefinition.findFirst({
       where: {
         organizationId: ctx.organizationId,
         deletedAt: null,
         archived: false,
         active: true,
-        category: "OPEN",
+        ...(requestedStatusId ? { id: requestedStatusId } : { category: "OPEN" }),
       },
       orderBy: { position: "asc" },
     });
-    if (!status) throw new Error("Nenhum status aberto de tarefa está configurado.");
+    if (!status) throw new Error("O status selecionado para a tarefa não está disponível.");
     const dealId = this.dealId(ctx, config) || null;
     const deal = dealId
       ? await this.prisma.deal.findFirst({
@@ -716,16 +764,32 @@ export class AutomationActionsService {
         })
       : null;
     const dueInMinutes = Number(config.dueInMinutes ?? 0);
+    const dueDate = String(config.dueDate ?? "").trim();
+    const dueTime = String(config.dueTime ?? "").trim();
+    const configuredDueAt = dueDate
+      ? new Date(`${dueDate}T${dueTime || "09:00"}:00`)
+      : null;
+    if (configuredDueAt && Number.isNaN(configuredDueAt.getTime())) {
+      throw new Error("A data ou o horário da tarefa é inválido.");
+    }
+    const taskStatus =
+      status.category === "DONE"
+        ? "COMPLETED"
+        : status.category === "IN_PROGRESS"
+          ? "IN_PROGRESS"
+          : "PENDING";
     const task = await this.prisma.task.create({
       data: {
         organizationId: ctx.organizationId,
         title,
         description: config.description ? String(config.description) : null,
         type: "FOLLOW_UP",
-        status: "PENDING",
+        status: taskStatus,
         statusDefinitionId: status.id,
         priority: (typeof config.priority === "string" ? config.priority : "MEDIUM") as never,
-        dueAt: dueInMinutes > 0 ? new Date(Date.now() + dueInMinutes * 60_000) : null,
+        dueAt:
+          configuredDueAt ??
+          (dueInMinutes > 0 ? new Date(Date.now() + dueInMinutes * 60_000) : null),
         assigneeId: (config.assigneeId as string) || deal?.ownerId || ctx.actorId || null,
         contactId:
           deal?.contactId ?? (this.path(ctx.context, "current.contact.id") as string) ?? null,
@@ -797,13 +861,117 @@ export class AutomationActionsService {
     return { output: { noteId: note.id }, branch: "out" };
   }
 
-  private async updateOrderStatus(
+  private async updateRelatedStatus(
     config: Record<string, unknown>,
     ctx: ActionContext,
   ): Promise<ActionResult> {
-    const orderId = this.orderId(ctx, config);
     const status = String(config.status ?? "");
-    if (!orderId || !status) throw new Error("Pedido ou status não configurado.");
+    if (!status) throw new Error("Selecione o novo status.");
+    const orderStatuses = new Set([
+      "PENDING",
+      "PAYMENT_APPROVED",
+      "SEPARATING",
+      "SHIPPED",
+      "DELIVERED",
+      "CANCELED",
+    ]);
+    const configuredType = String(
+      config.entityType ?? (orderStatuses.has(status) ? "ORDER" : "AUTO"),
+    ).toUpperCase();
+    const dealId = this.dealId(ctx, config);
+    const orderId = this.orderId(ctx, config);
+    const taskId = String(
+      config.taskId ??
+        this.path(ctx.context, "current.task.id") ??
+        this.path(ctx.context, "trigger.task.id") ??
+        "",
+    );
+    const entityType =
+      configuredType === "AUTO"
+        ? dealId
+          ? "DEAL"
+          : orderId
+            ? "ORDER"
+            : taskId
+              ? "TASK"
+              : ""
+        : configuredType;
+
+    if (entityType === "DEAL") {
+      if (!dealId) throw new Error("Nenhum card de lead está relacionado à automação.");
+      const deal = await this.prisma.deal.findFirst({
+        where: { id: dealId, organizationId: ctx.organizationId, deletedAt: null },
+      });
+      if (!deal) throw new Error("Card do lead não encontrado.");
+      const stage = await this.prisma.pipelineStage.findFirst({
+        where: {
+          id: status,
+          pipelineId: deal.pipelineId,
+          pipeline: { organizationId: ctx.organizationId, deletedAt: null },
+        },
+      });
+      if (!stage) throw new Error("O status selecionado não pertence ao pipeline atual do lead.");
+      const movedAt = new Date();
+      await this.prisma.deal.update({
+        where: { id: deal.id },
+        data: {
+          stageId: stage.id,
+          enteredStageAt: movedAt,
+          status: stage.type === "WON" ? "WON" : stage.type === "LOST" ? "LOST" : "OPEN",
+          closedAt: stage.type === "OPEN" ? null : movedAt,
+          ...(ctx.actorId ? { updatedById: ctx.actorId } : {}),
+        },
+      });
+      await this.prisma.dealStageHistory.create({
+        data: {
+          dealId: deal.id,
+          stageId: stage.id,
+          fromStageId: deal.stageId,
+          movedById: ctx.actorId ?? null,
+          movedAt,
+          note: "Status alterado por automação",
+        },
+      });
+      return { output: { dealId: deal.id, status: stage.id }, branch: "out" };
+    }
+
+    if (entityType === "TASK") {
+      if (!taskId) throw new Error("Nenhuma tarefa está relacionada à automação.");
+      const definition = await this.prisma.taskStatusDefinition.findFirst({
+        where: {
+          id: status,
+          organizationId: ctx.organizationId,
+          active: true,
+          archived: false,
+          deletedAt: null,
+        },
+      });
+      if (!definition) throw new Error("Status da tarefa não encontrado.");
+      const task = await this.prisma.task.findFirst({
+        where: { id: taskId, organizationId: ctx.organizationId, deletedAt: null },
+      });
+      if (!task) throw new Error("Tarefa não encontrada.");
+      const taskStatus =
+        definition.category === "DONE"
+          ? "COMPLETED"
+          : definition.category === "IN_PROGRESS"
+            ? "IN_PROGRESS"
+            : "PENDING";
+      await this.prisma.task.update({
+        where: { id: task.id },
+        data: {
+          statusDefinitionId: definition.id,
+          status: taskStatus,
+          completedAt: taskStatus === "COMPLETED" ? new Date() : null,
+        },
+      });
+      return { output: { taskId: task.id, status: definition.id }, branch: "out" };
+    }
+
+    if (entityType !== "ORDER") {
+      throw new Error("Não foi possível identificar o item relacionado à automação.");
+    }
+    if (!orderId) throw new Error("Nenhum pedido está relacionado à automação.");
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, organizationId: ctx.organizationId, deletedAt: null },
     });

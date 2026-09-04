@@ -30,7 +30,6 @@ export function OrderKanbanCard({
   const [ownerOpen, setOwnerOpen] = React.useState(false);
   const [priorityOpen, setPriorityOpen] = React.useState(false);
   const t = orderText(locale);
-  const financialStatus = order.financialStatus || order.status;
   const operationalOwner = order.operationalAssignee;
   const priority = order.operationalPriority || "MEDIUM";
   const priorityColor: Record<string, string> = {
@@ -190,14 +189,6 @@ export function OrderKanbanCard({
       <p className="mt-1 h-4 truncate text-xs text-muted-foreground" title={context || undefined}>
         {context || " "}
       </p>
-      <div className="mt-2">
-        <span
-          data-testid="order-financial-status"
-          className="inline-flex h-7 max-w-full items-center rounded-full border border-primary/15 bg-primary/5 px-2.5 text-[11px] font-medium text-primary"
-        >
-          <span className="truncate">{orderEnumLabel(financialStatus, locale)}</span>
-        </span>
-      </div>
       <div className="mt-3 flex items-center justify-between gap-2 text-xs">
         <strong className="truncate font-semibold text-primary">
           {formatOrderCurrency(

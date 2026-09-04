@@ -18,6 +18,7 @@ import { OrganizationId } from "../common/decorators/organization.decorator";
 import { PaginationQueryDto } from "../common/dto/pagination.dto";
 import {
   CreateAutomationDto,
+  CreateAutomationTagDto,
   ManualRunDto,
   QueryAutomationsDto,
   QueryExecutionsDto,
@@ -55,6 +56,24 @@ export class AutomationsController {
   @Get("node-catalog")
   catalog() {
     return this.automationsService.catalog();
+  }
+
+  @Get("options/users")
+  assignmentUsers(@OrganizationId() orgId: string) {
+    return this.automationsService.assignmentUsers(orgId);
+  }
+
+  @Get("options/tags")
+  assignmentTags(@OrganizationId() orgId: string) {
+    return this.automationsService.assignmentTags(orgId);
+  }
+
+  @Post("options/tags")
+  createAssignmentTag(
+    @OrganizationId() orgId: string,
+    @Body() dto: CreateAutomationTagDto,
+  ) {
+    return this.automationsService.createAssignmentTag(orgId, dto.name);
   }
 
   @Get("templates")

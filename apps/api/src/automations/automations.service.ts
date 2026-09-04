@@ -37,6 +37,39 @@ export class AutomationsService {
     return catalogForApi();
   }
 
+  assignmentUsers(organizationId: string) {
+    return this.prisma.user.findMany({
+      where: { organizationId, status: "ACTIVE", deletedAt: null },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  assignmentTags(organizationId: string) {
+    return this.prisma.tag.findMany({
+      where: { organizationId, deletedAt: null, status: "ACTIVE", entityType: "DEAL" },
+      select: { id: true, name: true, color: true },
+      orderBy: { name: "asc" },
+    });
+  }
+
+  async createAssignmentTag(organizationId: string, rawName: string) {
+    const name = rawName.trim();
+    if (!name) throw new BadRequestException("Informe o nome da tag.");
+    const duplicate = await this.prisma.tag.findFirst({
+      where: {
+        organizationId,
+        entityType: "DEAL",
+        name: { equals: name, mode: "insensitive" },
+        deletedAt: null,
+      },
+    });
+    if (duplicate) return duplicate;
+    return this.prisma.tag.create({
+      data: { organizationId, name, entityType: "DEAL" },
+    });
+  }
+
   templates() {
     return SYSTEM_TEMPLATES.map((template) => ({
       key: template.key,

@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, Eye } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, ChevronDown, Eye, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/form-controls";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { connectionsApi, pipelineStagesApi } from "@/lib/api";
+import { automationsApi, connectionsApi, pipelinesApi, pipelineStagesApi, tasksApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type {
   AutomationNodeCatalogItem,
@@ -70,7 +71,7 @@ const FRAME_COLORS = [
 
 type ConditionItem = { field: string; operator: string; value?: unknown };
 
-type SelectOption = { value: string; label: React.ReactNode; disabled: boolean };
+type SelectOption = { value: string; label: React.ReactNode; disabled: boolean; color?: string };
 
 function selectOptions(children: React.ReactNode): SelectOption[] {
   const options: SelectOption[] = [];
@@ -92,6 +93,10 @@ function selectOptions(children: React.ReactNode): SelectOption[] {
       value: String(props.value ?? textValue),
       label: props.children,
       disabled: Boolean(props.disabled),
+      color:
+        typeof (props as Record<string, unknown>)["data-color"] === "string"
+          ? String((props as Record<string, unknown>)["data-color"])
+          : undefined,
     });
   });
   return options;
@@ -106,6 +111,7 @@ function Select({
   "aria-label": ariaLabel,
 }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
   const options = React.useMemo(() => selectOptions(children), [children]);
   const currentValue = String(value ?? "");
   const selected = options.find((option) => option.value === currentValue);
@@ -117,13 +123,17 @@ function Select({
     setOpen(false);
   };
 
+  React.useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as globalThis.Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    return () => document.removeEventListener("pointerdown", closeOutside);
+  }, [open]);
+
   return (
-    <div
-      className="nodrag nopan relative"
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-      }}
-    >
+    <div ref={rootRef} className="nodrag nopan relative">
       <button
         type="button"
         disabled={disabled}
@@ -136,7 +146,15 @@ function Select({
           className,
         )}
       >
-        <span className="truncate">{selected?.label ?? "Selecione"}</span>
+        <span className="flex min-w-0 items-center gap-2 truncate">
+          {selected?.color ? (
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_0_2px_hsl(var(--automation-surface))]"
+              style={{ backgroundColor: selected.color }}
+            />
+          ) : null}
+          <span className="truncate">{selected?.label ?? "Selecione"}</span>
+        </span>
         <ChevronDown
           className={cn(
             "ml-2 h-4 w-4 shrink-0 text-[hsl(var(--automation-accent))] transition-transform",
@@ -166,8 +184,24 @@ function Select({
                     : "text-[hsl(var(--automation-text-2))] hover:bg-[hsl(var(--automation-accent)/0.1)] hover:text-[hsl(var(--automation-text))]",
                   option.disabled && "cursor-not-allowed opacity-45",
                 )}
+                style={
+                  option.color
+                    ? {
+                        backgroundColor: `${option.color}${active ? "24" : "10"}`,
+                        boxShadow: `inset 3px 0 0 ${option.color}`,
+                      }
+                    : undefined
+                }
               >
-                <span className="truncate">{option.label}</span>
+                <span className="flex min-w-0 items-center gap-2 truncate">
+                  {option.color ? (
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: option.color }}
+                    />
+                  ) : null}
+                  <span className="truncate">{option.label}</span>
+                </span>
                 {active ? <Check className="ml-2 h-3.5 w-3.5 shrink-0 text-[hsl(var(--automation-accent))]" /> : null}
               </button>
             );
@@ -184,6 +218,8 @@ export function NodeInspector({
   pipelines,
   users,
   tags,
+  statusContextType,
+  statusContextPipelineId,
   onChange,
   embedded = false,
 }: {
@@ -191,25 +227,72 @@ export function NodeInspector({
   catalog: AutomationNodeCatalogItem[];
   pipelines: Pipeline[];
   users: Array<{ id: string; name: string }>;
-  tags: Array<{ id: string; name: string }>;
+  tags: Array<{ id: string; name: string; color?: string }>;
+  statusContextType?: "DEAL" | "ORDER" | "TASK";
+  statusContextPipelineId?: string;
   onChange: (node: WorkflowDefinition["nodes"][number]) => void;
   embedded?: boolean;
 }) {
+  const queryClient = useQueryClient();
+  const [newTagName, setNewTagName] = React.useState("");
   const kind = node.type.replace(/@\d+$/, "");
+  const legacyOrderStatuses = [
+    "PENDING",
+    "PAYMENT_APPROVED",
+    "SEPARATING",
+    "SHIPPED",
+    "DELIVERED",
+    "CANCELED",
+  ];
+  const statusEntityType = String(
+    statusContextType ??
+      node.config?.entityType ??
+      (legacyOrderStatuses.includes(String(node.config?.status ?? "")) ? "ORDER" : "AUTO"),
+  );
   const entry = catalog.find((item) => item.id === node.type || item.type === kind);
   const pipelineId = String(node.config?.pipelineId ?? "");
+  const statusPipelineId = statusContextPipelineId ?? pipelineId;
   const stages = useQuery({
-    queryKey: ["pipelines", pipelineId, "automation-stages"],
-    queryFn: () => pipelineStagesApi.list(pipelineId),
-    enabled: Boolean(pipelineId),
+    queryKey: ["pipelines", statusPipelineId, "automation-stages"],
+    queryFn: () => pipelineStagesApi.list(statusPipelineId),
+    enabled: Boolean(statusPipelineId),
   });
   const connections = useQuery({
     queryKey: ["connections", "automation-whatsapp"],
     queryFn: () => connectionsApi.list(),
     enabled: kind === "action.whatsapp.send",
   });
+  const roundRobinUsers = useQuery({
+    queryKey: ["pipelines", pipelineId, "automation-round-robin-users"],
+    queryFn: () => pipelinesApi.eligibleUsers(pipelineId),
+    enabled: kind === "action.deal.assignRoundRobin" && Boolean(pipelineId),
+  });
+  const taskStatuses = useQuery({
+    queryKey: ["tasks", "statuses", "automation-editor"],
+    queryFn: () => tasksApi.statuses(),
+    enabled:
+      kind === "action.task.create" ||
+      (kind === "action.order.updateStatus" &&
+        ["AUTO", "TASK"].includes(statusEntityType)),
+  });
   const setConfig = (key: string, value: unknown) =>
     onChange({ ...node, config: { ...node.config, [key]: value } });
+  const createTag = useMutation({
+    mutationFn: (name: string) => automationsApi.createAssignmentTag(name),
+    onSuccess: (tag) => {
+      queryClient.setQueryData<Array<{ id: string; name: string; color?: string }>>(
+        ["automations", "assignment-tags"],
+        (current = []) =>
+          [...current.filter((item) => item.id !== tag.id), tag].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
+      );
+      setConfig("tagId", tag.id);
+      setNewTagName("");
+      toast.success("Tag criada e selecionada.");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   const conditions = (
     Array.isArray(node.config?.items) ? node.config.items : []
   ) as ConditionItem[];
@@ -308,7 +391,9 @@ export function NodeInspector({
           </Field>
         </div>
       ) : (kind.includes("deal") || kind.includes("stageChanged")) &&
-        kind !== "data.findDuplicates" ? (
+        kind !== "data.findDuplicates" &&
+        kind !== "action.deal.addTag" &&
+        kind !== "action.deal.removeTag" ? (
         <div className="space-y-3">
           <Field label="Pipeline">
             <Select
@@ -531,9 +616,73 @@ export function NodeInspector({
       ) : null}
 
       {kind === "action.deal.assignRoundRobin" ? (
-        <p className="text-[11px] leading-5 text-[hsl(var(--automation-text-2))]">
-          O próximo responsável será o usuário ativo com menos leads abertos. Empates são resolvidos de forma estável.
-        </p>
+        <>
+          <Field label="Pipeline da distribuição">
+            <Select
+              value={pipelineId}
+              onChange={(event) =>
+                onChange({
+                  ...node,
+                  config: {
+                    ...node.config,
+                    pipelineId: event.target.value,
+                    excludedUserIds: [],
+                  },
+                })
+              }
+            >
+              <option value="">Selecione um pipeline</option>
+              {pipelines.map((pipeline) => (
+                <option key={pipeline.id} value={pipeline.id}>
+                  {pipeline.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {pipelineId ? (
+            <Field label="Não receberão leads">
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-[hsl(var(--automation-border))] bg-[hsl(var(--automation-surface)/0.72)] p-2">
+                {(roundRobinUsers.data ?? []).length ? (
+                  (roundRobinUsers.data ?? []).map((user) => {
+                    const excluded = Array.isArray(node.config?.excludedUserIds)
+                      ? (node.config.excludedUserIds as unknown[]).map(String)
+                      : [];
+                    const checked = excluded.includes(user.id);
+                    return (
+                      <label
+                        key={user.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-[hsl(var(--automation-text))] transition-colors hover:bg-[hsl(var(--automation-accent)/0.1)]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setConfig(
+                              "excludedUserIds",
+                              checked
+                                ? excluded.filter((id) => id !== user.id)
+                                : [...excluded, user.id],
+                            )
+                          }
+                        />
+                        <span className="truncate">{user.name}</span>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <p className="px-2 py-1.5 text-[11px] text-[hsl(var(--automation-text-2))]">
+                    {roundRobinUsers.isLoading
+                      ? "Carregando responsáveis..."
+                      : "Nenhum responsável disponível neste pipeline."}
+                  </p>
+                )}
+              </div>
+            </Field>
+          ) : null}
+          <p className="text-[11px] leading-5 text-[hsl(var(--automation-text-2))]">
+            O lead será enviado ao responsável elegível com menos leads abertos neste pipeline.
+          </p>
+        </>
       ) : null}
 
       {kind === "action.deal.updateField" || kind === "action.contact.updateField" ? (
@@ -559,19 +708,51 @@ export function NodeInspector({
       ) : null}
 
       {kind === "action.deal.addTag" || kind === "action.deal.removeTag" ? (
-        <Field label="Tag">
-          <Select
-            value={String(node.config?.tagId ?? "")}
-            onChange={(event) => setConfig("tagId", event.target.value)}
-          >
-            <option value="">Selecione</option>
-            {tags.map((tag) => (
-              <option key={tag.id} value={tag.id}>
-                {tag.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div className="space-y-3">
+          <Field label="Tag">
+            <Select
+              value={String(node.config?.tagId ?? "")}
+              onChange={(event) => setConfig("tagId", event.target.value)}
+            >
+              <option value="">Selecione</option>
+              {tags.map((tag) => (
+                <option key={tag.id} value={tag.id} data-color={tag.color ?? "#7C3AED"}>
+                  {tag.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {kind === "action.deal.addTag" ? (
+            <Field label="Adicionar nova tag">
+              <div className="flex gap-2">
+                <Input
+                  value={newTagName}
+                  onChange={(event) => setNewTagName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && newTagName.trim()) {
+                      event.preventDefault();
+                      createTag.mutate(newTagName.trim());
+                    }
+                  }}
+                  placeholder="Nome da tag"
+                  maxLength={80}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  disabled={!newTagName.trim() || createTag.isPending}
+                  onClick={() => createTag.mutate(newTagName.trim())}
+                  className="shrink-0 border-[hsl(var(--automation-border))] bg-[hsl(var(--automation-surface))] text-[hsl(var(--automation-accent))]"
+                  aria-label="Criar e selecionar tag"
+                  title="Criar tag"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </Field>
+          ) : null}
+        </div>
       ) : null}
 
       {kind === "data.findDuplicates" ? (
@@ -587,6 +768,122 @@ export function NodeInspector({
           <p className="text-[11px] leading-5 text-[hsl(var(--automation-text-2))]">
             Compara telefone e e-mail. O resultado `found` e `belongsToOtherOwner` fica disponível
             para a próxima condição.
+          </p>
+        </>
+      ) : null}
+
+      {["data.findContact", "data.findDeal", "data.findOrder"].includes(kind) ? (
+        <>
+          <Field label="Buscar por">
+            <Select
+              value={String(node.config?.searchBy ?? "")}
+              onChange={(event) =>
+                onChange({
+                  ...node,
+                  config: { ...node.config, searchBy: event.target.value, searchValue: "" },
+                })
+              }
+            >
+              <option value="">Selecione um critério</option>
+              {kind === "data.findContact" ? (
+                <>
+                  <option value="phone">Telefone ou WhatsApp</option>
+                  <option value="email">E-mail</option>
+                  <option value="contactId">ID do contato</option>
+                </>
+              ) : null}
+              {kind === "data.findDeal" ? (
+                <>
+                  <option value="dealId">ID do lead</option>
+                  <option value="contactId">ID do contato</option>
+                </>
+              ) : null}
+              {kind === "data.findOrder" ? (
+                <>
+                  <option value="orderId">ID do pedido</option>
+                  <option value="contactId">ID do contato</option>
+                </>
+              ) : null}
+            </Select>
+          </Field>
+          <Field label="Valor da busca">
+            <Input
+              value={String(node.config?.searchValue ?? "")}
+              onChange={(event) => setConfig("searchValue", event.target.value)}
+              placeholder={
+                node.config?.searchBy === "phone"
+                  ? "Ex.: {{current.contact.phone}}"
+                  : node.config?.searchBy === "email"
+                    ? "Ex.: {{current.contact.email}}"
+                    : "Informe um ID ou use uma variável"
+              }
+            />
+          </Field>
+          <Field label="Se houver mais de um resultado">
+            <Select
+              value={String(node.config?.matchStrategy ?? "newest")}
+              onChange={(event) => setConfig("matchStrategy", event.target.value)}
+            >
+              <option value="newest">Usar o mais recente</option>
+              <option value="oldest">Usar o mais antigo</option>
+              <option value="error">Encerrar com erro</option>
+            </Select>
+          </Field>
+          <p className="text-[11px] leading-5 text-[hsl(var(--automation-text-2))]">
+            O resultado encontrado será usado automaticamente nas próximas etapas.
+          </p>
+        </>
+      ) : null}
+
+      {kind === "data.setVariable" ? (
+        <>
+          <Field label="Nome da informação">
+            <Input
+              value={String(node.config?.name ?? "")}
+              onChange={(event) =>
+                setConfig(
+                  "name",
+                  event.target.value.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, ""),
+                )
+              }
+              placeholder="Ex.: valor_do_desconto"
+            />
+          </Field>
+          <Field label="Informação que será salva">
+            <Select
+              value={
+                /^\{\{[^}]+\}\}$/.test(String(node.config?.value ?? ""))
+                  ? String(node.config?.value)
+                  : "manual"
+              }
+              onChange={(event) =>
+                setConfig("value", event.target.value === "manual" ? "" : event.target.value)
+              }
+            >
+              <option value="manual">Digitar um valor</option>
+              {DATA_PATHS.map(([path, label]) => (
+                <option key={path} value={`{{${path}}}`}>
+                  {label}
+                </option>
+              ))}
+              <option value="{{now}}">Data e hora atuais</option>
+            </Select>
+          </Field>
+          {!/^\{\{[^}]+\}\}$/.test(String(node.config?.value ?? "")) ? (
+            <Field label="Valor">
+              <Input
+                value={String(node.config?.value ?? "")}
+                onChange={(event) => setConfig("value", event.target.value)}
+                placeholder="Ex.: 10%"
+              />
+            </Field>
+          ) : (
+            <p className="rounded-lg border border-[hsl(var(--automation-border))] bg-[hsl(var(--automation-surface))] px-3 py-2 text-xs text-[hsl(var(--automation-text-2))]">
+              O valor será preenchido automaticamente durante a execução.
+            </p>
+          )}
+          <p className="text-[11px] leading-5 text-[hsl(var(--automation-text-2))]">
+            Use depois como <code>{`{{variables.${String(node.config?.name || "nome")}}}`}</code>.
           </p>
         </>
       ) : null}
@@ -621,9 +918,69 @@ export function NodeInspector({
         </>
       ) : null}
 
-      {kind === "action.task.create" ||
-      kind === "action.notify.user" ||
-      kind === "action.note.create" ? (
+      {kind === "action.task.create" ? (
+        <>
+          <Field label="Título da tarefa">
+            <Input
+              value={String(node.config?.title ?? "")}
+              onChange={(event) => setConfig("title", event.target.value)}
+              placeholder="Ex.: Retornar contato"
+            />
+          </Field>
+          <Field label="Descrição">
+            <Textarea
+              value={String(node.config?.description ?? "")}
+              onChange={(event) => setConfig("description", event.target.value)}
+              placeholder="Descreva o que precisa ser feito"
+              className="min-h-20 resize-y"
+            />
+          </Field>
+          <Field label="Status inicial">
+            <Select
+              value={String(node.config?.statusDefinitionId ?? "")}
+              onChange={(event) => setConfig("statusDefinitionId", event.target.value)}
+            >
+              <option value="">Primeiro status aberto</option>
+              {(taskStatuses.data ?? []).map((status) => (
+                <option key={status.id} value={status.id} data-color={status.color}>
+                  {status.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Responsável">
+            <Select
+              value={String(node.config?.assigneeId ?? "")}
+              onChange={(event) => setConfig("assigneeId", event.target.value)}
+            >
+              <option value="">Responsável atual do lead</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Data">
+              <Input
+                type="date"
+                value={String(node.config?.dueDate ?? "")}
+                onChange={(event) => setConfig("dueDate", event.target.value)}
+              />
+            </Field>
+            <Field label="Horário">
+              <Input
+                type="time"
+                value={String(node.config?.dueTime ?? "")}
+                onChange={(event) => setConfig("dueTime", event.target.value)}
+              />
+            </Field>
+          </div>
+        </>
+      ) : null}
+
+      {kind === "action.notify.user" || kind === "action.note.create" ? (
         <>
           {kind !== "action.note.create" ? (
             <ExpressionField
@@ -636,9 +993,7 @@ export function NodeInspector({
           <ExpressionField
             label={kind === "action.note.create" ? "Nota" : "Texto"}
             value={String(node.config?.body ?? node.config?.description ?? "")}
-            onChange={(value) =>
-              setConfig(kind === "action.task.create" ? "description" : "body", value)
-            }
+            onChange={(value) => setConfig("body", value)}
             showPreview={kind !== "action.notify.user"}
           />
           {kind === "action.notify.user" ? (
@@ -681,20 +1036,60 @@ export function NodeInspector({
       ) : null}
 
       {kind === "action.order.updateStatus" ? (
-        <Field label="Novo status do pedido">
-          <Select
-            value={String(node.config?.status ?? "")}
-            onChange={(event) => setConfig("status", event.target.value)}
-          >
-            <option value="">Selecione o status</option>
-            <option value="PENDING">Pendente</option>
-            <option value="PAYMENT_APPROVED">Pagamento aprovado</option>
-            <option value="SEPARATING">Em separação</option>
-            <option value="SHIPPED">Enviado</option>
-            <option value="DELIVERED">Entregue</option>
-            <option value="CANCELED">Cancelado</option>
-          </Select>
-        </Field>
+        <>
+          <Field label="Novo status">
+            <Select
+              value={String(node.config?.status ?? "")}
+              disabled={!statusContextType}
+              onChange={(event) =>
+                onChange({
+                  ...node,
+                  config: {
+                    ...node.config,
+                    entityType: statusContextType,
+                    ...(statusContextPipelineId ? { pipelineId: statusContextPipelineId } : {}),
+                    status: event.target.value,
+                  },
+                })
+              }
+            >
+              <option value="">Selecione o status</option>
+              {statusContextType === "ORDER" ? (
+                <>
+                  <option value="PENDING">Pendente</option>
+                  <option value="PAYMENT_APPROVED">Pagamento aprovado</option>
+                  <option value="SEPARATING">Em separação</option>
+                  <option value="SHIPPED">Enviado</option>
+                  <option value="DELIVERED">Entregue</option>
+                  <option value="CANCELED">Cancelado</option>
+                </>
+              ) : null}
+              {statusContextType === "TASK"
+                ? (taskStatuses.data ?? []).map((status) => (
+                    <option key={status.id} value={status.id} data-color={status.color}>
+                      {status.name}
+                    </option>
+                  ))
+                : null}
+              {statusContextType === "DEAL"
+                ? (stages.data ?? []).map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.name}
+                    </option>
+                  ))
+                : null}
+            </Select>
+          </Field>
+          {!statusContextType ? (
+            <p className="text-xs leading-5 text-[hsl(var(--automation-text-2))]">
+              Conecte esta etapa a um gatilho de lead, pedido ou tarefa para carregar os status disponíveis.
+            </p>
+          ) : statusContextType === "DEAL" && !statusPipelineId ? (
+            <p className="text-xs leading-5 text-[hsl(var(--automation-text-2))]">
+              Defina o pipeline no gatilho para carregar as etapas disponíveis.
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       {kind === "logic.randomSplit" ? (

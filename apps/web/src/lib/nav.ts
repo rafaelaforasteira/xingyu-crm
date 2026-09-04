@@ -17,6 +17,11 @@ import {
   Landmark,
   QrCode,
   UsersRound,
+  ShoppingCart,
+  Truck,
+  ShieldCheck,
+  Undo2,
+  BadgeDollarSign,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,7 +35,21 @@ export interface NavItem {
   exact?: boolean;
   /** Render expandable pipeline children under this item */
   expandablePipelines?: boolean;
+  /** Render fixed sub-pipelines under this product area. */
+  children?: Array<{ href: string; label: string; icon?: LucideIcon; color?: string }>;
 }
+
+const ORDER_PIPELINES = [
+  { href: "/orders?pipeline=ecommerce", label: "E-commerce", icon: ShoppingCart, color: "#8B5CF6" },
+  { href: "/orders?pipeline=operation", label: "Envio", icon: Truck, color: "#06B6D4" },
+];
+
+const ATTENDANCE_PIPELINES = [
+  { href: "/after-sales?pipeline=post-sale", label: "Pós-venda", icon: HeartHandshake, color: "#10B981" },
+  { href: "/after-sales?pipeline=warranty", label: "Garantia e assistência", icon: ShieldCheck, color: "#F59E0B" },
+  { href: "/after-sales?pipeline=returns", label: "Trocas e devoluções", icon: Undo2, color: "#3B82F6" },
+  { href: "/after-sales?pipeline=refunds", label: "Reembolsos", icon: BadgeDollarSign, color: "#EC4899" },
+];
 
 export interface NavGroup {
   id: string;
@@ -62,7 +81,18 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
       { href: "/pipelines", label: "Pipelines", icon: Kanban, expandablePipelines: true },
       { href: "/repurchase", label: "Recompra", icon: RefreshCw },
       { href: "/reactivation", label: "Reativação", icon: Sparkles },
-      { href: "/orders", label: "Pedidos", icon: Package },
+      {
+        href: "/orders",
+        label: "Pedidos",
+        icon: Package,
+        children: ORDER_PIPELINES,
+      },
+      {
+        href: "/after-sales",
+        label: "Atendimento",
+        icon: HeartHandshake,
+        children: ATTENDANCE_PIPELINES,
+      },
       { href: "/after-sales", label: "Pós-venda", icon: HeartHandshake },
     ],
   },
@@ -114,7 +144,18 @@ export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
         exact: true,
         expandablePipelines: true,
       },
-      { href: "/orders", label: "Pedidos", icon: Package },
+      {
+        href: "/orders",
+        label: "Pedidos",
+        icon: Package,
+        children: ORDER_PIPELINES,
+      },
+      {
+        href: "/after-sales",
+        label: "Atendimento",
+        icon: HeartHandshake,
+        children: ATTENDANCE_PIPELINES,
+      },
     ],
   },
 ];
@@ -140,7 +181,18 @@ export const NAV_GROUPS: NavGroup[] = [
         exact: true,
         expandablePipelines: true,
       },
-      { href: "/orders", label: "Pedidos", icon: Package },
+      {
+        href: "/orders",
+        label: "Pedidos",
+        icon: Package,
+        children: ORDER_PIPELINES,
+      },
+      {
+        href: "/after-sales",
+        label: "Atendimento",
+        icon: HeartHandshake,
+        children: ATTENDANCE_PIPELINES,
+      },
     ],
   },
   {

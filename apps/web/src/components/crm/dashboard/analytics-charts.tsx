@@ -101,7 +101,13 @@ export function AnalyticsChart({
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} width={axisFormatter ? 72 : 48} tickFormatter={axisFormatter} />
                 <Tooltip {...tooltip} />
-                {secondaryKey ? <Legend /> : null}
+                {secondaryKey ? (
+                  <Legend
+                    iconType="circle"
+                    iconSize={6}
+                    wrapperStyle={{ fontSize: 10, lineHeight: "14px" }}
+                  />
+                ) : null}
                 <Line
                   type="monotone"
                   dataKey={dataKey}
@@ -143,7 +149,11 @@ export function AnalyticsChart({
                   ))}
                 </Pie>
                 <Tooltip {...tooltip} />
-                <Legend />
+                <Legend
+                  iconType="circle"
+                  iconSize={7}
+                  wrapperStyle={{ fontSize: 10, lineHeight: "14px" }}
+                />
               </PieChart>
             ) : kind === "horizontal-bar" ? (
               <BarChart data={data} layout="vertical" margin={{ left: 8, right: 20 }}>

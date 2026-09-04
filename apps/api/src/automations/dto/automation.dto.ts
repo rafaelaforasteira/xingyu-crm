@@ -22,6 +22,10 @@ export class CreateAutomationDto {
   @ApiPropertyOptional() @IsOptional() @IsObject() definition?: Record<string, unknown>;
 }
 
+export class CreateAutomationTagDto {
+  @ApiProperty() @IsString() @MaxLength(80) name!: string;
+}
+
 export class SaveDraftDto {
   @ApiProperty() @IsObject() definition!: Record<string, unknown>;
   @ApiPropertyOptional() @IsOptional() @IsInt() revision?: number;

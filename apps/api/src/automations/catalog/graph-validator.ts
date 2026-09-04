@@ -32,6 +32,19 @@ export function validateDefinition(definition: WorkflowDefinition): WorkflowVali
       }
     }
     const kind = parseNodeType(node.type).type;
+    if (
+      kind === "data.setVariable" &&
+      typeof node.config?.name === "string" &&
+      node.config.name &&
+      !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(node.config.name)
+    ) {
+      issues.push({
+        level: "error",
+        code: "INVALID_VARIABLE_NAME",
+        message: "O nome da informação deve começar com uma letra e usar apenas letras, números ou _.",
+        nodeId: node.id,
+      });
+    }
     if ((kind === "logic.if" || kind === "logic.filter") && !Array.isArray(node.config?.items)) {
       issues.push({ level: "warning", code: "EMPTY_CONDITION", message: `${entry.label} ainda não tem uma condição. Sem critérios, o caminho Sim/continuar será sempre usado.`, nodeId: node.id });
     }
@@ -45,6 +58,19 @@ export function validateDefinition(definition: WorkflowDefinition): WorkflowVali
       const outs = edges.filter((edge) => edge.source === node.id).map((edge) => edge.sourceHandle ?? "out");
       if (!outs.includes("received") || !outs.includes("timeout")) {
         issues.push({ level: "warning", code: "INCOMPLETE_WAIT", message: "Conecte os caminhos Recebido e Timeout desta espera.", nodeId: node.id });
+      }
+    }
+    if (["data.findContact", "data.findDeal", "data.findOrder"].includes(kind)) {
+      const outs = edges
+        .filter((edge) => edge.source === node.id)
+        .map((edge) => edge.sourceHandle ?? "out");
+      if (!outs.includes("found") || !outs.includes("notFound")) {
+        issues.push({
+          level: "warning",
+          code: "INCOMPLETE_SEARCH_BRANCH",
+          message: `Conecte os caminhos Encontrado e Não encontrado de ${entry.label}.`,
+          nodeId: node.id,
+        });
       }
     }
   }

@@ -8,15 +8,18 @@ import {
   AlertTriangle,
   ArrowUpRight,
   BarChart3,
+  BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
   Clock3,
+  Headphones,
   Kanban,
   MessagesSquare,
   Radio,
   ShoppingBag,
   Target,
   TrendingUp,
+  Trophy,
   UserRound,
   UsersRound,
   WalletCards,
@@ -50,6 +53,44 @@ const minutes = (value: unknown) =>
       ? `${Math.round(value)} min`
       : `${(value / 60).toFixed(1)} h`
     : "—";
+
+const ATTENDANCE_DEMO = {
+  conversations: 248,
+  waitingOurResponse: 12,
+  waitingCustomer: 31,
+  unread: 18,
+  averageMinutes: 8.4,
+  medianMinutes: 5.2,
+  initiatedByTeam: 96,
+  initiatedByCustomer: 152,
+  sla: { under5: 126, under15: 71, under60: 36, over60: 15 },
+  responseByPeriod: [
+    { label: "Seg", value: 11, target: 15 },
+    { label: "Ter", value: 8, target: 15 },
+    { label: "Qua", value: 6, target: 15 },
+    { label: "Qui", value: 9, target: 15 },
+    { label: "Sex", value: 7, target: 15 },
+    { label: "Sáb", value: 13, target: 15 },
+    { label: "Dom", value: 5, target: 15 },
+  ],
+  byOwner: [
+    { label: "Ana Souza", value: 4.8 },
+    { label: "Carlos Lima", value: 7.1 },
+    { label: "Marina Alves", value: 9.6 },
+    { label: "João Pedro", value: 13.2 },
+  ],
+  byChannel: [
+    { label: "WhatsApp", value: 164 },
+    { label: "Site / Shopify", value: 46 },
+    { label: "E-mail", value: 25 },
+    { label: "Manual", value: 13 },
+  ],
+  outsideSla: [
+    { name: "Fernanda Costa", channel: "WhatsApp", wait: "1h 18min", owner: "João Pedro" },
+    { name: "Loja Aurora", channel: "Site / Shopify", wait: "1h 07min", owner: "Marina Alves" },
+    { name: "Ricardo Mendes", channel: "WhatsApp", wait: "1h 02min", owner: "Carlos Lima" },
+  ],
+};
 
 function goalPeriod(period: string, from: string, to: string) {
   if (period === "custom" && from && to) {
@@ -201,6 +242,102 @@ function Ranking({
   );
 }
 
+type TeamPerformanceRow = {
+  id: string;
+  name: string;
+  revenue: number;
+  conversionRate: number;
+  averageTicket: number;
+  openDeals: number;
+  overdueTasks: number;
+  waitingConversations: number;
+};
+
+function TeamPodium({ rows }: { rows: TeamPerformanceRow[] }) {
+  const highlights = rows.filter((row) => row.revenue > 0).slice(0, 3);
+  const tones = [
+    "border-amber-200 bg-amber-50/55",
+    "border-slate-200 bg-slate-50/70",
+    "border-orange-200 bg-orange-50/45",
+  ];
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-4 w-4 text-amber-500" /> Destaques comerciais</CardTitle>
+        <p className="text-xs text-muted-foreground">As três maiores receitas do período selecionado.</p>
+      </CardHeader>
+      <CardContent className={cn("grid gap-3", highlights.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3")}>
+        {highlights.map((row, index) => (
+          <div key={row.id} className={cn("rounded-xl border p-4", tones[index])}>
+            <div className="flex items-center gap-3">
+              <Avatar name={row.name} size="md" />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-muted-foreground">{index + 1}º lugar</p>
+                <p className="truncate text-sm font-semibold">{row.name}</p>
+              </div>
+            </div>
+            <p className="mt-4 text-2xl font-semibold tracking-tight">{money(row.revenue)}</p>
+            <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+              <span>{number(row.conversionRate)}% conversão</span>
+              <span>{number(row.openDeals)} abertos</span>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TeamRanking({ rows }: { rows: TeamPerformanceRow[] }) {
+  const [sort, setSort] = React.useState<keyof TeamPerformanceRow>("revenue");
+  const ordered = [...rows].sort((a, b) => Number(b[sort] ?? 0) - Number(a[sort] ?? 0));
+  const columns: Array<{ key: keyof TeamPerformanceRow; label: string }> = [
+    { key: "revenue", label: "Receita" },
+    { key: "conversionRate", label: "Conversão" },
+    { key: "averageTicket", label: "Ticket médio" },
+    { key: "openDeals", label: "Em aberto" },
+    { key: "overdueTasks", label: "Tarefas atrasadas" },
+  ];
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Desempenho da equipe</CardTitle>
+        <p className="text-xs text-muted-foreground">Clique em uma coluna para reorganizar o ranking.</p>
+      </CardHeader>
+      <CardContent className="overflow-x-auto p-0">
+        <table className="w-full min-w-[900px] text-sm">
+          <thead className="border-y bg-muted/35 text-xs text-muted-foreground">
+            <tr>
+              <th className="px-5 py-3 text-left font-medium">Posição</th>
+              <th className="px-5 py-3 text-left font-medium">Pessoa</th>
+              {columns.map((column) => (
+                <th key={column.key} className="px-4 py-3 text-right font-medium">
+                  <button type="button" onClick={() => setSort(column.key)} className={cn("hover:text-primary", sort === column.key && "font-semibold text-primary")}>
+                    {column.label}{sort === column.key ? " ↓" : ""}
+                  </button>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ordered.map((row, index) => (
+              <tr key={row.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                <td className="px-5 py-3 font-semibold">{index + 1}º</td>
+                <td className="px-5 py-3"><div className="flex items-center gap-2"><Avatar name={row.name} size="sm" /><span className="font-medium">{row.name}</span></div></td>
+                <td className="px-4 py-3 text-right font-medium">{money(row.revenue)}</td>
+                <td className="px-4 py-3 text-right">{number(row.conversionRate)}%</td>
+                <td className="px-4 py-3 text-right">{money(row.averageTicket)}</td>
+                <td className="px-4 py-3 text-right">{number(row.openDeals)}</td>
+                <td className={cn("px-4 py-3 text-right", row.overdueTasks > 0 && "font-semibold text-red-600")}>{number(row.overdueTasks)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  );
+}
+
 function PipelinePerformance({ rows }: { rows: Array<Record<string, unknown>> }) {
   return (
     <Card>
@@ -333,6 +470,45 @@ export function DashboardPage() {
   });
   const data = area.data ?? {};
   const metrics = (data.metrics ?? {}) as Record<string, unknown>;
+  const showingAttendanceDemo =
+    tab === "attendance" &&
+    Number(data.conversations ?? 0) === 0 &&
+    Number(data.waitingOurResponse ?? 0) === 0 &&
+    Number(data.unread ?? 0) === 0;
+  const attendance = (showingAttendanceDemo ? ATTENDANCE_DEMO : data) as typeof ATTENDANCE_DEMO &
+    Record<string, unknown>;
+  const attendanceSla = attendance.sla as Record<string, number>;
+  const attendanceSlaTotal = Object.values(attendanceSla ?? {}).reduce(
+    (total, value) => total + Number(value ?? 0),
+    0,
+  );
+  const attendanceSlaMet = Number(attendanceSla?.under5 ?? 0) + Number(attendanceSla?.under15 ?? 0);
+  const attendanceSlaRate = attendanceSlaTotal
+    ? Math.round((attendanceSlaMet / attendanceSlaTotal) * 100)
+    : 0;
+  const teamRows = ((data.ranking as Array<Record<string, unknown>>) ?? []).map(
+    (row): TeamPerformanceRow => ({
+      id: String(row.id ?? row.name),
+      name: String(row.name ?? "Sem nome"),
+      revenue: Number(row.revenue ?? 0),
+      conversionRate: Number(row.conversionRate ?? 0),
+      averageTicket: Number(row.averageTicket ?? 0),
+      openDeals: Number(row.openDeals ?? 0),
+      overdueTasks: Number(row.overdueTasks ?? 0),
+      waitingConversations: Number(row.waitingConversations ?? 0),
+    }),
+  );
+  const teamRevenue = teamRows.reduce((total, row) => total + row.revenue, 0);
+  const teamOpenDeals = teamRows.reduce((total, row) => total + row.openDeals, 0);
+  const teamAttention = teamRows.reduce(
+    (total, row) => total + row.overdueTasks + row.waitingConversations,
+    0,
+  );
+  const teamWithConversion = teamRows.filter((row) => row.conversionRate > 0);
+  const teamAverageConversion = teamWithConversion.length
+    ? teamWithConversion.reduce((total, row) => total + row.conversionRate, 0) /
+      teamWithConversion.length
+    : 0;
 
   return (
     <div
@@ -552,82 +728,172 @@ export function DashboardPage() {
       ) : null}
       {tab === "attendance" && area.data ? (
         <>
+          {showingAttendanceDemo ? (
+            <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50/55 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-violet-900">Visualização demonstrativa</p>
+                <p className="text-xs text-violet-700">Estes dados são fictícios e serão substituídos automaticamente quando houver atendimentos no período.</p>
+              </div>
+              <Badge className="shrink-0 bg-violet-600 text-white hover:bg-violet-600">Demonstração</Badge>
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Conversas iniciadas" value={number(data.conversations)} />
-            <Metric label="Aguardando nossa resposta" value={number(data.waitingOurResponse)} />
-            <Metric label="Aguardando cliente" value={number(data.waitingCustomer)} />
-            <Metric label="Não lidas" value={number(data.unread)} />
+            <Metric
+              label="Conversas iniciadas"
+              value={number(attendance.conversations)}
+              note="Total recebido no período"
+              icon={MessagesSquare}
+            />
+            <Metric
+              label="Aguardando nossa resposta"
+              value={number(attendance.waitingOurResponse)}
+              note="Precisam de atenção da equipe"
+              icon={AlertTriangle}
+              tone="danger"
+            />
             <Metric
               label="Tempo médio de resposta"
-              value={minutes(data.averageMinutes)}
+              value={minutes(attendance.averageMinutes)}
+              note={`Mediana de ${minutes(attendance.medianMinutes)}`}
               icon={Clock3}
+              tone="orange"
             />
-            <Metric label="Mediana de resposta" value={minutes(data.medianMinutes)} />
-            <Metric label="Iniciadas pela equipe" value={number(data.initiatedByTeam)} />
-            <Metric label="Iniciadas pelo cliente" value={number(data.initiatedByCustomer)} />
+            <Metric
+              label="SLA cumprido"
+              value={`${attendanceSlaRate}%`}
+              note={`${number(attendanceSlaMet)} respostas em até 15 min`}
+              icon={Target}
+              tone="success"
+            />
           </div>
-          <AnalyticsChart
-            title="Distribuição do SLA"
-            kind="donut"
-            data={Object.entries((data.sla as Record<string, number>) ?? {}).map(
-              ([label, value]) => ({ label, value }),
-            )}
-          />
+          <div className="grid gap-3 xl:grid-cols-[1.6fr_1fr]">
+            <AnalyticsChart
+              title="Tempo de resposta no período"
+              kind="line"
+              data={(attendance.responseByPeriod as Array<Record<string, unknown>>) ?? []}
+              secondaryKey="target"
+              valueFormatter={(value) => `${number(value)} min`}
+              axisFormatter={(value) => `${value} min`}
+              emptyMessage="Ainda não há histórico de tempo de resposta neste período."
+            />
+            <AnalyticsChart
+              title="Distribuição do SLA"
+              kind="donut"
+              data={[
+                { label: "Até 5 min", value: Number(attendanceSla?.under5 ?? 0) },
+                { label: "6–15 min", value: Number(attendanceSla?.under15 ?? 0) },
+                { label: "16–60 min", value: Number(attendanceSla?.under60 ?? 0) },
+                { label: "Acima de 60 min", value: Number(attendanceSla?.over60 ?? 0) },
+              ]}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Aguardando cliente" value={number(attendance.waitingCustomer)} note="Equipe já respondeu" icon={Clock3} tone="yellow" />
+            <Metric label="Não lidas" value={number(attendance.unread)} note="Mensagens ainda não visualizadas" icon={MessagesSquare} tone="danger" />
+            <Metric label="Iniciadas pelo cliente" value={number(attendance.initiatedByCustomer)} note="Entradas espontâneas" icon={UserRound} />
+            <Metric label="Iniciadas pela equipe" value={number(attendance.initiatedByTeam)} note="Abordagens ativas" icon={Headphones} />
+          </div>
+          <div className="grid gap-3 xl:grid-cols-2">
+            <AnalyticsChart
+              title="Tempo médio por responsável"
+              kind="horizontal-bar"
+              data={(attendance.byOwner as Array<Record<string, unknown>>) ?? []}
+              valueFormatter={(value) => `${number(value)} min`}
+              axisFormatter={(value) => `${value} min`}
+              emptyMessage="Ainda não há dados suficientes por responsável."
+            />
+            <AnalyticsChart
+              title="Volume por canal"
+              kind="horizontal-bar"
+              data={(attendance.byChannel as Array<Record<string, unknown>>) ?? []}
+              valueFormatter={(value) => `${number(value)} conversas`}
+              emptyMessage="Ainda não há conversas distribuídas por canal."
+            />
+          </div>
           <Card>
-            <CardHeader>
-              <CardTitle>SLA de resposta</CardTitle>
+            <CardHeader className="flex-row items-start justify-between space-y-0">
+              <div>
+                <CardTitle className="text-base">Conversas fora do SLA</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">Atendimentos que ultrapassaram 60 minutos sem resposta.</p>
+              </div>
+              <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+                {number((attendance.outsideSla as unknown[])?.length ?? attendanceSla?.over60 ?? 0)} pendentes
+              </Badge>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-4">
-              <Metric
-                label="Até 5 min"
-                value={number((data.sla as Record<string, unknown>)?.under5)}
-              />
-              <Metric
-                label="6–15 min"
-                value={number((data.sla as Record<string, unknown>)?.under15)}
-              />
-              <Metric
-                label="16–60 min"
-                value={number((data.sla as Record<string, unknown>)?.under60)}
-              />
-              <Metric
-                label="Acima de 60 min"
-                value={number((data.sla as Record<string, unknown>)?.over60)}
-              />
+            <CardContent>
+              {(attendance.outsideSla as Array<{ name: string; channel: string; wait: string; owner: string }> | undefined)?.length ? (
+                <div className="divide-y divide-border/70">
+                  {(attendance.outsideSla as Array<{ name: string; channel: string; wait: string; owner: string }>).map((conversation) => (
+                    <div key={`${conversation.name}-${conversation.wait}`} className="grid gap-2 py-3 text-sm sm:grid-cols-[1.4fr_1fr_1fr_auto] sm:items-center">
+                      <span className="font-medium">{conversation.name}</span>
+                      <span className="text-muted-foreground">{conversation.channel}</span>
+                      <span className="text-muted-foreground">{conversation.owner}</span>
+                      <span className="font-semibold text-red-600">{conversation.wait}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border/80 bg-muted/15 px-6 py-10 text-center">
+                  <p className="text-sm font-medium">Nenhuma conversa fora do SLA.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Os atendimentos críticos aparecerão aqui.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </>
       ) : null}
       {tab === "team" && area.data ? (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Pódio comercial</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-3">
-              {((data.podium as Array<Record<string, unknown>>) ?? []).map((row, index) => (
-                <Metric
-                  key={String(row.id)}
-                  label={`${index + 1}º · ${String(row.name)}`}
-                  value={money(row.revenue)}
-                  note={
-                    typeof row.conversionRate === "number"
-                      ? `${row.conversionRate}% de conversão`
-                      : "Sem base de conversão"
-                  }
-                />
-              ))}
-            </CardContent>
-          </Card>
-          <AnalyticsChart
-            title="Receita por pessoa"
-            data={((data.ranking as Array<Record<string, unknown>>) ?? []).map((row) => ({
-              label: row.name,
-              value: row.revenue,
-            }))}
-            valueFormatter={money}
-          />
-          <Ranking rows={(data.ranking as Array<Record<string, unknown>>) ?? []} />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Receita da equipe" value={money(teamRevenue)} note={`${teamRows.filter((row) => row.revenue > 0).length} pessoas com vendas`} icon={TrendingUp} tone="success" />
+            <Metric label="Conversão média" value={`${number(teamAverageConversion)}%`} note="Entre pessoas com conversões" icon={Target} />
+            <Metric label="Negócios em aberto" value={number(teamOpenDeals)} note="Carteira ativa da equipe" icon={BriefcaseBusiness} tone="orange" />
+            <Metric label="Pontos de atenção" value={number(teamAttention)} note="Tarefas atrasadas e clientes esperando" icon={AlertTriangle} tone={teamAttention > 0 ? "danger" : "success"} />
+          </div>
+          {teamRows.some((row) => row.revenue > 0) ? <TeamPodium rows={[...teamRows].sort((a, b) => b.revenue - a.revenue)} /> : null}
+          <div className="grid gap-3 xl:grid-cols-2">
+            <AnalyticsChart
+              title="Receita por pessoa"
+              kind="horizontal-bar"
+              data={teamRows.filter((row) => row.revenue > 0).sort((a, b) => b.revenue - a.revenue).map((row) => ({ label: row.name, value: row.revenue }))}
+              valueFormatter={money}
+              axisFormatter={(value) => value >= 1000 ? `R$ ${number(value / 1000)} mil` : `R$ ${number(value)}`}
+              emptyMessage="A equipe ainda não registrou receita no período."
+            />
+            <AnalyticsChart
+              title="Conversão por pessoa"
+              kind="horizontal-bar"
+              data={teamRows.filter((row) => row.conversionRate > 0).sort((a, b) => b.conversionRate - a.conversionRate).map((row) => ({ label: row.name, value: row.conversionRate }))}
+              valueFormatter={(value) => `${number(value)}%`}
+              axisFormatter={(value) => `${value}%`}
+              emptyMessage="Ainda não há base para calcular conversão."
+            />
+          </div>
+          {teamRows.length ? <TeamRanking rows={teamRows} /> : <EmptyState icon={UsersRound} title="Sem dados da equipe neste período" />}
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Equipe que precisa de atenção</CardTitle><p className="text-xs text-muted-foreground">Pendências operacionais que podem impactar os resultados.</p></CardHeader>
+              <CardContent className="space-y-2">
+                {teamRows.filter((row) => row.overdueTasks > 0 || row.waitingConversations > 0).length ? teamRows.filter((row) => row.overdueTasks > 0 || row.waitingConversations > 0).sort((a, b) => (b.overdueTasks + b.waitingConversations) - (a.overdueTasks + a.waitingConversations)).map((row) => (
+                  <div key={row.id} className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2.5">
+                    <div className="flex items-center gap-2"><Avatar name={row.name} size="sm" /><span className="text-sm font-medium">{row.name}</span></div>
+                    <div className="text-right text-xs"><span className="font-semibold text-red-600">{number(row.overdueTasks)} atrasadas</span><span className="ml-3 text-muted-foreground">{number(row.waitingConversations)} esperando</span></div>
+                  </div>
+                )) : <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Nenhuma pendência relevante no período.</p>}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">Distribuição de oportunidades</CardTitle><p className="text-xs text-muted-foreground">Identifique pessoas sem carteira ou com poucas oportunidades.</p></CardHeader>
+              <CardContent className="space-y-2">
+                {[...teamRows].sort((a, b) => a.openDeals - b.openDeals).slice(0, 5).map((row) => (
+                  <div key={row.id} className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2.5">
+                    <div className="flex items-center gap-2"><Avatar name={row.name} size="sm" /><span className="text-sm font-medium">{row.name}</span></div>
+                    <Badge variant="outline" className={cn(row.openDeals === 0 && "border-amber-200 bg-amber-50 text-amber-700")}>{row.openDeals === 0 ? "Sem oportunidades" : `${number(row.openDeals)} negócios`}</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
         </>
       ) : null}
       {tab === "goals" ? <GoalsPanel data={goals.data} options={options.data} /> : null}

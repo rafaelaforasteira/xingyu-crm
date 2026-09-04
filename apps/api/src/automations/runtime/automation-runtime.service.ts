@@ -325,9 +325,26 @@ export class AutomationRuntimeService {
           },
         );
         nodesOut[node.id] = { output: result.output };
+        const executedKind = parseNodeType(node.type).type;
+        const current = ((context.current ?? {}) as Record<string, unknown>);
+        if (executedKind === "data.findContact" && result.output.contact) {
+          current.contact = result.output.contact;
+          context.current = current;
+        }
+        if (executedKind === "data.findDeal" && result.output.deal) {
+          current.deal = result.output.deal;
+          const foundDeal = result.output.deal as Record<string, unknown>;
+          if (foundDeal.contact) current.contact = foundDeal.contact;
+          context.current = current;
+        }
+        if (executedKind === "data.findOrder" && result.output.order) {
+          current.order = result.output.order;
+          context.current = current;
+        }
         if (node.config && typeof (node.config as { name?: string }).name === "string") {
           const vars = (context.variables ?? {}) as Record<string, unknown>;
-          vars[(node.config as { name: string }).name] = result.output;
+          vars[(node.config as { name: string }).name] =
+            "value" in result.output ? result.output.value : result.output;
           context.variables = vars;
         }
         const nodeStatus =

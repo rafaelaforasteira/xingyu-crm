@@ -57,7 +57,9 @@ export type AutomationFlowNode = Node<{
   stageId?: string;
   config?: Record<string, unknown>;
   users?: Array<{ id: string; name: string }>;
-  tags?: Array<{ id: string; name: string }>;
+  tags?: Array<{ id: string; name: string; color?: string }>;
+  statusContextType?: "DEAL" | "ORDER" | "TASK";
+  statusContextPipelineId?: string;
 }>;
 
 const HANDLE_CLASS = "automation-receptor !h-6 !w-6 !border-0 !bg-transparent";
@@ -79,6 +81,7 @@ const INLINE_CONFIG_KINDS = new Set([
   "logic.randomSplit",
   "logic.loop",
   "data.findDuplicates",
+  "data.setVariable",
   "action.deal.assignOwner",
   "action.deal.assignRoundRobin",
   "action.deal.updateField",
@@ -192,7 +195,9 @@ function InlineConfigNodeCard({
   const inputs = data.handles.inputs;
   const outputs = data.handles.outputs;
   const category = AUTOMATION_CATEGORY_META[data.category ?? ""] ?? AUTOMATION_CATEGORY_META.logic!;
-  const isMessageCard = data.kind.replace(/@\d+$/, "") === "action.whatsapp.send";
+  const baseKind = data.kind.replace(/@\d+$/, "");
+  const isMessageCard = baseKind === "action.whatsapp.send";
+  const isTaskCard = baseKind === "action.task.create";
   const node = {
     id: "embedded",
     type: data.kind,
@@ -204,7 +209,7 @@ function InlineConfigNodeCard({
     <div
       className={cn(
         "relative rounded-2xl border border-[hsl(var(--automation-accent)/0.32)] bg-gradient-to-br from-[hsl(var(--automation-accent)/0.1)] to-[hsl(var(--automation-surface-2)/0.98)] p-3 shadow-[0_18px_45px_hsl(var(--automation-canvas)/0.42)]",
-        isMessageCard ? "w-[380px]" : "w-[300px]",
+        isMessageCard ? "w-[380px]" : isTaskCard ? "w-[360px]" : "w-[300px]",
         selected &&
           "ring-2 ring-[hsl(var(--automation-accent)/0.5)] ring-offset-2 ring-offset-[hsl(var(--automation-canvas))]",
       )}
@@ -219,21 +224,35 @@ function InlineConfigNodeCard({
       {outputs.map((id, index) => {
         const placed = outputPosition(id, index, outputs.length);
         return (
-          <Handle
-            key={id}
-            id={id}
-            type="source"
-            position={placed.position}
-            style={placed.style}
-            className={cn(
-              HANDLE_CLASS,
-              id === "true" || id === "received"
-                ? "automation-receptor-success"
-                : id === "false" || id === "timeout"
-                  ? "automation-receptor-error"
-                  : "automation-receptor-accent",
-            )}
-          />
+          <React.Fragment key={id}>
+            <Handle
+              id={id}
+              type="source"
+              position={placed.position}
+              style={placed.style}
+              className={cn(
+                HANDLE_CLASS,
+                id === "true" || id === "received" || id === "found"
+                  ? "automation-receptor-success"
+                  : id === "false" || id === "timeout" || id === "notFound"
+                    ? "automation-receptor-error"
+                    : "automation-receptor-accent",
+              )}
+            />
+            {id === "found" || id === "notFound" ? (
+              <span
+                className={cn(
+                  "pointer-events-none absolute right-3 -translate-y-1/2 text-[9px] font-medium",
+                  id === "found"
+                    ? "text-[hsl(var(--automation-success))]"
+                    : "text-[hsl(var(--automation-error))]",
+                )}
+                style={{ top: placed.style?.top }}
+              >
+                {id === "found" ? "Encontrado" : "Não encontrado"}
+              </span>
+            ) : null}
+          </React.Fragment>
         );
       })}
       <div className="drag-handle mb-3 flex cursor-grab items-center gap-2 active:cursor-grabbing">
@@ -249,7 +268,7 @@ function InlineConfigNodeCard({
           </p>
         </div>
       </div>
-      <div className="nodrag nopan max-h-[360px] overflow-y-auto pr-1">
+      <div className="nodrag nopan overflow-visible">
         <NodeInspector
           embedded
           node={node}
@@ -257,6 +276,8 @@ function InlineConfigNodeCard({
           pipelines={data.pipelines ?? []}
           users={data.users ?? []}
           tags={data.tags ?? []}
+          statusContextType={data.statusContextType}
+          statusContextPipelineId={data.statusContextPipelineId}
           onChange={(next) => data.onNodeUpdate?.(next.config ?? {})}
         />
       </div>
@@ -625,6 +646,41 @@ function flowType(type: string) {
   return "automation";
 }
 
+function inferStatusContext(definition: WorkflowDefinition, nodeId: string) {
+  const incoming = new Map<string, string[]>();
+  definition.edges.forEach((edge) => {
+    incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge.source]);
+  });
+  const queue = [...(incoming.get(nodeId) ?? [])];
+  const visited = new Set<string>();
+  while (queue.length) {
+    const currentId = queue.shift()!;
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+    const current = definition.nodes.find((item) => item.id === currentId);
+    if (!current) continue;
+    const kind = kindOf(current.type);
+    const type = kind.startsWith("trigger.deal.")
+      ? "DEAL"
+      : kind.startsWith("trigger.order.")
+        ? "ORDER"
+        : kind.startsWith("trigger.task.")
+          ? "TASK"
+          : undefined;
+    if (type) {
+      return {
+        type,
+        pipelineId:
+          type === "DEAL" && typeof current.config?.pipelineId === "string"
+            ? current.config.pipelineId
+            : undefined,
+      } as const;
+    }
+    queue.push(...(incoming.get(currentId) ?? []));
+  }
+  return {};
+}
+
 export function toFlow(
   definition: WorkflowDefinition,
   catalog?: AutomationNodeCatalogItem[],
@@ -635,7 +691,7 @@ export function toFlow(
   onOrganize?: (frameId: string) => void,
   pipelines?: Pipeline[],
   users?: Array<{ id: string; name: string }>,
-  tags?: Array<{ id: string; name: string }>,
+  tags?: Array<{ id: string; name: string; color?: string }>,
 ): { nodes: AutomationFlowNode[]; edges: Edge[] } {
   const frameNodes: WorkflowGraphNode[] = (definition.frames ?? [])
     .filter((frame) => !definition.nodes.some((node) => node.id === frame.id))
@@ -661,6 +717,10 @@ export function toFlow(
       const catalogEntry = catalog?.find(
         (item) => item.id === node.type || item.type === kindOf(node.type),
       );
+      const statusContext =
+        kindOf(node.type) === "action.order.updateStatus"
+          ? inferStatusContext(definition, node.id)
+          : {};
       return {
         id: node.id,
         type: flowType(node.type),
@@ -681,6 +741,8 @@ export function toFlow(
                 ? { width: 286, zIndex: 2 }
                 : kindOf(node.type) === "action.whatsapp.send"
                   ? { width: 380, zIndex: 2 }
+                  : kindOf(node.type) === "action.task.create"
+                    ? { width: 360, zIndex: 2 }
                   : INLINE_CONFIG_KINDS.has(kindOf(node.type))
                     ? { width: 300, zIndex: 2 }
                   : { width: 128, zIndex: 2 },
@@ -688,6 +750,11 @@ export function toFlow(
           label:
             kindOf(node.type) === "visual.frame" && (!node.label || node.label === "Grupo")
               ? "Quadro"
+              : kindOf(node.type) === "action.order.updateStatus" &&
+                  ["Alterar status do pedido", "Atualizar pedido"].includes(node.label ?? "")
+                ? "Alterar status"
+              : kindOf(node.type) === "data.setVariable" && node.label === "Definir variável"
+                ? "Guardar informação"
               : node.label || kindOf(node.type).split(".").slice(-1)[0] || node.type,
           summary: summarize(node.type, node.config),
           kind: node.type,
@@ -709,6 +776,8 @@ export function toFlow(
           config: (node.config ?? {}) as Record<string, unknown>,
           users,
           tags,
+          statusContextType: statusContext.type,
+          statusContextPipelineId: statusContext.pipelineId,
           icon: catalogEntry?.icon,
           category: catalogEntry?.category,
         },
@@ -821,6 +890,9 @@ function summarize(type: string, config?: Record<string, unknown>) {
     if (minutes) return `${minutes} min`;
   }
   if (config.stageId) return "Etapa selecionada";
+  if (type.includes("setVariable") && config.name) {
+    return `${String(config.name)} = ${String(config.value ?? "").slice(0, 24)}`;
+  }
   if (typeof config.title === "string") return config.title;
   if (typeof config.body === "string") return config.body.slice(0, 42);
   return undefined;

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   keepPreviousData,
   useMutation,
@@ -1049,24 +1050,33 @@ function ScoreTable({
 
 export function AfterSalesPage() {
   const [page, setPage] = React.useState(1);
+  const params = useSearchParams();
+  const pipeline = params.get("pipeline") ?? "post-sale";
+  const pipelineConfig = {
+    "post-sale": { title: "Pós-venda", description: "Acompanhe satisfação, dúvidas e relacionamento após a entrega.", types: ["GENERAL_COMPLAINT", "DELAY", "DIVERGENCE"] },
+    warranty: { title: "Garantia e assistência", description: "Centralize análises de defeitos, avarias e assistência ao cliente.", types: ["DEFECT", "DAMAGED_PACKAGING", "MISSING_PRODUCT", "WRONG_ORDER", "RECALL"] },
+    returns: { title: "Trocas e devoluções", description: "Acompanhe solicitações, coleta, reenvio e conclusão.", types: ["RETURN"] },
+    refunds: { title: "Reembolsos", description: "Controle solicitações de estorno até a confirmação financeira.", types: ["REFUND", "CREDIT"] },
+  }[pipeline] ?? { title: "Pós-venda", description: "Ocorrências e suporte pós-entrega.", types: [] };
   const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.occurrences.list({ page }),
-    queryFn: () => occurrencesApi.list({ page, pageSize: 20 }),
+    queryKey: queryKeys.occurrences.list({ page, pipeline }),
+    queryFn: () => occurrencesApi.list({ page: 1, pageSize: 100 }),
     retry: false,
   });
+  const occurrences = (data?.data ?? []).filter((item) => pipelineConfig.types.includes(item.type ?? ""));
 
   return (
     <div>
-      <PageHeader title="Pós-venda" description="Ocorrências e suporte pós-entrega." />
+      <PageHeader title={`Atendimento · ${pipelineConfig.title}`} description={pipelineConfig.description} />
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
       <div className="space-y-2">
         {isLoading
           ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
           : null}
-        {!isLoading && (data?.data?.length ?? 0) === 0 ? (
-          <EmptyState icon={Headphones} title="Nenhuma ocorrência" />
+        {!isLoading && occurrences.length === 0 ? (
+          <EmptyState icon={Headphones} title={`Nenhum atendimento em ${pipelineConfig.title.toLowerCase()}`} />
         ) : null}
-        {data?.data?.map((o) => (
+        {occurrences.map((o) => (
           <Link
             key={o.id}
             href={`/after-sales/${o.id}`}
@@ -1088,7 +1098,7 @@ export function AfterSalesPage() {
           </Link>
         ))}
       </div>
-      {data?.meta ? (
+      {data?.meta && data.meta.totalPages > 1 ? (
         <PaginationBar
           page={data.meta.page}
           totalPages={data.meta.totalPages}

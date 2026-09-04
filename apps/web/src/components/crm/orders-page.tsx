@@ -60,6 +60,13 @@ import { OrderKanbanCard } from "@/components/crm/orders/order-kanban-card";
 import { OrderWorkspaceContent } from "@/components/crm/orders/order-workspace-content";
 const customer = (o: Order) => o.customerNameSnapshot || o.contact?.name || o.company?.name || "—";
 const total = (o: Order) => Number(o.finalValue ?? o.total ?? 0);
+const ECOMMERCE_STAGES: OrderStageDefinition[] = [
+  { id: "PENDING", code: "PENDING", name: "Pedido criado", color: "#64748B", position: 0, category: "OPEN", isInitial: true, isFinal: false, active: true, archived: false },
+  { id: "AUTHORIZED", code: "AUTHORIZED", name: "Pagamento autorizado", color: "#3B82F6", position: 1, category: "IN_PROGRESS", isInitial: false, isFinal: false, active: true, archived: false },
+  { id: "PARTIALLY_PAID", code: "PARTIALLY_PAID", name: "Pagamento parcial", color: "#F59E0B", position: 2, category: "IN_PROGRESS", isInitial: false, isFinal: false, active: true, archived: false },
+  { id: "PAID", code: "PAID", name: "Pagamento confirmado", color: "#10B981", position: 3, category: "DONE", isInitial: false, isFinal: true, active: true, archived: false },
+  { id: "RECOVERY", code: "RECOVERY", name: "Recuperação", color: "#8B5CF6", position: 4, category: "ISSUE", isInitial: false, isFinal: false, active: true, archived: false },
+];
 function Column({
   stage,
   orders,
@@ -177,6 +184,7 @@ export function OrdersPage() {
     params = useSearchParams(),
     qc = useQueryClient();
   const view = params.get("view") === "list" ? "list" : "kanban";
+  const orderPipeline = params.get("pipeline") === "ecommerce" ? "ecommerce" : "operation";
   const [locale, setLocale] = React.useState<OrderLocale>("pt-BR"),
     [search, setSearch] = React.useState(params.get("q") || ""),
     [debounced, setDebounced] = React.useState(search),
@@ -227,27 +235,41 @@ export function OrdersPage() {
   });
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const list = React.useMemo(() => orders.data?.data ?? [], [orders.data?.data]);
+  const pipelineOrders = React.useMemo(
+    () => orderPipeline === "ecommerce"
+      ? list
+      : list.filter((order) => ["PAID", "PAYMENT_APPROVED"].includes(order.financialStatus || order.status)),
+    [list, orderPipeline],
+  );
+  const boardStages = orderPipeline === "ecommerce" ? ECOMMERCE_STAGES : (stages.data ?? []);
+  const stageIdForOrder = React.useCallback((order: Order) => {
+    if (orderPipeline === "operation") return order.operationalStageId;
+    const financial = order.financialStatus || order.status || "PENDING";
+    if (["PAID", "PAYMENT_APPROVED"].includes(financial)) return "PAID";
+    if (["PENDING", "ORDER_PLACED", "PAYMENT_PENDING"].includes(financial)) return "PENDING";
+    return ECOMMERCE_STAGES.some((stage) => stage.id === financial) ? financial : "RECOVERY";
+  }, [orderPipeline]);
   const listGroups = React.useMemo(() => {
-    const definitions = stages.data ?? [];
+    const definitions = boardStages;
     const groups = definitions
       .map((stage) => ({
         id: stage.id,
         name: stageLabel(stage, locale),
         color: stage.color,
-        orders: list.filter(
+        orders: pipelineOrders.filter(
           (order) =>
-            order.operationalStageId === stage.id || (!order.operationalStageId && stage.isInitial),
+            stageIdForOrder(order) === stage.id || (!stageIdForOrder(order) && stage.isInitial),
         ),
       }))
       .filter((group) => group.orders.length);
     const knownIds = new Set(definitions.map((stage) => stage.id));
-    const unassigned = list.filter(
-      (order) => order.operationalStageId && !knownIds.has(order.operationalStageId),
+    const unassigned = pipelineOrders.filter(
+      (order) => stageIdForOrder(order) && !knownIds.has(stageIdForOrder(order)!),
     );
     if (unassigned.length)
       groups.push({ id: "unassigned", name: "Sem etapa", color: "#94A3B8", orders: unassigned });
     return groups;
-  }, [list, locale, stages.data]);
+  }, [boardStages, locale, pipelineOrders, stageIdForOrder]);
   const openOrder = (order: Order) => {
     setSelected(order);
     replace({ order: order.id });
@@ -266,21 +288,26 @@ export function OrdersPage() {
   const drag = (e: DragEndEvent) => {
     const o = list.find((x) => x.id === String(e.active.id)),
       stageId = e.over?.id && String(e.over.id);
-    if (o && stageId && o.operationalStageId !== stageId)
-      update.mutate({ id: o.id, data: { operationalStageId: stageId } });
+    if (!o || !stageId || stageIdForOrder(o) === stageId) return;
+    update.mutate({
+      id: o.id,
+      data: orderPipeline === "ecommerce"
+        ? { financialStatus: stageId === "RECOVERY" ? "PENDING" : stageId }
+        : { operationalStageId: stageId },
+    });
   };
   return (
     <div>
       <PageHeader
-        title={t.title}
-        description={t.subtitle}
+        title={orderPipeline === "ecommerce" ? "Pedidos · E-commerce" : "Pedidos · Envio"}
+        description={orderPipeline === "ecommerce" ? "Acompanhe pedidos criados no site até a confirmação do pagamento." : "Acompanhe pedidos pagos da conferência até a entrega ao cliente."}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" />
               {t.newOrder}
             </Button>
-            {user?.role === "ADMIN" ? (
+            {user?.role === "ADMIN" && orderPipeline === "operation" ? (
               <Button
                 type="button"
                 size="icon"
@@ -337,18 +364,18 @@ export function OrdersPage() {
         <ErrorBanner message={String(orders.error || stages.error)} />
       ) : null}
       {orders.isLoading ? <Skeleton className="h-80 w-full" /> : null}
-      {!orders.isLoading && !list.length ? <EmptyState icon={Package} title={t.empty} /> : null}
-      {view === "kanban" && list.length ? (
+      {!orders.isLoading && !pipelineOrders.length ? <EmptyState icon={Package} title={t.empty} /> : null}
+      {view === "kanban" && pipelineOrders.length ? (
         <DndContext sensors={sensors} onDragEnd={drag}>
           <div data-testid="orders-board-scroll" className="overflow-x-auto pt-1 pb-4">
             <div className="flex min-w-max gap-3">
-              {(stages.data ?? []).map((s) => (
+              {boardStages.map((s) => (
                 <Column
                   key={s.id}
                   stage={s}
                   locale={locale}
-                  orders={list.filter(
-                    (o) => o.operationalStageId === s.id || (!o.operationalStageId && s.isInitial),
+                  orders={pipelineOrders.filter(
+                    (o) => stageIdForOrder(o) === s.id || (!stageIdForOrder(o) && s.isInitial),
                   )}
                   onOpen={openOrder}
                   users={users.data ?? []}
@@ -359,7 +386,7 @@ export function OrdersPage() {
           </div>
         </DndContext>
       ) : null}
-      {view === "list" && list.length ? (
+      {view === "list" && pipelineOrders.length ? (
         <div className="overflow-x-auto rounded-xl border bg-card shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">

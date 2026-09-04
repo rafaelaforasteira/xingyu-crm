@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { automationsApi, pipelinesApi, settingsApi } from "@/lib/api";
+import { automationsApi, pipelinesApi } from "@/lib/api";
 import { automationsText, EXECUTION_LABEL } from "@/lib/automations-i18n";
 import { queryKeys } from "@/lib/query-keys";
 import type {
@@ -61,22 +61,50 @@ function defaultHandle(type: string) {
 function availableNodePosition(
   nodes: WorkflowDefinition["nodes"],
   preferred: { x: number; y: number },
+  type: string,
 ) {
-  const horizontalGap = 170;
-  const verticalGap = 130;
-  let candidate = preferred;
+  const sizeFor = (nodeType: string, config?: Record<string, unknown>) => {
+    const kind = nodeType.replace(/@\d+$/, "");
+    if (kind === "visual.frame")
+      return { width: Number(config?.width ?? 280), height: Number(config?.height ?? 180) };
+    if (kind === "visual.note") return { width: 190, height: 120 };
+    if (kind === "action.whatsapp.send") return { width: 380, height: 520 };
+    if (kind === "action.deal.moveStage" || kind === "trigger.deal.created")
+      return { width: 286, height: 240 };
+    return { width: 300, height: 300 };
+  };
+  const absolutePosition = (node: WorkflowDefinition["nodes"][number]) => {
+    const parentId = typeof node.config?.parentId === "string" ? node.config.parentId : undefined;
+    const parent = parentId ? nodes.find((item) => item.id === parentId) : undefined;
+    return parent
+      ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y }
+      : node.position;
+  };
+  const targetSize = sizeFor(type);
+  const gap = 28;
 
-  for (let attempt = 0; attempt <= nodes.length; attempt += 1) {
-    const occupied = nodes.some(
-      (node) =>
-        Math.abs(node.position.x - candidate.x) < horizontalGap * 0.8 &&
-        Math.abs(node.position.y - candidate.y) < verticalGap * 0.75,
-    );
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const column = Math.floor(attempt / 12);
+    const rowIndex = attempt % 12;
+    const row = rowIndex === 0 ? 0 : Math.ceil(rowIndex / 2) * (rowIndex % 2 ? 1 : -1);
+    const candidate = {
+      x: preferred.x + column * (targetSize.width + 48),
+      y: Math.max(24, preferred.y + row * (targetSize.height + 40)),
+    };
+    const occupied = nodes.some((node) => {
+      const position = absolutePosition(node);
+      const size = sizeFor(node.type, node.config);
+      return !(
+        candidate.x + targetSize.width + gap <= position.x ||
+        candidate.x >= position.x + size.width + gap ||
+        candidate.y + targetSize.height + gap <= position.y ||
+        candidate.y >= position.y + size.height + gap
+      );
+    });
     if (!occupied) return candidate;
-    candidate = { x: preferred.x, y: preferred.y + verticalGap * (attempt + 1) };
   }
 
-  return candidate;
+  return preferred;
 }
 
 function autoLayout(definition: WorkflowDefinition): WorkflowDefinition {
@@ -137,6 +165,7 @@ export function AutomationStudio({ automationId }: { automationId: string }) {
     context: "{}",
   });
   const [nodeIdToDelete, setNodeIdToDelete] = React.useState<string | null>(null);
+  const [selectorCategory, setSelectorCategory] = React.useState("all");
   const revisionRef = React.useRef<number>(0);
   const definitionRef = React.useRef<WorkflowDefinition | null>(null);
   const insertRef = React.useRef<{ source?: string; edgeId?: string; handle?: string } | null>(
@@ -163,10 +192,13 @@ export function AutomationStudio({ automationId }: { automationId: string }) {
     queryFn: () => pipelinesApi.list({ pageSize: 100 }),
   });
   const users = useQuery({
-    queryKey: ["settings", "automation-users"],
-    queryFn: settingsApi.users,
+    queryKey: ["automations", "assignment-users"],
+    queryFn: automationsApi.assignmentUsers,
   });
-  const tags = useQuery({ queryKey: ["settings", "automation-tags"], queryFn: settingsApi.tags });
+  const tags = useQuery({
+    queryKey: ["automations", "assignment-tags"],
+    queryFn: automationsApi.assignmentTags,
+  });
   const execution = useQuery({
     queryKey: queryKeys.automations.execution(executionId ?? ""),
     queryFn: () => automationsApi.getExecution(executionId!),
@@ -352,13 +384,16 @@ export function AutomationStudio({ automationId }: { automationId: string }) {
     let nodes = definition.nodes;
     let edges = definition.edges;
     const rightmostX = definition.nodes.reduce(
-      (maximum, node) => Math.max(maximum, node.position.x),
+      (maximum, node) => {
+        const width = Number(node.config?.width ?? (node.type.includes("whatsapp.send") ? 380 : 300));
+        return Math.max(maximum, node.position.x + width);
+      },
       10,
     );
     let position = availableNodePosition(definition.nodes, {
-      x: rightmostX + 170,
+      x: rightmostX + 48,
       y: definition.nodes[0]?.position.y ?? 140,
-    });
+    }, type);
     if (pending?.edgeId) {
       const edge = definition.edges.find((item) => item.id === pending.edgeId);
       const sourceNode = definition.nodes.find((item) => item.id === edge?.source);
@@ -367,7 +402,7 @@ export function AutomationStudio({ automationId }: { automationId: string }) {
         position = availableNodePosition(definition.nodes, {
           x: (sourceNode.position.x + targetNode.position.x) / 2,
           y: (sourceNode.position.y + targetNode.position.y) / 2,
-        });
+        }, type);
         edges = definition.edges
           .filter((item) => item.id !== edge.id)
           .concat([
@@ -390,7 +425,7 @@ export function AutomationStudio({ automationId }: { automationId: string }) {
       position = availableNodePosition(definition.nodes, {
         x: (sourceNode?.position.x ?? 10) + 170,
         y: sourceNode?.position.y ?? 140,
-      });
+      }, type);
       edges = [
         ...definition.edges,
         {
@@ -725,6 +760,8 @@ export function AutomationStudio({ automationId }: { automationId: string }) {
       {selectorOpen ? (
         <NodeSelector
           catalog={catalog.data ?? []}
+          category={selectorCategory}
+          onCategoryChange={setSelectorCategory}
           onClose={() => setSelectorOpen(false)}
           onPick={addNode}
         />
@@ -1063,15 +1100,18 @@ const NODE_HELP_TEXT: Record<string, string> = {
 
 function NodeSelector({
   catalog,
+  category,
+  onCategoryChange,
   onClose,
   onPick,
 }: {
   catalog: AutomationNodeCatalogItem[];
+  category: string;
+  onCategoryChange: (category: string) => void;
   onClose: () => void;
   onPick: (type: string, label: string) => void;
 }) {
   const [search, setSearch] = React.useState("");
-  const [category, setCategory] = React.useState("all");
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -1146,7 +1186,7 @@ function NodeSelector({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setCategory(item.id)}
+                  onClick={() => onCategoryChange(item.id)}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-colors",
                     selected
