@@ -1,0 +1,116 @@
+.funnel {
+  container-type: inline-size;
+}
+.diagram {
+  position: relative;
+  width: 100%;
+  height: clamp(390px, 105cqw, 500px);
+}
+.shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.stage {
+  position: absolute;
+  left: 42.8%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--tone);
+  white-space: nowrap;
+}
+.label {
+  position: relative;
+  font-size: clamp(10px, 2.7cqw, 12px);
+  line-height: 1.4;
+  font-weight: 500;
+  color: hsl(var(--foreground) / 0.75);
+}
+.value {
+  margin-top: 6px;
+  line-height: 1.15;
+  font-weight: 600;
+  font-size: clamp(15px, 4.3cqw, 21px);
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+.gross {
+  --tone: #805d1e;
+  --fill: color-mix(in srgb, hsl(var(--warning)) 24%, white);
+}
+.loss {
+  --tone: #965052;
+  --fill: color-mix(in srgb, hsl(var(--destructive)) 14%, white);
+}
+.refund {
+  --tone: #91424a;
+  --fill: color-mix(in srgb, hsl(var(--destructive)) 22%, white);
+}
+.net {
+  --tone: #226a4e;
+  --fill: color-mix(in srgb, hsl(var(--success)) 24%, white);
+}
+.gross .value {
+  font-size: clamp(21px, 5.4cqw, 27px);
+}
+.net .value {
+  font-size: clamp(15px, 4.5cqw, 23px);
+}
+.info {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: calc(100% + 3px);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.info:hover {
+  background: rgb(255 255 255 / 45%);
+}
+.info:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+.badge {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  width: 16%;
+  color: var(--tone);
+  text-align: center;
+  font-size: clamp(11px, 3cqw, 14px);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.badge::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  border-top: 1px solid currentColor;
+  opacity: 0.3;
+  width: 10cqw;
+}
+.badge.refund::before {
+  width: 17cqw;
+}
+.badge.net::before {
+  width: 24cqw;
+}
+.badge span {
+  display: block;
+  padding: 7px 2px;
+  border-radius: 7px;
+  background: var(--fill);
+}
+.trend {
+  display: flex;
+  justify-content: center;
+  margin-top: 6px;
+  width: 85.6%;
+}
