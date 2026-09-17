@@ -1,6 +1,6 @@
 "use client";
-
-import { HeartHandshake, HelpCircle, History, UserPlus } from "lucide-react";
+import type { ReactNode } from "react";
+import { AnimatedMetric, AnimatedProgress, useTrackingMotion } from "./tracking-motion";
 import {
   Bar,
   BarChart,
@@ -11,187 +11,154 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
 import { REACTIVATION_DAYS } from "./sales-tracking-rules";
-import type { CustomerStatus, SalesTrackingData } from "./sales-tracking-types";
-
-const money = (value: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
-const integer = (value: number) => new Intl.NumberFormat("pt-BR").format(value);
-const percent = (value: number) =>
-  `${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)}%`;
-const tooltipStyle = {
-  borderRadius: 12,
-  borderColor: "hsl(var(--border))",
-  background: "hsl(var(--card))",
-  fontSize: 12,
-  boxShadow: "0 12px 30px rgba(30,20,60,.12)",
-};
-
-function ConceptTitle({ title, help }: { title: string; help?: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <CardTitle>{title}</CardTitle>
-      {help ? (
-        <span
-          tabIndex={0}
-          title={help}
-          aria-label={`${title}: ${help}`}
-          className="text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
+import { ConceptHelp, ChartTooltip } from "./tracking-help";
+import { METRIC_DEFINITIONS } from "./tracking-dictionary";
+import { money, integer, percentage, days } from "./tracking-format";
+import type { PurchaseStageDistribution, SalesTrackingData } from "./sales-tracking-types";
+import styles from "./tracking-overview.module.css";
 export { SalesHero } from "./sales-overview";
 
 export function CustomerOrigin({ data }: { data: SalesTrackingData }) {
   const { summary } = data;
   const rows = [
     {
-      label: "Clientes novos",
-      help: "Primeira compra válida da história realizada no período.",
-      customers: summary.newCustomers,
-      customerShare:
-        summary.buyersCount > 0 ? (summary.newCustomers / summary.buyersCount) * 100 : 0,
+      label: "Novos clientes",
+      help: METRIC_DEFINITIONS.newCustomer,
+      count: summary.newCustomers,
       revenue: summary.newRevenue,
-      revenueShare: summary.newRevenuePercentage,
-      icon: UserPlus,
-      color: "bg-violet-400",
-      surface: "bg-primary/[0.06] border-primary/10",
+      share: summary.newRevenuePercentage,
       accent: "text-primary",
-      iconSurface: "bg-primary/10",
+      surface: "bg-primary/[0.055]",
+      bar: "bg-primary/65",
     },
     {
-      label: "Clientes da base",
-      help: "Já possuíam ao menos uma compra válida antes do período.",
-      customers: summary.existingCustomers,
-      customerShare:
-        summary.buyersCount > 0 ? (summary.existingCustomers / summary.buyersCount) * 100 : 0,
-      revenue: summary.repeatRevenue,
-      revenueShare: summary.repeatRevenuePercentage,
-      icon: History,
-      color: "bg-success/70",
-      surface: "bg-success/[0.07] border-success/10",
+      label: "Base existente",
+      help: METRIC_DEFINITIONS.existingCustomer,
+      count: summary.existingCustomers,
+      revenue: summary.existingRevenue,
+      share: summary.existingRevenuePercentage,
       accent: "text-success",
-      iconSurface: "bg-success/10",
+      surface: "bg-success/[0.055]",
+      bar: "bg-success/65",
     },
   ];
   return (
-    <Card className="rounded-2xl shadow-soft">
+    <Card className="min-w-0 rounded-2xl shadow-soft">
       <CardHeader>
-        <CardTitle>Quem gerou as vendas?</CardTitle>
-        <p className="text-xs text-slate-500">
-          Entenda quanto do período veio de novos clientes e quanto veio da base existente.
+        <CardTitle>Novos clientes × base existente</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Quem comprou neste período e quanto cada perfil gerou.
         </p>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        {rows.map((row) => {
-          const Icon = row.icon;
-          return (
-            <div key={row.label} className={cn("rounded-xl border p-4", row.surface)}>
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-                    row.accent,
-                    row.iconSurface,
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="font-semibold">{row.label}</p>
-                  <p className="text-[11px] text-slate-500">{row.help}</p>
-                </div>
+      <CardContent className="space-y-3">
+        {rows.map((row) => (
+          <div key={row.label} className={"rounded-xl p-4 " + row.surface}>
+            <div className="flex items-center gap-1 text-sm font-medium">
+              {row.label}
+              <ConceptHelp label={row.label} text={row.help} />
+            </div>
+            <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <strong className={"text-2xl font-semibold tabular-nums " + row.accent}>
+                  <AnimatedMetric value={row.count} format={integer} duration={550} />
+                </strong>
+                <span className="ml-1 text-xs text-muted-foreground">compradores</span>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {percentage(summary.buyersCount ? (row.count / summary.buyersCount) * 100 : null)}{" "}
+                  dos compradores
+                </p>
               </div>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div>
-                  <p className={cn("text-2xl font-semibold tabular-nums", row.accent)}>
-                    {integer(row.customers)}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {percent(row.customerShare)} dos compradores
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className={cn("text-lg font-semibold tabular-nums", row.accent)}>
-                    {money(row.revenue)}
-                  </p>
-                  <p className="text-xs text-slate-500">{percent(row.revenueShare)} da receita</p>
-                </div>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all duration-300 motion-reduce:transition-none",
-                    row.color,
-                  )}
-                  style={{ width: `${row.revenueShare}%` }}
-                />
+              <div className="text-right">
+                <strong className="font-semibold tabular-nums">
+                  <AnimatedMetric value={row.revenue} format={money} duration={550} />
+                </strong>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <AnimatedMetric value={row.share} format={percentage} duration={550} /> da receita
+                </p>
               </div>
             </div>
-          );
-        })}
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-card/80">
+              <AnimatedProgress value={row.share} className={row.bar} />
+            </div>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
 }
-
 export function PurchaseStageChart({ data }: { data: SalesTrackingData }) {
   const reduced = useReducedMotion();
+  const { revision, initial } = useTrackingMotion();
   return (
     <Card className="min-w-0 rounded-2xl shadow-soft">
       <CardHeader>
-        <CardTitle>Primeira compra × recompra</CardTitle>
+        <CardTitle>Distribuição por número da compra</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Distribuição dos pedidos pela posição da compra na jornada do cliente.
+          Pedidos pela posição no histórico de compras válidas.
         </p>
       </CardHeader>
       <CardContent>
-        <div className="h-72" aria-label="Distribuição dos pedidos por número da compra">
+        <div className="h-64" aria-label="Distribuição de pedidos por número da compra">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data.purchaseStages} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.18} />
-              <XAxis dataKey="stage" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} width={44} />
+            <BarChart
+              accessibilityLayer
+              data={data.purchaseStages}
+              margin={{ top: 16, right: 8, left: -15, bottom: 0 }}
+            >
+              <CartesianGrid
+                vertical={false}
+                stroke="hsl(var(--border))"
+                strokeDasharray="3 4"
+                opacity={0.45}
+              />
+              <XAxis
+                dataKey="stage"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              />
+              <YAxis
+                allowDecimals={false}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              />
               <Tooltip
-                contentStyle={tooltipStyle}
-                formatter={(value: number, name: string, item) =>
-                  name === "orders"
-                    ? [
-                        `${integer(Number(value))} pedidos · ${percent(Number(item.payload.percentage))} · ${money(Number(item.payload.revenue))}`,
-                        "Resultado",
-                      ]
-                    : [value, name]
-                }
+                cursor={{ fill: "hsl(var(--primary) / .035)" }}
+                content={({ active, payload }) => {
+                  const row = payload?.[0]?.payload as PurchaseStageDistribution | undefined;
+                  return active && row ? (
+                    <ChartTooltip
+                      title={row.stage + " compra"}
+                      rows={[
+                        ["Pedidos", integer(row.orders)],
+                        ["Participação nos pedidos", percentage(row.percentage)],
+                        ["Receita líquida", money(row.revenue)],
+                        ["Participação na receita", percentage(row.revenueShare)],
+                        ["Ticket médio", money(row.averageTicket)],
+                      ]}
+                    />
+                  ) : null;
+                }}
               />
               <Bar
+                key={revision}
                 dataKey="orders"
-                name="Pedidos"
-                fill="hsl(var(--primary))"
                 radius={[7, 7, 0, 0]}
+                maxBarSize={48}
                 isAnimationActive={!reduced}
-                animationDuration={650}
+                animationDuration={initial ? 550 : 350}
               >
                 {data.purchaseStages.map((stage, index) => (
                   <Cell
                     key={stage.stage}
                     fill={
                       index === 0
-                        ? "hsl(var(--primary) / 0.55)"
-                        : `hsl(var(--success) / ${Math.min(0.4 + index * 0.1, 0.9)})`
+                        ? "hsl(var(--primary))"
+                        : "hsl(var(--success) / " + (0.4 + index * 0.09) + ")"
                     }
                   />
                 ))}
@@ -199,106 +166,121 @@ export function PurchaseStageChart({ data }: { data: SalesTrackingData }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Uma pessoa pode gerar uma primeira compra e uma recompra no mesmo período.
+        </p>
       </CardContent>
     </Card>
   );
 }
-
 export function RepurchaseAnalysis({ data }: { data: SalesTrackingData }) {
-  const { summary } = data;
-  const fastShare = data.repurchaseBuckets
-    .filter((row) => row.maxDays != null && row.maxDays <= 60)
-    .reduce((sum, row) => sum + row.percentage, 0);
-  const largestShare = Math.max(0, ...data.repurchaseBuckets.map((row) => row.percentage));
+  const { summary, firstToSecondConversion: conversion } = data;
+  const hasReturns = data.repurchaseBuckets.some((row) => row.customers > 0);
   return (
-    <Card className="rounded-2xl shadow-soft">
+    <Card className="min-w-0 rounded-2xl shadow-soft">
       <CardHeader>
-        <ConceptTitle
-          title="Tempo até a recompra"
-          help="Intervalo entre compras válidas consecutivas do mesmo cliente."
-        />
+        <CardTitle>Tempo até a recompra</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Média, mediana e distribuição dos clientes por intervalo de retorno.
+          O ritmo de retorno dos compradores selecionados.
         </p>
       </CardHeader>
-      <CardContent className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-          <Metric label="Tempo médio" value={`${summary.averageRepurchaseDays} dias`} />
-          <Metric
-            label="Tempo mediano"
-            help="Metade dos intervalos de retorno está abaixo da mediana e metade acima."
-            value={`${summary.medianRepurchaseDays} dias`}
-          />
-          <Metric
-            label="1ª → 2ª compra"
-            value={`${summary.firstToSecondPurchaseDays} dias`}
-            accent
-          />
-        </div>
-        <div className="flex min-w-0 flex-col justify-center">
-          <div className="space-y-5">
-            {data.repurchaseBuckets.map((row) => (
-              <div
-                key={row.label}
-                className="grid items-center gap-3 grid-cols-[100px_minmax(0,1fr)] sm:grid-cols-[135px_minmax(0,1fr)]"
-              >
-                <span
-                  className={cn(
-                    "text-xs text-slate-600",
-                    row.percentage > 0 &&
-                      row.percentage === largestShare &&
-                      "font-semibold text-foreground",
-                  )}
-                >
-                  {row.minDays === 181 && row.maxDays == null ? "Mais de 180 dias" : row.label}
+      <CardContent>
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.6fr]">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <Metric
+              label="Tempo médio"
+              value={
+                <AnimatedMetric
+                  value={summary.averageRepurchaseDays}
+                  format={days}
+                  duration={550}
+                />
+              }
+              help={METRIC_DEFINITIONS.repurchase}
+            />
+            <Metric
+              label="Mediana"
+              value={
+                <AnimatedMetric value={summary.medianRepurchaseDays} format={days} duration={550} />
+              }
+              help={METRIC_DEFINITIONS.median}
+            />
+            <Metric
+              label="1ª → 2ª compra"
+              value={
+                <AnimatedMetric
+                  value={summary.firstToSecondPurchaseDays}
+                  format={days}
+                  duration={550}
+                />
+              }
+              help={METRIC_DEFINITIONS.firstToSecond}
+              accent
+            />
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground sm:col-span-3 lg:col-span-1">
+              {conversion?.rate != null ? (
+                <span>
+                  Conversão 1ª → 2ª:{" "}
+                  <strong className="text-primary">
+                    <AnimatedMetric value={conversion.rate} format={percentage} />
+                  </strong>
                 </span>
-                <div className="pr-14">
-                  <div className="relative">
-                    <div
-                      className="h-3.5 overflow-hidden rounded-full bg-slate-100"
-                      role="img"
-                      aria-label={`${row.label}: ${percent(row.percentage)} dos clientes, ${row.customers} clientes, ${money(row.revenue)}`}
-                    >
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none",
-                          row.maxDays != null && row.maxDays <= 60
-                            ? "bg-success/45"
-                            : row.maxDays != null && row.maxDays <= 90
-                              ? "bg-primary/35"
-                              : "bg-slate-300",
-                          row.percentage > 0 &&
-                            row.percentage === largestShare &&
-                            (row.maxDays != null && row.maxDays <= 60
-                              ? "bg-success/60"
-                              : row.maxDays != null && row.maxDays <= 90
-                                ? "bg-primary/50"
-                                : "bg-slate-400"),
-                        )}
-                        style={{ width: `${row.percentage}%` }}
-                      />
-                    </div>
-                    <strong
-                      className="absolute top-1/2 ml-2 -translate-y-1/2 whitespace-nowrap text-xs tabular-nums text-slate-700"
-                      style={{ left: `${row.percentage}%` }}
-                    >
-                      {percent(row.percentage)}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            ))}
+              ) : (
+                "Conversão ainda indisponível"
+              )}
+              <ConceptHelp
+                label="Conversão 1ª → 2ª"
+                text={
+                  conversion?.rate != null
+                    ? METRIC_DEFINITIONS.conversion
+                    : "Ainda não existe uma coorte com tempo suficiente de observação neste recorte para calcular esta conversão com segurança. Use todos os perfis e números de compra para observar a coorte completa."
+                }
+              />
+            </div>
           </div>
-          <p className="mt-6 text-sm text-slate-600">
-            <strong className="text-lg font-semibold text-success">{percent(fastShare)}</strong> dos
-            clientes que recompraram retornaram em até 60 dias.
-          </p>
+          <div className="flex min-w-0 flex-col justify-center">
+            {hasReturns ? (
+              <div className="space-y-4">
+                {data.repurchaseBuckets.map((row) => (
+                  <div key={row.label}>
+                    <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        {row.label}
+                        <ConceptHelp
+                          label={row.label}
+                          text={
+                            integer(row.customers) +
+                            " clientes · " +
+                            percentage(row.percentage) +
+                            ". Receita de recompra: " +
+                            money(row.revenue) +
+                            "."
+                          }
+                        />
+                      </div>
+                      <strong className="tabular-nums">{percentage(row.percentage)}</strong>
+                    </div>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                      <AnimatedProgress value={row.percentage} className="bg-success/65" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-muted/50 p-6 text-sm text-muted-foreground">
+                Nenhuma recompra encontrada neste recorte.
+              </p>
+            )}
+            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+              Faixas por cliente, considerando seu último intervalo de recompra no recorte. Média e
+              mediana consideram os intervalos históricos até a data final.
+            </p>
+          </div>
         </div>
       </CardContent>
     </Card>
   );
 }
-
 function Metric({
   label,
   value,
@@ -306,223 +288,132 @@ function Metric({
   help,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   accent?: boolean;
   help?: string;
 }) {
   return (
-    <div className={cn("rounded-xl p-4", accent ? "bg-primary/[0.065]" : "bg-slate-50")}>
-      <div className="flex items-center gap-1.5">
-        <p className="text-xs text-slate-600">{label}</p>
-        {help && (
-          <span
-            tabIndex={0}
-            title={help}
-            aria-label={help}
-            className="rounded text-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-          >
-            <HelpCircle className="h-3.5 w-3.5" />
-          </span>
-        )}
+    <div className={"min-w-0 rounded-xl p-4 " + (accent ? "bg-primary/[0.055]" : "bg-muted/40")}>
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        {label}
+        {help && <ConceptHelp label={label} text={help} />}
       </div>
       <p
-        className={cn(
-          "mt-2 text-2xl font-semibold tabular-nums",
-          accent ? "text-primary" : "text-slate-900",
-        )}
+        className={
+          "mt-2 text-xl font-semibold tracking-tight tabular-nums " +
+          (accent ? "text-primary" : "text-foreground")
+        }
       >
-        {value.endsWith(" dias") ? (
-          <>
-            {value.slice(0, -5)} <span className="text-sm font-normal text-slate-500">dias</span>
-          </>
-        ) : (
-          value
-        )}
+        {value}
       </p>
     </div>
   );
 }
-
-export function RelationshipFlow({ data }: { data: SalesTrackingData }) {
-  const stages = data.purchaseStages;
-  return (
-    <Card className="rounded-2xl shadow-soft">
-      <CardHeader>
-        <CardTitle>Evolução da relação com o cliente</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Distribuição dos compradores do período por etapa de compra. Percentuais sobre o total de
-          compradores.
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-          {stages.map((stage, index) => (
-            <div
-              key={stage.stage}
-              className={cn(
-                "relative rounded-xl border p-4 text-center",
-                index === 0
-                  ? "border-primary/10 bg-primary/[0.06]"
-                  : "border-success/10 bg-success/[0.06]",
-              )}
-            >
-              <p className="text-xs font-medium text-slate-600">
-                {stage.stage === "6ª+" ? "6ª compra ou mais" : stage.stage}
-              </p>
-              <p
-                className={cn(
-                  "mt-2 text-2xl font-semibold tabular-nums",
-                  index === 0 ? "text-primary" : "text-success",
-                )}
-              >
-                {integer(stage.customers)}
-              </p>
-              <p className="text-xs text-slate-500">
-                {percent(
-                  data.summary.buyersCount > 0
-                    ? (stage.customers / data.summary.buyersCount) * 100
-                    : 0,
-                )}
-              </p>
-              {index < stages.length - 1 ? (
-                <span className="absolute -right-2 top-1/2 z-10 hidden h-px w-2 bg-success/20 xl:block" />
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function ValueAndReactivation({ data }: { data: SalesTrackingData }) {
-  const { summary } = data;
+  const { reactivation } = data;
   return (
-    <div className="grid gap-3 xl:grid-cols-2">
-      <Card className="rounded-2xl shadow-soft">
+    <div className="grid gap-4 xl:grid-cols-2">
+      <Card className="min-w-0 rounded-2xl shadow-soft">
         <CardHeader>
-          <ConceptTitle
-            title="LTV dos compradores do período"
-            help="Valor histórico acumulado das compras válidas dos clientes que compraram no período selecionado."
-          />
+          <div className="flex items-center gap-1">
+            <CardTitle>LTV por perfil de cliente</CardTitle>
+            <ConceptHelp label="LTV por perfil" text={METRIC_DEFINITIONS.ltv} />
+          </div>
           <p className="text-xs text-muted-foreground">
-            Histórico completo da relação, não apenas a receita do recorte.
+            Valor médio histórico até a data final selecionada.
           </p>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2">
-          {data.ltv.map((item) => (
-            <Metric
+        <CardContent className="space-y-3">
+          {data.ltv.map((item, index) => (
+            <div
               key={item.key}
-              label={item.label}
-              value={money(item.value)}
-              accent={item.key === "all"}
-            />
+              className={
+                styles.ltvRow +
+                " flex items-center justify-between gap-3 rounded-xl bg-muted/30 px-4 py-4"
+              }
+              style={
+                {
+                  "--profile-color": [
+                    "hsl(var(--primary))",
+                    "hsl(248 45% 54%)",
+                    "hsl(var(--success))",
+                  ][index],
+                } as React.CSSProperties
+              }
+            >
+              <span className="text-sm text-muted-foreground">{item.label}</span>
+              <strong
+                className="text-xl font-semibold tabular-nums"
+                style={{ color: "var(--profile-color)" }}
+              >
+                <AnimatedMetric value={item.value} format={money} duration={550} />
+              </strong>
+            </div>
           ))}
+          <p className="pt-1 text-[11px] text-muted-foreground">
+            Reativados são um subconjunto da base existente; os perfis não devem ser somados.
+          </p>
         </CardContent>
       </Card>
-      <Card className="rounded-2xl border-emerald-100 bg-emerald-50/25 shadow-soft">
+      <Card className="min-w-0 rounded-2xl shadow-soft">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-              <HeartHandshake className="h-4 w-4" />
-            </span>
-            <div>
-              <CardTitle>Clientes reativados</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Retorno após {REACTIVATION_DAYS}+ dias sem comprar.
-              </p>
-            </div>
+          <div className="flex items-center gap-1">
+            <CardTitle>Reativação</CardTitle>
+            <ConceptHelp label="Reativação" text={METRIC_DEFINITIONS.reactivation} />
           </div>
+          <p className="text-xs text-muted-foreground">
+            Retorno após {REACTIVATION_DAYS} dias ou mais sem comprar.
+          </p>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-2">
-          <Metric label="Clientes" value={integer(summary.reactivatedCustomers)} />
-          <Metric label="Vendas no período" value={money(summary.reactivatedRevenue)} />
-          <Metric label="LTV médio" value={money(summary.reactivatedAverageLtv)} />
-          <Metric
-            label="Inatividade média"
-            value={`${summary.reactivatedAverageInactiveDays} dias`}
-          />
+        <CardContent>
+          <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+            <Metric
+              label="Clientes reativados"
+              value={
+                <AnimatedMetric
+                  value={reactivation.reactivatedCustomers}
+                  format={integer}
+                  duration={550}
+                />
+              }
+            />
+            <Metric
+              label="Receita gerada"
+              value={
+                <AnimatedMetric value={reactivation.netRevenue} format={money} duration={550} />
+              }
+            />
+            <Metric
+              label="Inatividade média"
+              value={
+                <AnimatedMetric
+                  value={reactivation.averageInactivityDays}
+                  format={days}
+                  duration={550}
+                />
+              }
+            />
+            <Metric
+              label="Taxa de reativação"
+              value={
+                <AnimatedMetric
+                  value={reactivation.reactivationRate}
+                  format={percentage}
+                  duration={550}
+                />
+              }
+              help={METRIC_DEFINITIONS.reactivation}
+              accent
+            />
+          </div>
+          <p className="mt-4 text-[11px] text-muted-foreground">
+            {reactivation.eligibleCustomers == null
+              ? "Taxa indisponível com filtro de número da compra: a elegibilidade exige observar também quem não voltou."
+              : integer(reactivation.eligibleCustomers) +
+                " clientes elegíveis no período, incluindo quem ainda não voltou."}
+          </p>
         </CardContent>
       </Card>
     </div>
   );
 }
-
-const healthTone: Record<
-  CustomerStatus,
-  "default" | "success" | "warning" | "destructive" | "secondary"
-> = {
-  NEW: "default",
-  RECURRING: "success",
-  REACTIVATED: "secondary",
-  AT_RISK: "warning",
-  INACTIVE: "destructive",
-};
-export function CustomerHealth({ data }: { data: SalesTrackingData }) {
-  return (
-    <Card className="rounded-2xl shadow-soft">
-      <CardHeader>
-        <CardTitle>Saúde da base</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Classificação dos compradores conforme seu momento de relacionamento.
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {data.health.map((item) => (
-            <div key={item.status} className="rounded-xl border border-border/70 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <Badge variant={healthTone[item.status]}>{item.label}</Badge>
-                <strong className="text-sm tabular-nums">{percent(item.percentage)}</strong>
-              </div>
-              <p className="mt-3 text-2xl font-semibold tabular-nums">{integer(item.customers)}</p>
-              <p className="text-xs text-muted-foreground">clientes no período</p>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function RevenueMix({ data }: { data: SalesTrackingData }) {
-  const { summary } = data;
-  return (
-    <Card className="rounded-2xl shadow-soft">
-      <CardHeader>
-        <CardTitle>Receita nova × receita de recompra</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Participação das primeiras compras e das compras seguintes.
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div
-          className="flex h-4 overflow-hidden rounded-full bg-muted"
-          role="img"
-          aria-label={`${percent(summary.newRevenuePercentage)} de primeira compra e ${percent(summary.repeatRevenuePercentage)} de recompra`}
-        >
-          <div className="bg-violet-400" style={{ width: `${summary.newRevenuePercentage}%` }} />
-          <div className="bg-primary" style={{ width: `${summary.repeatRevenuePercentage}%` }} />
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <div className="rounded-xl border border-border/70 p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2.5 w-2.5 rounded-full bg-violet-400" /> Primeira compra
-            </div>
-            <p className="mt-1 text-lg font-semibold">{percent(summary.newRevenuePercentage)}</p>
-            <p className="text-xs text-muted-foreground">{money(summary.newRevenue)}</p>
-          </div>
-          <div className="rounded-xl border border-border/70 p-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2.5 w-2.5 rounded-full bg-primary" /> Recompra
-            </div>
-            <p className="mt-1 text-lg font-semibold">{percent(summary.repeatRevenuePercentage)}</p>
-            <p className="text-xs text-muted-foreground">{money(summary.repeatRevenue)}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export const trackingFormatters = { money, integer, percent, healthTone };

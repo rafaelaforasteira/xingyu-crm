@@ -1,3 +1,10 @@
+import type {
+  AttributionCoverage,
+  FirstToSecondConversion,
+  ReactivationAnalytics,
+  ResolvedTrackingRange,
+  TrackingChannelRow,
+} from "./tracking-analytics-types";
 export type TrackingPeriod = "30d" | "90d" | "12m";
 export type TrackingDateRange =
   | { mode: "preset"; preset: TrackingPeriod }
@@ -16,6 +23,8 @@ export type PurchaseStageDistribution = {
   orders: number;
   revenue: number;
   percentage: number;
+  revenueShare: number | null;
+  averageTicket: number | null;
 };
 
 export type RepurchaseTimeBucket = {
@@ -29,6 +38,10 @@ export type RepurchaseTimeBucket = {
 
 export type TrackedCustomer = {
   id: string;
+  crmProfileId?: string;
+  acquisitionType: "NEW" | "EXISTING";
+  isReactivated: boolean;
+  periodOrders: number;
   name: string;
   email: string;
   phone: string;
@@ -41,29 +54,29 @@ export type TrackedCustomer = {
   daysSinceLastPurchase: number;
   averageDaysBetweenOrders: number | null;
   salesperson: string;
-  state: string;
-  product: string;
 };
 
 export type SalesTrackingSummary = {
   periodRevenue: number;
   ordersCount: number;
   buyersCount: number;
-  averageTicket: number;
-  averageLtv: number;
-  averageRepurchaseDays: number;
-  medianRepurchaseDays: number;
-  firstToSecondPurchaseDays: number;
+  averageTicket: number | null;
+  averageLtv: number | null;
+  averageRepurchaseDays: number | null;
+  medianRepurchaseDays: number | null;
+  firstToSecondPurchaseDays: number | null;
   newCustomers: number;
   existingCustomers: number;
   reactivatedCustomers: number;
   reactivatedRevenue: number;
-  reactivatedAverageLtv: number;
-  reactivatedAverageInactiveDays: number;
+  reactivatedAverageLtv: number | null;
+  reactivatedAverageInactiveDays: number | null;
   newRevenue: number;
+  existingRevenue: number;
+  existingRevenuePercentage: number | null;
   repeatRevenue: number;
-  newRevenuePercentage: number;
-  repeatRevenuePercentage: number;
+  newRevenuePercentage: number | null;
+  repeatRevenuePercentage: number | null;
 };
 
 export type Trend = {
@@ -75,10 +88,12 @@ export type Trend = {
 
 export type SalesTimelinePoint = {
   date: string;
+  endDate: string;
   label: string;
   grossSales: number;
   netSales: number;
   paidOrders: number;
+  realizationRate: number | null;
 };
 
 export type SalesOverview = {
@@ -90,15 +105,15 @@ export type SalesOverview = {
   realizationRate: number | null;
   paidOrders: number;
   buyers: number;
-  averageTicket: number;
-  averageLtv: number;
-  averageRepurchaseDays: number;
+  averageTicket: number | null;
+  averageLtv: number | null;
+  averageRepurchaseDays: number | null;
   repeatRevenue: number;
-  repeatRevenuePercentage: number;
+  repeatRevenuePercentage: number | null;
   firstPurchaseRevenue: number;
-  firstPurchaseRevenuePercentage: number;
+  firstPurchaseRevenuePercentage: number | null;
   reactivatedCustomers: number;
-  reactivatedCustomersPercentage: number;
+  reactivatedCustomersPercentage: number | null;
   trends: {
     netSales: Trend | null;
     averageLtv: Trend | null;
@@ -122,8 +137,8 @@ export type FinancialSnapshot = {
 export type SalesComparison = FinancialSnapshot & {
   startDate: string;
   endDate: string;
-  averageLtv: number;
-  averageRepurchaseDays: number;
+  averageLtv: number | null;
+  averageRepurchaseDays: number | null;
   repeatRevenue: number;
   reactivatedCustomers: number;
 };
@@ -143,12 +158,18 @@ export type FinancialFlowData = FinancialSnapshot & {
 };
 
 export type SalesTrackingData = {
+  range: ResolvedTrackingRange;
+  granularity: "day" | "week" | "month";
+  channels: TrackingChannelRow[];
+  attribution: AttributionCoverage;
+  reactivation: ReactivationAnalytics;
+  firstToSecondConversion: FirstToSecondConversion | null;
+  repeatCustomerRate: number | null;
   summary: SalesTrackingSummary;
   overview: SalesOverview;
   purchaseStages: PurchaseStageDistribution[];
   repurchaseBuckets: RepurchaseTimeBucket[];
-  ltv: Array<{ key: "all" | "new" | "existing" | "reactivated"; label: string; value: number }>;
-  health: Array<{ status: CustomerStatus; label: string; customers: number; percentage: number }>;
+  ltv: Array<{ key: "new" | "existing" | "reactivated"; label: string; value: number | null }>;
   customers: TrackedCustomer[];
   updatedAt: string;
   source: "mock" | "api";

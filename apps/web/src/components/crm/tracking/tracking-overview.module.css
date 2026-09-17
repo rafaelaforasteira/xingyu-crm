@@ -1,0 +1,139 @@
+.page {
+  min-width: 0;
+}
+.page :is(button, a, select, input):focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+.sections > * {
+  min-width: 0;
+  animation: section-in 280ms ease-out both;
+}
+.sections > :nth-child(2) {
+  animation-delay: 35ms;
+}
+.sections > :nth-child(3) {
+  animation-delay: 65ms;
+}
+.bar {
+  transform-origin: left;
+  animation: bar-in 450ms ease-out both;
+  transition: width 300ms ease;
+}
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes bar-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sections > *,
+  .bar {
+    animation: none;
+    transition: none;
+  }
+  .page * {
+    scroll-behavior: auto;
+  }
+}
+.sections > :nth-child(1) {
+  animation-delay: 70ms;
+}
+.sections > :nth-child(2) {
+  animation-delay: 220ms;
+}
+.sections > :nth-child(3) {
+  animation-delay: 300ms;
+}
+.sections > :nth-child(4) {
+  animation-delay: 380ms;
+}
+.sections > :nth-child(5) {
+  animation-delay: 460ms;
+}
+.page > p:first-child {
+  animation: section-in 240ms ease-out both;
+}
+.refresh {
+  animation: refresh-spin 800ms linear infinite;
+}
+.channelBar {
+  transform-origin: left;
+  animation: bar-in 550ms ease-out both;
+}
+.segment {
+  transition:
+    filter 160ms ease,
+    box-shadow 160ms ease;
+}
+.segment:hover,
+.segment:focus-visible {
+  filter: brightness(1.12);
+  box-shadow: 0 2px 8px hsl(var(--primary) / 0.2);
+}
+.ltvRow {
+  position: relative;
+  padding-left: 1.25rem;
+  transition: background 180ms ease;
+}
+.ltvRow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--profile-color);
+}
+.ltvRow:hover {
+  background: hsl(var(--muted) / 0.55);
+}
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 639px) {
+  .sections > * {
+    animation-delay: 0ms;
+    animation-duration: 220ms;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sections > *,
+  .page > p:first-child,
+  .refresh,
+  .channelBar {
+    animation: none;
+  }
+  .segment,
+  .ltvRow {
+    transition: none;
+  }
+}
+
+.heroCharts {
+  animation: section-in 300ms ease-out 160ms both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heroCharts {
+    animation: none;
+  }
+}
+
+.metricUpdate { animation: metric-update 300ms ease-out both; }
+@keyframes metric-update { from { opacity: .65; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .metricUpdate { animation: none; } }

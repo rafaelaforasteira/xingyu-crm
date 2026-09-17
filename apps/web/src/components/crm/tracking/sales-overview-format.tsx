@@ -2,17 +2,7 @@
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Trend } from "./sales-tracking-types";
-export const money = (value: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
-export const percentage = (value: number | null) =>
-  value == null
-    ? "—"
-    : `${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+export { money, integer, days, compactMoney, dateBR, percentage } from "./tracking-format";
 export function SalesTrend({ trend }: { trend: Trend | null }) {
   if (!trend)
     return <span className="text-[10px] text-muted-foreground">Sem base de comparação</span>;

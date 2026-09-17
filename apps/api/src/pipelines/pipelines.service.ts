@@ -52,6 +52,7 @@ export class PipelinesService {
       organizationId,
       deletedAt: null,
       archived: query.archived ?? false,
+      ...(query.space ? { space: query.space } : {}),
       ...(allowedIds === null || allowedIds === undefined ? {} : { id: { in: allowedIds } }),
       ...(query.favorite === undefined ? {} : { favorite: query.favorite }),
       ...(query.search ? { name: { contains: query.search.trim(), mode: "insensitive" } } : {}),
@@ -127,12 +128,13 @@ export class PipelinesService {
     );
   }
 
-  async navigation(organizationId: string, allowedIds?: string[] | null) {
+  async navigation(organizationId: string, allowedIds?: string[] | null, space = "COMMERCIAL") {
     const pipelines = await this.prisma.pipeline.findMany({
       where: {
         organizationId,
         deletedAt: null,
         archived: false,
+        space,
         ...(allowedIds === null || allowedIds === undefined ? {} : { id: { in: allowedIds } }),
       },
       orderBy: [{ position: "asc" }, { name: "asc" }, { id: "asc" }],
@@ -419,6 +421,7 @@ export class PipelinesService {
         data: {
           organizationId,
           name,
+          space: dto.space ?? "COMMERCIAL",
           description: this.optionalText(dto.description),
           color: dto.color,
           icon: dto.icon,
@@ -514,6 +517,7 @@ export class PipelinesService {
       const copy = await tx.pipeline.create({
         data: {
           organizationId,
+          space: source.space,
           name,
           description: source.description,
           color: source.color,

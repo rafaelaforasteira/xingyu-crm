@@ -21,11 +21,12 @@ export function previousEqualPeriod(range: { startDate: string; endDate: string 
 }
 
 export function metricTrend(
-  current: number,
-  previous: number,
+  current: number | null,
+  previous: number | null,
   lowerIsBetter = false,
   suffix: "%" | "dias" = "%",
 ): Trend | null {
+  if (current == null || previous == null) return null;
   const delta = suffix === "dias" ? current - previous : safeRate(current - previous, previous);
   if (delta == null || !Number.isFinite(delta)) return null;
   return {

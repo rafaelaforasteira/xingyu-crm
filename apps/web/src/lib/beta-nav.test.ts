@@ -4,13 +4,14 @@ import { BETA_SINGLE_PIPELINE_NAV_GROUPS, NAV_GROUPS } from "./nav";
 describe("beta navigation", () => {
   it("exposes the expandable Pipelines module", () => {
     const items = BETA_SINGLE_PIPELINE_NAV_GROUPS.flatMap((group) => group.items);
-    expect(items).toHaveLength(4);
+    expect(items).toHaveLength(5);
     expect(items[0]).toMatchObject({ href: "/dashboard", label: "Dados" });
     expect(items[1]).toMatchObject({ href: "/tasks", label: "Tarefas" });
     expect(items[2]?.href).toBe("/pipelines");
     expect(items[2]?.label).toBe("Pipelines");
     expect(items[2]?.expandablePipelines).toBe(true);
     expect(items[3]).toMatchObject({ href: "/orders", label: "Pedidos" });
+    expect(items[4]).toMatchObject({ href: "/after-sales", label: "Atendimento" });
     expect(items.some((item) => item.href === "/settings")).toBe(false);
     expect(items.some((item) => item.href === "/dashboard")).toBe(true);
   });
@@ -19,6 +20,7 @@ describe("beta navigation", () => {
     expect(NAV_GROUPS.map((group) => group.label)).toEqual([
       "Visão geral",
       "Jornadas",
+      "Tracking",
       "Gestão",
       "Infraestrutura",
     ]);
@@ -27,6 +29,8 @@ describe("beta navigation", () => {
       "/tasks",
       "/pipelines",
       "/orders",
+      "/after-sales",
+      "/tracking/vendas",
       "/finance",
       "/clients",
       "/connections",
@@ -35,6 +39,9 @@ describe("beta navigation", () => {
     ]);
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/orders", label: "Pedidos" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/tracking/vendas", label: "Vendas" }),
     );
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/finance", label: "Financeiro" }),

@@ -290,6 +290,7 @@ export interface PipelineNavigationItem {
 export interface Pipeline {
   id: string;
   name: string;
+  space?: "COMMERCIAL" | "ATTENDANCE";
   description?: string | null;
   color?: string | null;
   icon?: string | null;
@@ -470,6 +471,7 @@ export interface PipelineListQuery {
   search?: string;
   archived?: boolean;
   favorite?: boolean;
+  space?: "COMMERCIAL" | "ATTENDANCE";
 }
 
 export interface PipelineInput {
@@ -480,6 +482,7 @@ export interface PipelineInput {
   defaultTeamId?: string | null;
   defaultOwnerId?: string | null;
   favorite?: boolean;
+  space?: "COMMERCIAL" | "ATTENDANCE";
 }
 
 export type PipelineStageType = "OPEN" | "WON" | "LOST";

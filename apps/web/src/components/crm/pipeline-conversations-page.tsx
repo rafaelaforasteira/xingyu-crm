@@ -12,9 +12,11 @@ import { ConversationWorkspace } from "@/components/crm/conversation/conversatio
 export function PipelineConversationsPage({
   pipelineId,
   conversationId,
+  rootPath = "/pipelines",
 }: {
   pipelineId: string;
   conversationId?: string;
+  rootPath?: string;
 }) {
   const scope = useMemo(
     () => ({ type: "pipeline" as const, pipelineId }),
@@ -31,7 +33,7 @@ export function PipelineConversationsPage({
     <ConversationWorkspace
       scope={scope}
       conversationId={conversationId}
-      basePath={`/pipelines/${pipelineId}/conversations`}
+      basePath={`${rootPath}/${pipelineId}/conversations`}
       header={
         <>
           <PageHeader
@@ -39,8 +41,8 @@ export function PipelineConversationsPage({
             description="Conversas vinculadas ao funil"
             actions={
               <div className="flex flex-wrap items-center gap-3">
-                <PipelineViewSwitcher pipelineId={pipelineId} active="conversations" />
-                <Link href="/pipelines" className="text-sm text-primary hover:underline">
+                <PipelineViewSwitcher pipelineId={pipelineId} active="conversations" kanbanHref={`${rootPath}/${pipelineId}`} conversationsHref={`${rootPath}/${pipelineId}/conversations`} />
+                <Link href={rootPath} className="text-sm text-primary hover:underline">
                   Todos os pipelines
                 </Link>
               </div>

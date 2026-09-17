@@ -82,6 +82,7 @@ function pipelineResult() {
     id: pipelineId,
     organizationId,
     name: "Pipeline de teste",
+    space: "COMMERCIAL",
     description: null,
     color: "#7C3AED",
     icon: null,

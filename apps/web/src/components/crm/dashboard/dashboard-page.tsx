@@ -35,6 +35,12 @@ import { FilterSelect } from "@/components/ui/filter-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/ui/avatar";
 import { AnalyticsChart, RevenueComparisonChart } from "./analytics-charts";
+import {
+  CUSTOMERS_DEMO_DATA,
+  CustomerInsights,
+  CustomerInsightsSkeleton,
+  type CustomerAnalyticsData,
+} from "./customer-insights";
 import { GoalsPanel } from "./goals-panel";
 import { DimensionExplorer } from "./dimension-explorer";
 import { DashboardTabs, DASHBOARD_TABS, type DashboardTab } from "./dashboard-tabs";
@@ -175,7 +181,13 @@ function Metric({
       </CardContent>
     </Card>
   );
-  return href ? <Link href={href} className="block min-w-0">{card}</Link> : card;
+  return href ? (
+    <Link href={href} className="block min-w-0">
+      {card}
+    </Link>
+  ) : (
+    card
+  );
 }
 
 function Availability({ value }: { value?: string }) {
@@ -192,11 +204,7 @@ function Availability({ value }: { value?: string }) {
   );
 }
 
-function Ranking({
-  rows,
-}: {
-  rows: Array<Record<string, unknown>>;
-}) {
+function Ranking({ rows }: { rows: Array<Record<string, unknown>> }) {
   if (!rows.length) return <EmptyState icon={UsersRound} title="Sem dados para o ranking" />;
   const hasRevenue = rows.some((row) => Number(row.revenue ?? 0) > 0);
   const usefulRows = hasRevenue ? rows.filter((row) => Number(row.revenue ?? 0) > 0) : rows;
@@ -227,9 +235,7 @@ function Ranking({
             <tr key={String(row.id ?? index)} className="border-b last:border-0">
               <td className="px-4 py-3 font-semibold">{`${index + 1}º`}</td>
               <td className="px-4 py-3 font-medium">{String(row.name ?? "—")}</td>
-              <td className="px-4 py-3 text-right">
-                {money(row.revenue)}
-              </td>
+              <td className="px-4 py-3 text-right">{money(row.revenue)}</td>
               <td className="px-4 py-3 text-right">
                 {typeof row.conversionRate === "number" ? `${row.conversionRate}%` : "—"}
               </td>
@@ -263,10 +269,16 @@ function TeamPodium({ rows }: { rows: TeamPerformanceRow[] }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base"><Trophy className="h-4 w-4 text-amber-500" /> Destaques comerciais</CardTitle>
-        <p className="text-xs text-muted-foreground">As três maiores receitas do período selecionado.</p>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Trophy className="h-4 w-4 text-amber-500" /> Destaques comerciais
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          As três maiores receitas do período selecionado.
+        </p>
       </CardHeader>
-      <CardContent className={cn("grid gap-3", highlights.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3")}>
+      <CardContent
+        className={cn("grid gap-3", highlights.length === 2 ? "md:grid-cols-2" : "md:grid-cols-3")}
+      >
         {highlights.map((row, index) => (
           <div key={row.id} className={cn("rounded-xl border p-4", tones[index])}>
             <div className="flex items-center gap-3">
@@ -302,7 +314,9 @@ function TeamRanking({ rows }: { rows: TeamPerformanceRow[] }) {
     <Card className="overflow-hidden">
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Desempenho da equipe</CardTitle>
-        <p className="text-xs text-muted-foreground">Clique em uma coluna para reorganizar o ranking.</p>
+        <p className="text-xs text-muted-foreground">
+          Clique em uma coluna para reorganizar o ranking.
+        </p>
       </CardHeader>
       <CardContent className="overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-sm">
@@ -312,8 +326,16 @@ function TeamRanking({ rows }: { rows: TeamPerformanceRow[] }) {
               <th className="px-5 py-3 text-left font-medium">Pessoa</th>
               {columns.map((column) => (
                 <th key={column.key} className="px-4 py-3 text-right font-medium">
-                  <button type="button" onClick={() => setSort(column.key)} className={cn("hover:text-primary", sort === column.key && "font-semibold text-primary")}>
-                    {column.label}{sort === column.key ? " ↓" : ""}
+                  <button
+                    type="button"
+                    onClick={() => setSort(column.key)}
+                    className={cn(
+                      "hover:text-primary",
+                      sort === column.key && "font-semibold text-primary",
+                    )}
+                  >
+                    {column.label}
+                    {sort === column.key ? " ↓" : ""}
                   </button>
                 </th>
               ))}
@@ -321,14 +343,29 @@ function TeamRanking({ rows }: { rows: TeamPerformanceRow[] }) {
           </thead>
           <tbody>
             {ordered.map((row, index) => (
-              <tr key={row.id} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+              <tr
+                key={row.id}
+                className="border-b border-border/70 last:border-0 hover:bg-muted/20"
+              >
                 <td className="px-5 py-3 font-semibold">{index + 1}º</td>
-                <td className="px-5 py-3"><div className="flex items-center gap-2"><Avatar name={row.name} size="sm" /><span className="font-medium">{row.name}</span></div></td>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <Avatar name={row.name} size="sm" />
+                    <span className="font-medium">{row.name}</span>
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-right font-medium">{money(row.revenue)}</td>
                 <td className="px-4 py-3 text-right">{number(row.conversionRate)}%</td>
                 <td className="px-4 py-3 text-right">{money(row.averageTicket)}</td>
                 <td className="px-4 py-3 text-right">{number(row.openDeals)}</td>
-                <td className={cn("px-4 py-3 text-right", row.overdueTasks > 0 && "font-semibold text-red-600")}>{number(row.overdueTasks)}</td>
+                <td
+                  className={cn(
+                    "px-4 py-3 text-right",
+                    row.overdueTasks > 0 && "font-semibold text-red-600",
+                  )}
+                >
+                  {number(row.overdueTasks)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -343,7 +380,9 @@ function PipelinePerformance({ rows }: { rows: Array<Record<string, unknown>> })
     <Card>
       <CardHeader>
         <CardTitle>Métricas por pipeline</CardTitle>
-        <p className="text-xs text-muted-foreground">Compare carteira aberta, receita confirmada e eficiência comercial.</p>
+        <p className="text-xs text-muted-foreground">
+          Compare carteira aberta, receita confirmada e eficiência comercial.
+        </p>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         <table className="w-full min-w-[820px] text-sm">
@@ -360,19 +399,40 @@ function PipelinePerformance({ rows }: { rows: Array<Record<string, unknown>> })
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={String(row.id)} className="border-b border-border/60 transition hover:bg-muted/25 last:border-0">
+              <tr
+                key={String(row.id)}
+                className="border-b border-border/60 transition hover:bg-muted/25 last:border-0"
+              >
                 <td className="py-3 font-medium">
                   <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary"><Kanban className="h-4 w-4" /></span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Kanban className="h-4 w-4" />
+                    </span>
                     <span>{String(row.name)}</span>
                   </div>
                 </td>
                 <td className="py-3 text-right tabular-nums">{number(row.openDeals)}</td>
                 <td className="py-3 text-right font-medium tabular-nums">{money(row.openValue)}</td>
-                <td className="py-3 text-right font-semibold text-emerald-700 tabular-nums">{money(row.revenue)}</td>
-                <td className="py-3 text-right tabular-nums">{typeof row.conversionRate === "number" ? `${number(row.conversionRate)}%` : "—"}</td>
+                <td className="py-3 text-right font-semibold text-emerald-700 tabular-nums">
+                  {money(row.revenue)}
+                </td>
+                <td className="py-3 text-right tabular-nums">
+                  {typeof row.conversionRate === "number" ? `${number(row.conversionRate)}%` : "—"}
+                </td>
                 <td className="py-3 text-right tabular-nums">{money(row.averageTicket)}</td>
-                <td className="py-3 pl-3 text-right">{row.id ? <Link href={`/pipelines/${String(row.id)}`} aria-label={`Abrir pipeline ${String(row.name)}`} className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"><ArrowUpRight className="h-4 w-4" /></Link> : <span className="inline-block h-8 w-8" />}</td>
+                <td className="py-3 pl-3 text-right">
+                  {row.id ? (
+                    <Link
+                      href={`/pipelines/${String(row.id)}`}
+                      aria-label={`Abrir pipeline ${String(row.name)}`}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                    >
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <span className="inline-block h-8 w-8" />
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -382,29 +442,77 @@ function PipelinePerformance({ rows }: { rows: Array<Record<string, unknown>> })
   );
 }
 
-function CommercialOpportunityList({ title, description, rows, kind }: { title: string; description: string; rows: Array<Record<string, unknown>>; kind: "closing" | "stalled" }) {
+function CommercialOpportunityList({
+  title,
+  description,
+  rows,
+  kind,
+}: {
+  title: string;
+  description: string;
+  rows: Array<Record<string, unknown>>;
+  kind: "closing" | "stalled";
+}) {
   const Icon = kind === "closing" ? Target : Clock3;
   return (
     <Card className="min-w-0">
       <CardHeader>
         <div className="flex items-start gap-3">
-          <span className={cn("flex h-9 w-9 items-center justify-center rounded-full", kind === "closing" ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700")}><Icon className="h-4 w-4" /></span>
-          <div><CardTitle>{title}</CardTitle><p className="mt-1 text-xs text-muted-foreground">{description}</p></div>
+          <span
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-full",
+              kind === "closing"
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-orange-100 text-orange-700",
+            )}
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+          <div>
+            <CardTitle>{title}</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-1">
-        {!rows.length ? <p className="py-8 text-center text-sm text-muted-foreground">Nenhum negócio neste recorte.</p> : rows.map((row) => {
-          const owner = row.owner as { name?: string; avatarUrl?: string | null } | null;
-          const stage = row.stage as { name?: string } | null;
-          return (
-            <Link key={String(row.id)} href={`/pipelines/${String(row.pipelineId)}/deals/${String(row.id)}`} className="grid grid-cols-[58px_minmax(0,1fr)_32px_100px] items-center gap-3 border-b border-border/60 px-2 py-3 transition hover:bg-muted/50 last:border-0">
-              <span className="inline-flex h-7 items-center justify-center rounded-lg bg-primary/10 px-2 text-[11px] font-semibold tabular-nums text-primary">#{row.leadSequence == null ? "—" : String(row.leadSequence).padStart(4, "0")}</span>
-              <div className="min-w-0"><p className="truncate text-sm font-medium">{String(row.contactName || row.name)}</p><p className="truncate text-[11px] text-muted-foreground">{stage?.name ?? "Sem etapa"} · {kind === "closing" ? `${number(row.probability)}% de probabilidade` : `${number(row.idleDays)} dias sem interação`}</p></div>
-              <span className="flex justify-center">{owner ? <Avatar name={owner.name} src={owner.avatarUrl} size="sm" /> : null}</span>
-              <strong className="whitespace-nowrap text-right text-xs tabular-nums">{money(row.value)}</strong>
-            </Link>
-          );
-        })}
+        {!rows.length ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            Nenhum negócio neste recorte.
+          </p>
+        ) : (
+          rows.map((row) => {
+            const owner = row.owner as { name?: string; avatarUrl?: string | null } | null;
+            const stage = row.stage as { name?: string } | null;
+            return (
+              <Link
+                key={String(row.id)}
+                href={`/pipelines/${String(row.pipelineId)}/deals/${String(row.id)}`}
+                className="grid grid-cols-[58px_minmax(0,1fr)_32px_100px] items-center gap-3 border-b border-border/60 px-2 py-3 transition hover:bg-muted/50 last:border-0"
+              >
+                <span className="inline-flex h-7 items-center justify-center rounded-lg bg-primary/10 px-2 text-[11px] font-semibold tabular-nums text-primary">
+                  #{row.leadSequence == null ? "—" : String(row.leadSequence).padStart(4, "0")}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {String(row.contactName || row.name)}
+                  </p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {stage?.name ?? "Sem etapa"} ·{" "}
+                    {kind === "closing"
+                      ? `${number(row.probability)}% de probabilidade`
+                      : `${number(row.idleDays)} dias sem interação`}
+                  </p>
+                </div>
+                <span className="flex justify-center">
+                  {owner ? <Avatar name={owner.name} src={owner.avatarUrl} size="sm" /> : null}
+                </span>
+                <strong className="whitespace-nowrap text-right text-xs tabular-nums">
+                  {money(row.value)}
+                </strong>
+              </Link>
+            );
+          })
+        )}
       </CardContent>
     </Card>
   );
@@ -469,6 +577,26 @@ export function DashboardPage() {
     retry: false,
   });
   const data = area.data ?? {};
+  const showingCustomersDemo =
+    process.env.NODE_ENV !== "production" && params.get("demo") === "customers";
+  const customerData: CustomerAnalyticsData = showingCustomersDemo
+    ? CUSTOMERS_DEMO_DATA
+    : {
+        newCustomers: Number(data.newCustomers ?? 0),
+        recurringCustomers: Number(data.recurringCustomers ?? 0),
+        newRevenue: Number(data.newRevenue ?? 0),
+        recurringRevenue: Number(data.recurringRevenue ?? 0),
+        newTicket: typeof data.newTicket === "number" ? data.newTicket : null,
+        recurringTicket: typeof data.recurringTicket === "number" ? data.recurringTicket : null,
+        tags: ((data.tags as Array<Record<string, unknown>> | undefined) ?? []).map((tag) => ({
+          id: String(tag.id ?? tag.name),
+          name: String(tag.name ?? "Sem nome"),
+          color: typeof tag.color === "string" ? tag.color : null,
+          customers: typeof tag.customers === "number" ? tag.customers : null,
+          orders: Number(tag.orders ?? 0),
+          revenue: Number(tag.revenue ?? 0),
+        })),
+      };
   const metrics = (data.metrics ?? {}) as Record<string, unknown>;
   const showingAttendanceDemo =
     tab === "attendance" &&
@@ -536,12 +664,12 @@ export function DashboardPage() {
               { value: "custom", label: "Personalizado" },
             ]}
             onChange={(value) =>
-                replace({
-                  period: value === "30d" ? null : value,
-                  start: null,
-                  end: null,
-                })
-              }
+              replace({
+                period: value === "30d" ? null : value,
+                start: null,
+                end: null,
+              })
+            }
           />
           <FilterSelect
             label="Pipeline"
@@ -550,7 +678,10 @@ export function DashboardPage() {
             aria-label="Filtrar por pipeline"
             options={[
               { value: "", label: "Todos acessíveis" },
-              ...(options.data?.pipelines ?? []).map((item) => ({ value: item.id, label: item.name })),
+              ...(options.data?.pipelines ?? []).map((item) => ({
+                value: item.id,
+                label: item.name,
+              })),
             ]}
             onChange={(value) => replace({ pipeline: value || null })}
           />
@@ -615,7 +746,9 @@ export function DashboardPage() {
         ) : null}
       </section>
       {area.error ? <ErrorBanner message={(area.error as Error).message} /> : null}
-      {area.isLoading && !area.data ? (
+      {area.isLoading && !area.data && tab === "customers" ? (
+        <CustomerInsightsSkeleton />
+      ) : area.isLoading && !area.data ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
             <Skeleton key={index} className="h-28" />
@@ -625,62 +758,62 @@ export function DashboardPage() {
       {tab === "overview" && area.data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <Metric
-                label="Receita confirmada"
-                value={money(metrics.confirmedRevenue)}
-                icon={TrendingUp}
-                href="/finance"
-              />
-              <Metric
-                label="Valor em aberto"
-                value={money(metrics.negotiatingValue)}
-                icon={WalletCards}
-                href="/pipelines"
-              />
-              <Metric
-                label="Pedidos confirmados"
-                value={number(metrics.salesCount)}
-                icon={ShoppingBag}
-                href="/orders"
-              />
-              <Metric
-                label="Conversão"
-                value={
-                  typeof metrics.conversionRate === "number"
-                    ? `${metrics.conversionRate}%`
-                    : "Sem fechamentos"
-                }
-                icon={BarChart3}
-                href="/pipelines"
-              />
-              <Metric
-                label="Aguardando nossa resposta"
-                value={number(metrics.waitingConversations)}
-                icon={MessagesSquare}
-                href="/pipelines"
-                tone="danger"
-              />
-              <Metric
-                label="Tarefas atrasadas"
-                value={number(metrics.overdueTasks)}
-                icon={AlertTriangle}
-                href="/tasks"
-                tone="danger"
-              />
-              <Metric
-                label="Negócios abertos"
-                value={number(metrics.openDeals)}
-                icon={BarChart3}
-                href="/pipelines"
-                tone="orange"
-              />
-              <Metric
-                label="Clientes prontos para recompra"
-                value={number(metrics.repurchaseReady)}
-                icon={UsersRound}
-                href="/clients"
-                tone="yellow"
-              />
+            <Metric
+              label="Receita confirmada"
+              value={money(metrics.confirmedRevenue)}
+              icon={TrendingUp}
+              href="/finance"
+            />
+            <Metric
+              label="Valor em aberto"
+              value={money(metrics.negotiatingValue)}
+              icon={WalletCards}
+              href="/pipelines"
+            />
+            <Metric
+              label="Pedidos confirmados"
+              value={number(metrics.salesCount)}
+              icon={ShoppingBag}
+              href="/orders"
+            />
+            <Metric
+              label="Conversão"
+              value={
+                typeof metrics.conversionRate === "number"
+                  ? `${metrics.conversionRate}%`
+                  : "Sem fechamentos"
+              }
+              icon={BarChart3}
+              href="/pipelines"
+            />
+            <Metric
+              label="Aguardando nossa resposta"
+              value={number(metrics.waitingConversations)}
+              icon={MessagesSquare}
+              href="/pipelines"
+              tone="danger"
+            />
+            <Metric
+              label="Tarefas atrasadas"
+              value={number(metrics.overdueTasks)}
+              icon={AlertTriangle}
+              href="/tasks"
+              tone="danger"
+            />
+            <Metric
+              label="Negócios abertos"
+              value={number(metrics.openDeals)}
+              icon={BarChart3}
+              href="/pipelines"
+              tone="orange"
+            />
+            <Metric
+              label="Clientes prontos para recompra"
+              value={number(metrics.repurchaseReady)}
+              icon={UsersRound}
+              href="/clients"
+              tone="yellow"
+            />
           </div>
           <div className="grid gap-3 xl:grid-cols-2">
             <AnalyticsChart
@@ -693,9 +826,9 @@ export function DashboardPage() {
             <AnalyticsChart
               title="Receita por canal"
               kind="horizontal-bar"
-              data={((data.channelPerformance as Array<Record<string, unknown>>) ?? []).map(
-                (row) => ({ label: row.label, value: row.revenue }),
-              ).filter((row) => Number(row.value ?? 0) > 0)}
+              data={((data.channelPerformance as Array<Record<string, unknown>>) ?? [])
+                .map((row) => ({ label: row.label, value: row.revenue }))
+                .filter((row) => Number(row.value ?? 0) > 0)}
               valueFormatter={money}
               emptyMessage="Nenhuma receita por canal neste período."
             />
@@ -710,19 +843,57 @@ export function DashboardPage() {
             <Metric
               label="Receita confirmada"
               value={money(metrics.confirmedRevenue)}
-              note={typeof metrics.confirmedRevenueDeltaPct === "number" ? `${metrics.confirmedRevenueDeltaPct >= 0 ? "+" : ""}${number(metrics.confirmedRevenueDeltaPct)}% em relação ao período anterior` : "Pedidos confirmados no período"}
+              note={
+                typeof metrics.confirmedRevenueDeltaPct === "number"
+                  ? `${metrics.confirmedRevenueDeltaPct >= 0 ? "+" : ""}${number(metrics.confirmedRevenueDeltaPct)}% em relação ao período anterior`
+                  : "Pedidos confirmados no período"
+              }
               icon={TrendingUp}
               tone="success"
             />
-            <Metric label="Valor em negociação" value={money(metrics.negotiatingValue)} note={`${number(metrics.openDeals)} negócios ativos`} icon={WalletCards} tone="orange" />
-            <Metric label="Conversão" value={typeof metrics.conversionRate === "number" ? `${number(metrics.conversionRate)}%` : "Sem fechamentos"} note={`${number(metrics.wonInPeriod)} ganhos de ${number(metrics.conversionDenominator)} encerrados`} icon={BarChart3} />
-            <Metric label="Ticket médio" value={money(metrics.averageTicket)} note="Por pedido confirmado" icon={ShoppingBag} />
+            <Metric
+              label="Valor em negociação"
+              value={money(metrics.negotiatingValue)}
+              note={`${number(metrics.openDeals)} negócios ativos`}
+              icon={WalletCards}
+              tone="orange"
+            />
+            <Metric
+              label="Conversão"
+              value={
+                typeof metrics.conversionRate === "number"
+                  ? `${number(metrics.conversionRate)}%`
+                  : "Sem fechamentos"
+              }
+              note={`${number(metrics.wonInPeriod)} ganhos de ${number(metrics.conversionDenominator)} encerrados`}
+              icon={BarChart3}
+            />
+            <Metric
+              label="Ticket médio"
+              value={money(metrics.averageTicket)}
+              note="Por pedido confirmado"
+              icon={ShoppingBag}
+            />
           </div>
-          <RevenueComparisonChart data={(data.revenueByPeriod as Array<Record<string, unknown>>) ?? []} />
-          <PipelinePerformance rows={(data.pipelinePerformance as Array<Record<string, unknown>>) ?? []} />
+          <RevenueComparisonChart
+            data={(data.revenueByPeriod as Array<Record<string, unknown>>) ?? []}
+          />
+          <PipelinePerformance
+            rows={(data.pipelinePerformance as Array<Record<string, unknown>>) ?? []}
+          />
           <div className="grid gap-3 xl:grid-cols-2">
-            <CommercialOpportunityList title="Próximos fechamentos" description="Oportunidades abertas com maior probabilidade e valor." rows={(data.topOpportunities as Array<Record<string, unknown>>) ?? []} kind="closing" />
-            <CommercialOpportunityList title="Negócios parados" description="Oportunidades sem interação há três dias ou mais." rows={(data.stalledOpportunities as Array<Record<string, unknown>>) ?? []} kind="stalled" />
+            <CommercialOpportunityList
+              title="Próximos fechamentos"
+              description="Oportunidades abertas com maior probabilidade e valor."
+              rows={(data.topOpportunities as Array<Record<string, unknown>>) ?? []}
+              kind="closing"
+            />
+            <CommercialOpportunityList
+              title="Negócios parados"
+              description="Oportunidades sem interação há três dias ou mais."
+              rows={(data.stalledOpportunities as Array<Record<string, unknown>>) ?? []}
+              kind="stalled"
+            />
           </div>
         </>
       ) : null}
@@ -732,9 +903,14 @@ export function DashboardPage() {
             <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50/55 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-violet-900">Visualização demonstrativa</p>
-                <p className="text-xs text-violet-700">Estes dados são fictícios e serão substituídos automaticamente quando houver atendimentos no período.</p>
+                <p className="text-xs text-violet-700">
+                  Estes dados são fictícios e serão substituídos automaticamente quando houver
+                  atendimentos no período.
+                </p>
               </div>
-              <Badge className="shrink-0 bg-violet-600 text-white hover:bg-violet-600">Demonstração</Badge>
+              <Badge className="shrink-0 bg-violet-600 text-white hover:bg-violet-600">
+                Demonstração
+              </Badge>
             </div>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -788,10 +964,32 @@ export function DashboardPage() {
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Aguardando cliente" value={number(attendance.waitingCustomer)} note="Equipe já respondeu" icon={Clock3} tone="yellow" />
-            <Metric label="Não lidas" value={number(attendance.unread)} note="Mensagens ainda não visualizadas" icon={MessagesSquare} tone="danger" />
-            <Metric label="Iniciadas pelo cliente" value={number(attendance.initiatedByCustomer)} note="Entradas espontâneas" icon={UserRound} />
-            <Metric label="Iniciadas pela equipe" value={number(attendance.initiatedByTeam)} note="Abordagens ativas" icon={Headphones} />
+            <Metric
+              label="Aguardando cliente"
+              value={number(attendance.waitingCustomer)}
+              note="Equipe já respondeu"
+              icon={Clock3}
+              tone="yellow"
+            />
+            <Metric
+              label="Não lidas"
+              value={number(attendance.unread)}
+              note="Mensagens ainda não visualizadas"
+              icon={MessagesSquare}
+              tone="danger"
+            />
+            <Metric
+              label="Iniciadas pelo cliente"
+              value={number(attendance.initiatedByCustomer)}
+              note="Entradas espontâneas"
+              icon={UserRound}
+            />
+            <Metric
+              label="Iniciadas pela equipe"
+              value={number(attendance.initiatedByTeam)}
+              note="Abordagens ativas"
+              icon={Headphones}
+            />
           </div>
           <div className="grid gap-3 xl:grid-cols-2">
             <AnalyticsChart
@@ -814,17 +1012,33 @@ export function DashboardPage() {
             <CardHeader className="flex-row items-start justify-between space-y-0">
               <div>
                 <CardTitle className="text-base">Conversas fora do SLA</CardTitle>
-                <p className="mt-1 text-xs text-muted-foreground">Atendimentos que ultrapassaram 60 minutos sem resposta.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Atendimentos que ultrapassaram 60 minutos sem resposta.
+                </p>
               </div>
               <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
-                {number((attendance.outsideSla as unknown[])?.length ?? attendanceSla?.over60 ?? 0)} pendentes
+                {number((attendance.outsideSla as unknown[])?.length ?? attendanceSla?.over60 ?? 0)}{" "}
+                pendentes
               </Badge>
             </CardHeader>
             <CardContent>
-              {(attendance.outsideSla as Array<{ name: string; channel: string; wait: string; owner: string }> | undefined)?.length ? (
+              {(
+                attendance.outsideSla as
+                  Array<{ name: string; channel: string; wait: string; owner: string }> | undefined
+              )?.length ? (
                 <div className="divide-y divide-border/70">
-                  {(attendance.outsideSla as Array<{ name: string; channel: string; wait: string; owner: string }>).map((conversation) => (
-                    <div key={`${conversation.name}-${conversation.wait}`} className="grid gap-2 py-3 text-sm sm:grid-cols-[1.4fr_1fr_1fr_auto] sm:items-center">
+                  {(
+                    attendance.outsideSla as Array<{
+                      name: string;
+                      channel: string;
+                      wait: string;
+                      owner: string;
+                    }>
+                  ).map((conversation) => (
+                    <div
+                      key={`${conversation.name}-${conversation.wait}`}
+                      className="grid gap-2 py-3 text-sm sm:grid-cols-[1.4fr_1fr_1fr_auto] sm:items-center"
+                    >
                       <span className="font-medium">{conversation.name}</span>
                       <span className="text-muted-foreground">{conversation.channel}</span>
                       <span className="text-muted-foreground">{conversation.owner}</span>
@@ -835,7 +1049,9 @@ export function DashboardPage() {
               ) : (
                 <div className="rounded-xl border border-dashed border-border/80 bg-muted/15 px-6 py-10 text-center">
                   <p className="text-sm font-medium">Nenhuma conversa fora do SLA.</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Os atendimentos críticos aparecerão aqui.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Os atendimentos críticos aparecerão aqui.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -845,52 +1061,145 @@ export function DashboardPage() {
       {tab === "team" && area.data ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Receita da equipe" value={money(teamRevenue)} note={`${teamRows.filter((row) => row.revenue > 0).length} pessoas com vendas`} icon={TrendingUp} tone="success" />
-            <Metric label="Conversão média" value={`${number(teamAverageConversion)}%`} note="Entre pessoas com conversões" icon={Target} />
-            <Metric label="Negócios em aberto" value={number(teamOpenDeals)} note="Carteira ativa da equipe" icon={BriefcaseBusiness} tone="orange" />
-            <Metric label="Pontos de atenção" value={number(teamAttention)} note="Tarefas atrasadas e clientes esperando" icon={AlertTriangle} tone={teamAttention > 0 ? "danger" : "success"} />
+            <Metric
+              label="Receita da equipe"
+              value={money(teamRevenue)}
+              note={`${teamRows.filter((row) => row.revenue > 0).length} pessoas com vendas`}
+              icon={TrendingUp}
+              tone="success"
+            />
+            <Metric
+              label="Conversão média"
+              value={`${number(teamAverageConversion)}%`}
+              note="Entre pessoas com conversões"
+              icon={Target}
+            />
+            <Metric
+              label="Negócios em aberto"
+              value={number(teamOpenDeals)}
+              note="Carteira ativa da equipe"
+              icon={BriefcaseBusiness}
+              tone="orange"
+            />
+            <Metric
+              label="Pontos de atenção"
+              value={number(teamAttention)}
+              note="Tarefas atrasadas e clientes esperando"
+              icon={AlertTriangle}
+              tone={teamAttention > 0 ? "danger" : "success"}
+            />
           </div>
-          {teamRows.some((row) => row.revenue > 0) ? <TeamPodium rows={[...teamRows].sort((a, b) => b.revenue - a.revenue)} /> : null}
+          {teamRows.some((row) => row.revenue > 0) ? (
+            <TeamPodium rows={[...teamRows].sort((a, b) => b.revenue - a.revenue)} />
+          ) : null}
           <div className="grid gap-3 xl:grid-cols-2">
             <AnalyticsChart
               title="Receita por pessoa"
               kind="horizontal-bar"
-              data={teamRows.filter((row) => row.revenue > 0).sort((a, b) => b.revenue - a.revenue).map((row) => ({ label: row.name, value: row.revenue }))}
+              data={teamRows
+                .filter((row) => row.revenue > 0)
+                .sort((a, b) => b.revenue - a.revenue)
+                .map((row) => ({ label: row.name, value: row.revenue }))}
               valueFormatter={money}
-              axisFormatter={(value) => value >= 1000 ? `R$ ${number(value / 1000)} mil` : `R$ ${number(value)}`}
+              axisFormatter={(value) =>
+                value >= 1000 ? `R$ ${number(value / 1000)} mil` : `R$ ${number(value)}`
+              }
               emptyMessage="A equipe ainda não registrou receita no período."
             />
             <AnalyticsChart
               title="Conversão por pessoa"
               kind="horizontal-bar"
-              data={teamRows.filter((row) => row.conversionRate > 0).sort((a, b) => b.conversionRate - a.conversionRate).map((row) => ({ label: row.name, value: row.conversionRate }))}
+              data={teamRows
+                .filter((row) => row.conversionRate > 0)
+                .sort((a, b) => b.conversionRate - a.conversionRate)
+                .map((row) => ({ label: row.name, value: row.conversionRate }))}
               valueFormatter={(value) => `${number(value)}%`}
               axisFormatter={(value) => `${value}%`}
               emptyMessage="Ainda não há base para calcular conversão."
             />
           </div>
-          {teamRows.length ? <TeamRanking rows={teamRows} /> : <EmptyState icon={UsersRound} title="Sem dados da equipe neste período" />}
+          {teamRows.length ? (
+            <TeamRanking rows={teamRows} />
+          ) : (
+            <EmptyState icon={UsersRound} title="Sem dados da equipe neste período" />
+          )}
           <div className="grid gap-3 lg:grid-cols-2">
             <Card>
-              <CardHeader><CardTitle className="text-base">Equipe que precisa de atenção</CardTitle><p className="text-xs text-muted-foreground">Pendências operacionais que podem impactar os resultados.</p></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Equipe que precisa de atenção</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Pendências operacionais que podem impactar os resultados.
+                </p>
+              </CardHeader>
               <CardContent className="space-y-2">
-                {teamRows.filter((row) => row.overdueTasks > 0 || row.waitingConversations > 0).length ? teamRows.filter((row) => row.overdueTasks > 0 || row.waitingConversations > 0).sort((a, b) => (b.overdueTasks + b.waitingConversations) - (a.overdueTasks + a.waitingConversations)).map((row) => (
-                  <div key={row.id} className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2.5">
-                    <div className="flex items-center gap-2"><Avatar name={row.name} size="sm" /><span className="text-sm font-medium">{row.name}</span></div>
-                    <div className="text-right text-xs"><span className="font-semibold text-red-600">{number(row.overdueTasks)} atrasadas</span><span className="ml-3 text-muted-foreground">{number(row.waitingConversations)} esperando</span></div>
-                  </div>
-                )) : <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Nenhuma pendência relevante no período.</p>}
+                {teamRows.filter((row) => row.overdueTasks > 0 || row.waitingConversations > 0)
+                  .length ? (
+                  teamRows
+                    .filter((row) => row.overdueTasks > 0 || row.waitingConversations > 0)
+                    .sort(
+                      (a, b) =>
+                        b.overdueTasks +
+                        b.waitingConversations -
+                        (a.overdueTasks + a.waitingConversations),
+                    )
+                    .map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2.5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Avatar name={row.name} size="sm" />
+                          <span className="text-sm font-medium">{row.name}</span>
+                        </div>
+                        <div className="text-right text-xs">
+                          <span className="font-semibold text-red-600">
+                            {number(row.overdueTasks)} atrasadas
+                          </span>
+                          <span className="ml-3 text-muted-foreground">
+                            {number(row.waitingConversations)} esperando
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                ) : (
+                  <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    Nenhuma pendência relevante no período.
+                  </p>
+                )}
               </CardContent>
             </Card>
             <Card>
-              <CardHeader><CardTitle className="text-base">Distribuição de oportunidades</CardTitle><p className="text-xs text-muted-foreground">Identifique pessoas sem carteira ou com poucas oportunidades.</p></CardHeader>
+              <CardHeader>
+                <CardTitle className="text-base">Distribuição de oportunidades</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Identifique pessoas sem carteira ou com poucas oportunidades.
+                </p>
+              </CardHeader>
               <CardContent className="space-y-2">
-                {[...teamRows].sort((a, b) => a.openDeals - b.openDeals).slice(0, 5).map((row) => (
-                  <div key={row.id} className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2.5">
-                    <div className="flex items-center gap-2"><Avatar name={row.name} size="sm" /><span className="text-sm font-medium">{row.name}</span></div>
-                    <Badge variant="outline" className={cn(row.openDeals === 0 && "border-amber-200 bg-amber-50 text-amber-700")}>{row.openDeals === 0 ? "Sem oportunidades" : `${number(row.openDeals)} negócios`}</Badge>
-                  </div>
-                ))}
+                {[...teamRows]
+                  .sort((a, b) => a.openDeals - b.openDeals)
+                  .slice(0, 5)
+                  .map((row) => (
+                    <div
+                      key={row.id}
+                      className="flex items-center justify-between rounded-xl border border-border/70 px-3 py-2.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar name={row.name} size="sm" />
+                        <span className="text-sm font-medium">{row.name}</span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          row.openDeals === 0 && "border-amber-200 bg-amber-50 text-amber-700",
+                        )}
+                      >
+                        {row.openDeals === 0
+                          ? "Sem oportunidades"
+                          : `${number(row.openDeals)} negócios`}
+                      </Badge>
+                    </div>
+                  ))}
               </CardContent>
             </Card>
           </div>
@@ -898,56 +1207,7 @@ export function DashboardPage() {
       ) : null}
       {tab === "goals" ? <GoalsPanel data={goals.data} options={options.data} /> : null}
       {tab === "customers" && area.data ? (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Clientes novos" value={number(data.newCustomers)} />
-            <Metric label="Clientes recorrentes" value={number(data.recurringCustomers)} />
-            <Metric label="Receita de novos" value={money(data.newRevenue)} />
-            <Metric label="Receita recorrente" value={money(data.recurringRevenue)} />
-            <Metric label="Ticket novos" value={money(data.newTicket)} />
-            <Metric label="Ticket recorrentes" value={money(data.recurringTicket)} />
-          </div>
-          <div className="grid gap-3 xl:grid-cols-2">
-            <AnalyticsChart
-              title="Clientes novos × recorrentes"
-              kind="donut"
-              data={[
-                { label: "Novos", value: data.newCustomers },
-                { label: "Recorrentes", value: data.recurringCustomers },
-              ]}
-            />
-            <AnalyticsChart
-              title="Receita nova × recorrente"
-              data={[
-                { label: "Novos", value: data.newRevenue },
-                { label: "Recorrentes", value: data.recurringRevenue },
-              ]}
-              valueFormatter={money}
-            />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Segmentos por tags</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {((data.tags as Array<Record<string, unknown>>) ?? []).length ? (
-                (data.tags as Array<Record<string, unknown>>).map((tag) => (
-                  <div
-                    key={String(tag.id)}
-                    className="flex items-center justify-between rounded-lg border p-3 text-sm"
-                  >
-                    <span className="font-medium">{String(tag.name)}</span>
-                    <span>
-                      {number(tag.orders)} pedidos · {money(tag.revenue)}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <EmptyState title="Sem tags associadas a compradores no período" />
-              )}
-            </CardContent>
-          </Card>
-        </>
+        <CustomerInsights data={customerData} demo={showingCustomersDemo} />
       ) : null}
       {tab === "channels" && area.data ? (
         <>

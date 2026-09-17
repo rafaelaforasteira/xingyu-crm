@@ -40,6 +40,7 @@ import type {
 import { PageHeader, PaginationBar, ErrorBanner } from "@/components/crm/page-header";
 import { CreateOpportunityDialog } from "@/components/crm/create-opportunity-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ClientRelativeTime } from "@/components/ui/client-relative-time";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -1064,40 +1065,20 @@ export function AfterSalesPage() {
     retry: false,
   });
   const occurrences = (data?.data ?? []).filter((item) => pipelineConfig.types.includes(item.type ?? ""));
+  const attendanceStages = [
+    { id: "OPEN", name: "Novo atendimento", color: "#8B5CF6", statuses: ["OPEN"] },
+    { id: "UNDER_REVIEW", name: "Em análise", color: "#3B82F6", statuses: ["UNDER_REVIEW"] },
+    { id: "AWAITING", name: "Aguardando retorno", color: "#F59E0B", statuses: ["AWAITING_FILES", "AWAITING_CUSTOMER", "AWAITING_DEPARTMENT"] },
+    { id: "APPROVED", name: "Solução aprovada", color: "#10B981", statuses: ["APPROVED"] },
+    { id: "DONE", name: "Concluído", color: "#64748B", statuses: ["RESOLVED", "CLOSED", "REJECTED"] },
+  ];
 
   return (
     <div>
       <PageHeader title={`Atendimento · ${pipelineConfig.title}`} description={pipelineConfig.description} />
       {error ? <ErrorBanner message={(error as Error).message} /> : null}
-      <div className="space-y-2">
-        {isLoading
-          ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
-          : null}
-        {!isLoading && occurrences.length === 0 ? (
-          <EmptyState icon={Headphones} title={`Nenhum atendimento em ${pipelineConfig.title.toLowerCase()}`} />
-        ) : null}
-        {occurrences.map((o) => (
-          <Link
-            key={o.id}
-            href={`/after-sales/${o.id}`}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-soft hover:border-primary/30"
-          >
-            <div>
-              <p className="font-medium">{o.title}</p>
-              <p className="text-xs text-muted-foreground">
-                {o.contact?.name ?? "—"}
-                {o.order?.number ? ` · Pedido #${o.order.number}` : ""}
-                {" · "}
-                <ClientRelativeTime value={o.openedAt} />
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {o.priority ? <Badge variant="warning">{o.priority}</Badge> : null}
-              <Badge>{o.status}</Badge>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {isLoading ? <Skeleton className="h-96 w-full" /> : null}
+      {!isLoading ? <div className="overflow-x-auto pb-4"><div className="flex min-w-max gap-3">{attendanceStages.map((stage) => { const cards = occurrences.filter((item) => stage.statuses.includes(item.status ?? "OPEN")); return <section key={stage.id} className="flex w-[292px] flex-col rounded-xl border border-border bg-muted/20 p-2.5"><header className="mb-2 flex items-center gap-2 px-1"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: stage.color }} /><h2 className="min-w-0 flex-1 truncate text-xs font-bold uppercase tracking-wide">{stage.name}</h2><Badge variant="outline" className="h-5 min-w-5 justify-center px-1.5 text-[10px]">{cards.length}</Badge></header><div className="space-y-2">{cards.map((o) => <Link key={o.id} href={`/after-sales/${o.id}`} className="block rounded-xl border border-border/80 bg-card p-3 shadow-soft transition hover:border-primary/30 hover:shadow-card"><div className="flex items-start justify-between gap-2"><p className="line-clamp-2 text-sm font-semibold leading-snug">{o.title}</p>{o.assignee ? <Avatar name={o.assignee.name} size="sm" /> : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-muted"><UserRound className="h-3.5 w-3.5 text-muted-foreground" /></span>}</div><p className="mt-1 truncate text-xs text-muted-foreground">{o.contact?.name ?? "Sem contato"}</p>{o.order?.number ? <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Pedido #{o.order.number}</p> : null}<div className="mt-3 flex items-center justify-between gap-2"><span className="text-[11px] text-muted-foreground"><ClientRelativeTime value={o.openedAt} /></span>{o.priority ? <Badge variant="warning" className="text-[10px]">{o.priority}</Badge> : null}</div></Link>)}{!cards.length ? <div className="rounded-lg border border-dashed px-3 py-8 text-center text-xs text-muted-foreground">Solte atendimentos aqui</div> : null}</div></section>; })}</div></div> : null}
       {data?.meta && data.meta.totalPages > 1 ? (
         <PaginationBar
           page={data.meta.page}

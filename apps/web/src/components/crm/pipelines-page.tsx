@@ -134,6 +134,7 @@ function PipelineCard({
   onDelete,
   onAction,
   canManage,
+  basePath,
 }: {
   pipeline: Pipeline;
   actionPending: boolean;
@@ -141,6 +142,7 @@ function PipelineCard({
   onDelete: (pipeline: Pipeline) => void;
   onAction: (action: PipelineAction, pipeline: Pipeline) => void;
   canManage: boolean;
+  basePath: string;
 }) {
   const router = useRouter();
   const Icon = resolvePipelineIcon(pipeline.icon);
@@ -156,9 +158,9 @@ function PipelineCard({
       tabIndex={0}
       aria-label={`Abrir pipeline ${pipeline.name}`}
       className="flex h-full cursor-pointer flex-col transition hover:border-primary/30 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={() => router.push(`/pipelines/${pipeline.id}?view=kanban`)}
+      onClick={() => router.push(`${basePath}/${pipeline.id}?view=kanban`)}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") router.push(`/pipelines/${pipeline.id}?view=kanban`);
+        if (event.key === "Enter" || event.key === " ") router.push(`${basePath}/${pipeline.id}?view=kanban`);
       }}
     >
       <CardHeader className="flex-row items-start justify-between gap-3">
@@ -172,7 +174,7 @@ function PipelineCard({
           <div className="min-w-0">
             <CardTitle className="truncate">
               <Link
-                href={`/pipelines/${pipeline.id}?view=kanban`}
+                href={`${basePath}/${pipeline.id}?view=kanban`}
                 className="outline-none hover:text-primary focus-visible:text-primary"
                 onClick={(event) => event.stopPropagation()}
               >
@@ -202,7 +204,7 @@ function PipelineCard({
           >
             <Link
               role="menuitem"
-              href={`/pipelines/${pipeline.id}?view=kanban`}
+              href={`${basePath}/${pipeline.id}?view=kanban`}
               className="flex items-center gap-2 rounded-md px-2.5 py-2 text-sm transition hover:bg-accent"
             >
               <ExternalLink className="h-4 w-4" />
@@ -354,7 +356,7 @@ function PipelineCard({
             Atualizado em {formatUpdatedAt(pipeline.updatedAt)}
           </p>
           <Link
-            href={`/pipelines/${pipeline.id}?view=kanban`}
+            href={`${basePath}/${pipeline.id}?view=kanban`}
             className="text-xs font-medium text-primary hover:underline"
             onClick={(event) => event.stopPropagation()}
           >
@@ -366,7 +368,7 @@ function PipelineCard({
   );
 }
 
-export function PipelinesListPage() {
+export function PipelinesListPage({ space = "COMMERCIAL", basePath = "/pipelines" }: { space?: "COMMERCIAL" | "ATTENDANCE"; basePath?: string } = {}) {
   const { user } = useAuth();
   const canManage = user?.role === "ADMIN";
   const router = useRouter();
@@ -388,6 +390,7 @@ export function PipelinesListPage() {
     search: deferredSearch || undefined,
     archived: tab === "archived",
     favorite: tab === "favorites" ? true : undefined,
+    space,
   };
 
   const list = useQuery({
@@ -405,7 +408,7 @@ export function PipelinesListPage() {
     const next = new URLSearchParams();
     if (idleDays) next.set("idleDays", idleDays);
     if (stageId) next.set("stageId", stageId);
-    router.replace(`/pipelines/${first.id}?${next.toString()}`);
+    router.replace(`${basePath}/${first.id}?${next.toString()}`);
   }, [list.data?.data, router, searchParams]);
 
   const actionMutation = useMutation({
@@ -474,8 +477,8 @@ export function PipelinesListPage() {
   return (
     <div>
       <PageHeader
-        title="Pipelines"
-        description="Crie, organize e acompanhe todos os funis da operação."
+        title={space === "ATTENDANCE" ? "Atendimento" : "Pipelines"}
+        description={space === "ATTENDANCE" ? "Crie e acompanhe funis de conversa e suporte ao cliente." : "Crie, organize e acompanhe todos os funis da operação."}
         actions={
           <div className="flex flex-wrap gap-2">
             {canManage ? <Link className={buttonVariants({ variant: "outline" })} href="/pipelines/access"><UsersRound className="h-4 w-4" />Equipes e acessos</Link> : null}
@@ -553,6 +556,7 @@ export function PipelinesListPage() {
               <PipelineCard
                 key={pipeline.id}
                 pipeline={pipeline}
+                basePath={basePath}
                 canManage={canManage}
                 actionPending={actionMutation.isPending || deleteMutation.isPending}
                 onEdit={openEditDialog}
@@ -579,8 +583,9 @@ export function PipelinesListPage() {
           if (!open) setEditingPipeline(null);
         }}
         pipeline={editingPipeline}
+        initialSpace={space}
         onSaved={(savedPipeline, mode) => {
-          if (mode === "create") router.push(`/pipelines/${savedPipeline.id}`);
+          if (mode === "create") router.push(`${basePath}/${savedPipeline.id}`);
         }}
       />
 
@@ -628,7 +633,7 @@ export function PipelinesListPage() {
   );
 }
 
-export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
+export function PipelineBoardPage({ pipelineId, basePath = "/pipelines" }: { pipelineId: string; basePath?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const openDealDrawer = useUiStore((state) => state.openDealDrawer);
@@ -647,14 +652,14 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
 
   const onOpenDeal = (deal: Deal) => {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
-      router.push(`/pipelines/${pipelineId}/deals/${deal.id}`);
+      router.push(`${basePath}/${pipelineId}/deals/${deal.id}`);
       return;
     }
     openDealDrawer(deal.id);
   };
 
   const clearBoardFilters = () => {
-    router.replace(`/pipelines/${pipelineId}`);
+    router.replace(`${basePath}/${pipelineId}`);
   };
 
   return (
@@ -664,8 +669,8 @@ export function PipelineBoardPage({ pipelineId }: { pipelineId: string }) {
         description={data?.description ?? "Quadro Kanban"}
         actions={
           <div className="flex flex-wrap items-center gap-3">
-            <PipelineViewSwitcher pipelineId={pipelineId} active="kanban" />
-            <Link href="/pipelines" className="text-sm text-primary hover:underline">
+            <PipelineViewSwitcher pipelineId={pipelineId} active="kanban" kanbanHref={`${basePath}/${pipelineId}`} conversationsHref={`${basePath}/${pipelineId}/conversations`} />
+            <Link href={basePath} className="text-sm text-primary hover:underline">
               Todos os pipelines
             </Link>
             <Button

@@ -39,14 +39,13 @@ export function OrderKanbanCard({
     URGENT: "bg-red-100 text-red-700",
   };
   const seller = order.owner?.name || order.deal?.owner?.name;
-  const context = [
-    order.deal?.leadSequence
-      ? `${t.leadShort} #${String(order.deal.leadSequence).padStart(4, "0")}`
-      : null,
-    seller,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const displayOwner = operationalOwner || order.owner || order.deal?.owner;
+  const leadName =
+    order.deal?.contact?.name ||
+    order.contact?.name ||
+    order.customerNameSnapshot ||
+    order.company?.name ||
+    "Cliente não vinculado";
   const tracking = order.shipments?.[0]?.trackingCode || order.trackingCode;
   const units = order.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
   const due = order.operationalDueAt ? new Date(order.operationalDueAt) : null;
@@ -65,17 +64,19 @@ export function OrderKanbanCard({
       data-testid="order-kanban-card"
       data-order-id={order.id}
       onClick={onOpen}
-      className="cursor-grab rounded-xl border border-border bg-card p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="flex cursor-grab flex-col rounded-xl border border-border bg-card p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
       style={{ opacity: drag.isDragging ? 0.45 : 1 }}
     >
       <div className="flex items-start justify-between gap-2">
-        <strong
-          data-testid="order-kanban-title"
-          className="min-w-0 truncate text-sm font-semibold text-foreground"
-          title={displayNumber}
-        >
-          {displayNumber}
-        </strong>
+        <div className="min-w-0 pr-1">
+          <p data-testid="order-kanban-title" className="truncate text-sm font-semibold text-foreground" title={displayNumber}>
+            {displayNumber}
+          </p>
+          <p className="mt-3 truncate text-xs text-muted-foreground" title={leadName}>{leadName}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={seller || undefined}>
+            {seller || "Não atribuída"}
+          </p>
+        </div>
         <div
           className="flex shrink-0 flex-col items-center gap-1.5"
           onPointerDown={stop}
@@ -95,10 +96,10 @@ export function OrderKanbanCard({
                 aria-label={`${t.owner}: ${operationalOwner?.name || t.noOwner}`}
                 onClick={() => setOwnerOpen((open) => !open)}
               >
-                {operationalOwner ? (
+                {displayOwner ? (
                   <Avatar
-                    name={operationalOwner.name}
-                    src={operationalOwner.avatarUrl}
+                    name={displayOwner.name}
+                    src={displayOwner.avatarUrl}
                     size="sm"
                     className="h-7 w-7"
                   />
@@ -186,11 +187,9 @@ export function OrderKanbanCard({
           ) : null}
         </div>
       </div>
-      <p className="mt-1 h-4 truncate text-xs text-muted-foreground" title={context || undefined}>
-        {context || " "}
-      </p>
-      <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-        <strong className="truncate font-semibold text-primary">
+      <div className="mt-3">
+        <div className="flex items-center justify-between gap-2 text-xs">
+        <strong className="truncate font-semibold text-emerald-600 dark:text-emerald-400">
           {formatOrderCurrency(
             Number(order.finalValue ?? order.total ?? 0),
             order.currency,
@@ -200,6 +199,7 @@ export function OrderKanbanCard({
         <span className="shrink-0 text-muted-foreground">
           {units} {t.units}
         </span>
+        </div>
       </div>
       <div className="mt-1.5 flex min-h-4 items-center justify-between gap-2 text-[11px]">
         <span

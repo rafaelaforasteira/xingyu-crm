@@ -1,5 +1,9 @@
 "use client";
-import { HelpCircle } from "lucide-react";
+import styles from "./tracking-overview.module.css";
+import type { ReactNode } from "react";
+import { AnimatedMetric, useTrackingMotion } from "./tracking-motion";
+import { ChartTooltip } from "./tracking-help";
+import { compactMoney, integer, dateBR } from "./tracking-format";
 import {
   Area,
   AreaChart,
@@ -17,23 +21,16 @@ import { ptBR } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
-import { REACTIVATION_DAYS } from "./sales-tracking-rules";
-import type { SalesTrackingData, Trend } from "./sales-tracking-types";
+import type { SalesTrackingData } from "./sales-tracking-types";
+import { SalesIntelligence } from "./sales-intelligence";
 import { FinancialFunnel } from "./financial-funnel";
 import {
   money,
   percentage as percent,
-  SalesTrend as TrendIndicator,
 } from "./sales-overview-format";
-const integer = (value: number) => new Intl.NumberFormat("pt-BR").format(value);
-const tooltipStyle = {
-  borderRadius: 14,
-  borderColor: "hsl(var(--border))",
-  background: "hsl(var(--card))",
-  fontSize: 12,
-};
 export function SalesHero({ data }: { data: SalesTrackingData }) {
   const reduced = useReducedMotion();
+  const { revision, initial } = useTrackingMotion();
   const overview = data.overview;
   const composition = [
     {
@@ -52,58 +49,18 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
   return (
     <Card className="overflow-hidden rounded-2xl border-primary/15 shadow-soft">
       <CardContent className="space-y-5 p-3 sm:p-5">
-        <div className="grid gap-5 xl:grid-cols-[0.92fr_1.08fr]">
+        <div className="mx-auto grid w-full gap-4 xl:w-[90%] xl:grid-cols-[0.92fr_0.9fr]">
           <section
-            className="min-w-0 rounded-2xl bg-gradient-to-b from-warning/[0.025] to-success/[0.025] p-4 sm:p-5"
+            className="flex min-w-0 items-center rounded-2xl bg-muted/40 p-4"
             aria-label="Fluxo financeiro"
           >
-            <FinancialFunnel flow={overview.financialFlow} isMock={data.source === "mock"} />
+            <FinancialFunnel flow={overview.financialFlow} />
           </section>
 
-          <section
-            className="flex min-w-0 flex-col rounded-2xl bg-slate-50/60 p-4 sm:p-5"
-            aria-label="Inteligência das vendas realizadas"
-          >
-            <div className="grid flex-1 grid-cols-1 gap-3 min-[380px]:grid-cols-2">
-              <PrimaryMetric
-                tone="primary"
-                label="LTV médio"
-                value={money(overview.averageLtv)}
-                detail="dos compradores do período"
-                trend={overview.trends.averageLtv}
-                help="Valor líquido acumulado pelos compradores selecionados ao longo do relacionamento até o fim do período analisado."
-              />
-              <PrimaryMetric
-                label="Tempo médio até recompra"
-                value={`${overview.averageRepurchaseDays} dias`}
-                detail="entre compras válidas"
-                trend={overview.trends.averageRepurchaseDays}
-              />
-              <PrimaryMetric
-                tone="success"
-                label="Receita de recompra"
-                value={percent(overview.repeatRevenuePercentage)}
-                detail={money(overview.repeatRevenue)}
-                trend={overview.trends.repeatRevenue}
-              />
-              <PrimaryMetric
-                tone="primary"
-                label="Clientes reativados"
-                value={integer(overview.reactivatedCustomers)}
-                detail={`${percent(overview.reactivatedCustomersPercentage)} dos compradores`}
-                trend={overview.trends.reactivatedCustomers}
-                help={`Retornaram após pelo menos ${REACTIVATION_DAYS} dias sem comprar.`}
-              />
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
-              <SecondaryMetric label="Pedidos pagos" value={integer(overview.paidOrders)} />
-              <SecondaryMetric label="Compradores" value={integer(overview.buyers)} />
-              <SecondaryMetric label="Ticket médio" value={money(overview.averageTicket)} />
-            </div>
-          </section>
+          <SalesIntelligence data={data} />
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-[1.7fr_0.8fr]">
+        <div className={styles.heroCharts + " grid gap-5 xl:grid-cols-[1.7fr_0.8fr]"}>
           <section
             className="min-w-0 rounded-2xl bg-muted/25 p-3 sm:p-5"
             aria-label="Evolução das vendas"
@@ -112,7 +69,13 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
               <div>
                 <h3 className="font-semibold">Evolução das vendas</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Vendas brutas e líquidas ao longo do período.
+                  Vendas brutas e líquidas ·{" "}
+                  {data.granularity === "day"
+                    ? "visão diária"
+                    : data.granularity === "week"
+                      ? "visão semanal"
+                      : "visão mensal"}
+                  .
                 </p>
               </div>
               <div className="flex gap-4 text-xs text-muted-foreground">
@@ -126,6 +89,7 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
             >
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
+                  accessibilityLayer
                   data={overview.timeline}
                   margin={{ top: 20, right: 18, left: 0, bottom: 16 }}
                 >
@@ -143,7 +107,9 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                   <XAxis
                     dataKey="date"
                     tickFormatter={(date: string) =>
-                      format(parseISO(date), "dd MMM", { locale: ptBR }).replace(".", "")
+                      format(parseISO(date), data.granularity === "month" ? "MMM yy" : "dd MMM", {
+                        locale: ptBR,
+                      }).replace(".", "")
                     }
                     tickMargin={12}
                     tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
@@ -165,6 +131,7 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                     cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.2 }}
                   />
                   <Area
+                    key={"gross-" + revision}
                     type="monotone"
                     dataKey="grossSales"
                     name="Vendas brutas"
@@ -174,9 +141,10 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                     dot={false}
                     activeDot={{ r: 4 }}
                     isAnimationActive={!reduced}
-                    animationDuration={500}
+                    animationDuration={initial ? 600 : 350}
                   />
                   <Area
+                    key={"net-" + revision}
                     type="monotone"
                     dataKey="netSales"
                     name="Vendas líquidas"
@@ -186,7 +154,7 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                     dot={false}
                     activeDot={{ r: 4 }}
                     isAnimationActive={!reduced}
-                    animationDuration={550}
+                    animationDuration={350}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -195,14 +163,15 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
 
           <section
             className="min-w-0 rounded-2xl bg-primary/[0.025] p-4 sm:p-5"
-            aria-label="Origem da receita líquida"
+            aria-label="Composição da receita líquida"
           >
-            <h3 className="font-semibold">Origem da receita líquida</h3>
+            <h3 className="font-semibold">Composição da receita líquida</h3>
             <p className="mt-1 text-xs text-muted-foreground">Primeira compra versus recompra.</p>
             <div className="relative mx-auto mt-3 h-[220px] max-w-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
+                    key={revision}
                     data={composition}
                     dataKey="value"
                     nameKey="name"
@@ -212,21 +181,35 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                     cornerRadius={5}
                     stroke="none"
                     isAnimationActive={!reduced}
-                    animationDuration={500}
+                    animationDuration={initial ? 600 : 350}
                   >
                     {composition.map((item) => (
                       <Cell key={item.name} fill={item.color} />
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number, name: string) => [money(Number(value)), name]}
-                    contentStyle={tooltipStyle}
+                    content={({ active, payload }) => {
+                      const item = payload?.[0]?.payload as
+                        (typeof composition)[number] | undefined;
+                      return active && item ? (
+                        <ChartTooltip
+                          title={item.name}
+                          rows={[
+                            ["Receita líquida", money(item.value)],
+                            ["Participação", percent(item.percentage)],
+                          ]}
+                        />
+                      ) : null;
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
                 <strong className="text-2xl font-semibold tracking-tight tabular-nums">
-                  {compactMoney(overview.netSales)}
+                  <AnimatedMetric
+                    value={overview.netSales}
+                    format={(v) => (v == null ? "—" : compactMoney(v))}
+                  />
                 </strong>
                 <span className="text-[11px] text-muted-foreground">Receita líquida</span>
               </div>
@@ -255,64 +238,6 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
   );
 }
 
-function PrimaryMetric({
-  label,
-  value,
-  detail,
-  trend,
-  help,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  trend: Trend | null;
-  help?: string;
-  tone?: "primary" | "success" | "neutral";
-}) {
-  return (
-    <div
-      className={cn(
-        "flex min-w-0 flex-col justify-center rounded-2xl p-4 shadow-sm transition-shadow hover:shadow-soft",
-        tone === "primary" && "bg-primary/[0.065]",
-        tone === "success" && "bg-success/[0.08]",
-        tone === "neutral" && "bg-slate-100/70",
-      )}
-    >
-      <div className="flex items-center gap-1">
-        <p className="text-xs text-slate-600">{label}</p>
-        {help ? (
-          <span tabIndex={0} title={help} aria-label={`${label}: ${help}`}>
-            <HelpCircle className="h-3 w-3 text-slate-500" />
-          </span>
-        ) : null}
-      </div>
-      <p
-        className={cn(
-          "mt-2 text-slate-900 text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl",
-          tone === "primary" && "text-primary",
-          tone === "success" && "text-success",
-        )}
-      >
-        {value}
-      </p>
-      <p className="mt-0.5 text-[11px] text-slate-500">{detail}</p>
-      <div className="mt-2">
-        <TrendIndicator trend={trend} />
-      </div>
-    </div>
-  );
-}
-
-function SecondaryMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-xl bg-slate-100/80 px-3 py-3">
-      <p className="text-[11px] text-slate-600">{label}</p>
-      <p className="mt-1 text-slate-900 text-base font-semibold tabular-nums sm:text-lg">{value}</p>
-    </div>
-  );
-}
-
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
@@ -322,31 +247,33 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-const compactMoney = (value: number) =>
-  value >= 1_000_000
-    ? `R$ ${(value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`
-    : value >= 1000
-      ? `R$ ${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} mil`
-      : `R$ ${value.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}`;
-
 function SalesTimelineTooltip({
   active,
   payload,
 }: {
   active?: boolean;
   payload?: Array<{
-    payload?: { date: string; grossSales: number; netSales: number; paidOrders: number };
+    payload?: {
+      date: string;
+      endDate: string;
+      grossSales: number;
+      netSales: number;
+      paidOrders: number;
+      realizationRate: number | null;
+    };
   }>;
 }) {
   const point = payload?.[0]?.payload;
   if (!active || !point) return null;
-  const realization = point.grossSales ? (point.netSales / point.grossSales) * 100 : null;
+  const realization = point.realizationRate;
   const date = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
     .format(new Date(`${point.date}T12:00:00`))
     .replace(".", "");
   return (
     <div className="min-w-48 rounded-xl border border-border bg-card p-3 text-xs shadow-soft">
-      <p className="mb-2 font-semibold">{date}</p>
+      <p className="mb-2 font-semibold">
+        {point.endDate !== point.date ? dateBR(point.date) + " → " + dateBR(point.endDate) : date}
+      </p>
       <TooltipRow label="Vendas brutas" value={money(point.grossSales)} color="bg-warning" />
       <TooltipRow label="Vendas líquidas" value={money(point.netSales)} color="bg-success" />
       <div className="mt-2 border-t border-border/60 pt-2">
@@ -360,7 +287,7 @@ function SalesTimelineTooltip({
   );
 }
 
-function TooltipRow({ label, value, color }: { label: string; value: string; color?: string }) {
+function TooltipRow({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
   return (
     <div className="flex items-center justify-between gap-4 py-0.5">
       <span className="flex items-center gap-1.5 text-muted-foreground">

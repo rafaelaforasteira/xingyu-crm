@@ -686,6 +686,7 @@ model Pipeline {
   id             String             @id @default(cuid())
   organizationId String
   name           String
+  space          String             @default("COMMERCIAL")
   description    String?
   color          String?            @default("#7C3AED")
   icon           String?
@@ -718,6 +719,7 @@ model Pipeline {
   @@index([defaultTeamId])
   @@index([defaultOwnerId])
   @@index([organizationId, deletedAt, archived, favorite])
+  @@index([organizationId, space, deletedAt, archived, position])
 }
 
 model PipelineTeamAccess {

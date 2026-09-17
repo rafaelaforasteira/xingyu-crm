@@ -1,135 +1,240 @@
 "use client";
-import { useId, useState } from "react";
-import { Info } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
+import { AnimatedMetric, useTrackingMotion } from "./tracking-motion";
 import type { FinancialFlowData } from "./sales-tracking-types";
-import { money, percentage, SalesTrend } from "./sales-overview-format";
+import { money, percentage } from "./tracking-format";
+import {
+  formatFunnelMoney,
+  percentagePoints,
+  realizationComparison,
+} from "./financial-funnel-format";
+import { FunnelTooltipScope, FunnelTooltipTrigger } from "./financial-funnel-tooltip";
 import styles from "./financial-funnel.module.css";
 
-export function FinancialFunnel({ flow, isMock }: { flow: FinancialFlowData; isMock: boolean }) {
-  const [recoveryOpen, setRecoveryOpen] = useState(false);
-  const id = useId();
-  const clipId = `funnel-${id.replace(/:/g, "")}`;
-  const hasRecovery = (flow.recoverableAmount ?? 0) > 0 || (flow.recoveredAmount ?? 0) > 0;
-  const rate = (value: number | null) =>
-    value != null && Number.isFinite(value) ? percentage(value) : "—";
-  if (!Number.isFinite(flow.grossSales) || flow.grossSales <= 0)
+type Stage = {
+  label: string;
+  value: number;
+  tone: "gross" | "loss" | "refund" | "net";
+  detail: string;
+  balance?: number;
+};
+
+// Each transition lives inside its next stage: one layout source for both.
+const STAGE_LAYOUT: Record<Stage["tone"], CSSProperties & Record<string, string>> = {
+  gross: { "--stage-offset": "0cqw", "--stage-width": "66cqw" },
+  loss: { "--stage-offset": "4.6cqw", "--stage-width": "56.8cqw" },
+  refund: { "--stage-offset": "9.2cqw", "--stage-width": "47.6cqw" },
+  net: { "--stage-offset": "13.8cqw", "--stage-width": "38.4cqw" },
+};
+
+export function FinancialFunnel({ flow }: { flow: FinancialFlowData }) {
+  const { revision, initial } = useTrackingMotion();
+  const comparison = realizationComparison(flow);
+  if (!Number.isFinite(flow.grossSales) || flow.grossSales <= 0) {
     return (
-      <div className="flex min-h-72 items-center justify-center rounded-2xl bg-muted/40 p-6 text-center text-sm text-muted-foreground">
+      <div className="flex min-h-72 items-center justify-center p-6 text-center text-sm text-muted-foreground">
         Nenhuma venda encontrada neste período.
       </div>
     );
-  const stages = [
-    { label: "Vendas brutas", value: money(flow.grossSales), tone: "gross", y: 10.5 },
+  }
+  const stages: Stage[] = [
+    {
+      label: "Vendas brutas",
+      value: flow.grossSales,
+      tone: "gross",
+      detail: "100% do valor bruto gerado",
+    },
     {
       label: "Cancelamentos",
-      value: `− ${money(flow.cancellations)}`,
+      value: -flow.cancellations,
       tone: "loss",
-      y: 28,
-      percent: rate(flow.cancellationsRate),
+      detail: percentage(flow.cancellationsRate) + " das vendas brutas",
+      balance: flow.afterCancellations,
     },
     {
       label: "Reembolsos",
-      value: `− ${money(flow.refunds)}`,
+      value: -flow.refunds,
       tone: "refund",
-      y: 44,
-      percent: rate(flow.refundsRate),
+      detail: percentage(flow.refundsRate) + " das vendas brutas",
+      balance: flow.afterRefunds,
     },
     {
       label: "Vendas líquidas",
-      value: money(flow.netSales),
+      value: flow.netSales,
       tone: "net",
-      y: 61,
-      percent: rate(flow.realizationRate),
+      detail: percentage(flow.realizationRate) + " das vendas brutas",
     },
   ];
+  const rates: Partial<Record<Stage["tone"], ReactNode>> = {
+    loss: (
+      <FunnelTransitionRate
+        delay={180}
+        value={flow.grossToAfterCancellationRate}
+        label="Mantido após cancelamentos"
+        help={
+          <RateDetail
+            label="Mantido após cancelamentos"
+            value={flow.grossToAfterCancellationRate}
+            detail={`${money(flow.afterCancellations)} mantidos de ${money(flow.grossSales)} em vendas brutas.`}
+          />
+        }
+      />
+    ),
+    refund: (
+      <FunnelTransitionRate
+        delay={270}
+        value={flow.afterCancellationToAfterRefundRate}
+        label="Mantido após reembolsos"
+        help={
+          <RateDetail
+            label="Mantido após reembolsos"
+            value={flow.afterCancellationToAfterRefundRate}
+            detail={`${money(flow.afterRefunds)} mantidos de ${money(flow.afterCancellations)} após cancelamentos.`}
+          />
+        }
+      />
+    ),
+    net: (
+      <FunnelTransitionRate
+        delay={360}
+        value={flow.realizationRate}
+        label="Taxa de realização"
+        help={
+          <>
+            <RateDetail
+              label="Taxa de realização"
+              value={flow.realizationRate}
+              detail={`${money(flow.netSales)} líquidos sobre ${money(flow.grossSales)} brutos.`}
+            />
+            <span className="mt-3 block border-t border-border/60 pt-2">
+              <strong className="text-primary">{percentagePoints(comparison.delta)}</strong>
+              {comparison.previousRate != null && (
+                <span className="mt-1 block text-muted-foreground">
+                  vs. {percentage(comparison.previousRate)} no período anterior. Comparação em
+                  pontos percentuais.
+                </span>
+              )}
+            </span>
+          </>
+        }
+      />
+    ),
+  };
   return (
-    <div className={styles.funnel}>
+    <FunnelTooltipScope className={styles.funnel} revision={revision}>
       <p className="sr-only">
-        Fluxo financeiro. Formato esquemático: as larguras não representam os valores. Percentuais
-        em relação às vendas brutas.
+        Funil financeiro. As larguras são esquemáticas. Foque ou toque em cada etapa para consultar
+        valores exatos.
       </p>
-      <div className={styles.diagram}>
-        <svg
-          viewBox="0 0 500 520"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-          className={styles.shape}
-        >
-          <defs>
-            <clipPath id={clipId}>
-              <path d="M 20 4 H 408 Q 423 4 417 19 L 223 503 Q 214 524 205 503 L 11 19 Q 5 4 20 4 Z" />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#${clipId})`}>
-            <path className={styles.gross} fill="var(--fill)" d="M0 0H430V105H0Z" />
-            <path className={styles.loss} fill="var(--fill)" d="M0 105H430V187H0Z" />
-            <path className={styles.refund} fill="var(--fill)" d="M0 187H430V269H0Z" />
-            <path className={styles.net} fill="var(--fill)" d="M0 269H430V520H0Z" />
-            {[105, 187, 269].map((y) => (
-              <path key={y} d={`M0 ${y}H430`} stroke="white" strokeWidth="4" />
-            ))}
-          </g>
-        </svg>
-        {stages.map((stage) => (
-          <div key={stage.tone}>
-            <div className={`${styles.stage} ${styles[stage.tone]}`} style={{ top: `${stage.y}%` }}>
-              <div className={styles.label}>
-                {stage.label}
-                {stage.tone === "loss" && hasRecovery && (
-                  <button
-                    type="button"
-                    className={styles.info}
-                    aria-label="Detalhes de recuperação"
-                    aria-expanded={recoveryOpen}
-                    aria-controls={id}
-                    onClick={() => setRecoveryOpen(!recoveryOpen)}
-                  >
-                    <Info size={14} aria-hidden />
-                  </button>
-                )}
-              </div>
-              <p className={styles.value}>{stage.value}</p>
-            </div>
-            {stage.percent && (
-              <div
-                className={`${styles.badge} ${styles[stage.tone]}`}
-                style={{ top: `${stage.y}%` }}
-                aria-label={`${stage.label}: ${stage.percent} das vendas brutas`}
-              >
-                <span>{stage.percent}</span>
-              </div>
-            )}
+      <div className={styles.diagram + (initial ? "" : " " + styles.updated)}>
+        {stages.map((stage, index) => (
+          <div
+            key={stage.tone}
+            className={styles.stageSlot}
+            style={STAGE_LAYOUT[stage.tone]}
+            data-funnel-stage={stage.tone}
+          >
+            <FunnelStage stage={stage} index={index} revision={revision} />
+            {rates[stage.tone] && <div className={styles.rateAnchor}>{rates[stage.tone]}</div>}
           </div>
         ))}
       </div>
-      <div className={styles.trend}>
-        <SalesTrend trend={flow.trends.netSales} />
-      </div>
-      {hasRecovery && (
-        <div
-          id={id}
-          hidden={!recoveryOpen}
-          className="mt-3 rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground"
-        >
-          <p className="mb-2 font-medium text-foreground">
-            Recuperação das perdas{isMock ? " · Simulação" : ""}
-          </p>
-          {(flow.recoverableAmount ?? 0) > 0 && (
-            <p>
-              Em recuperação: <strong>{money(flow.recoverableAmount!)}</strong>
-            </p>
+    </FunnelTooltipScope>
+  );
+}
+
+function FunnelStage({
+  stage,
+  index,
+  revision,
+}: {
+  stage: Stage;
+  index: number;
+  revision: number;
+}) {
+  return (
+    <FunnelTooltipTrigger
+      tone={stage.tone}
+      label={stage.label}
+      className={`${styles.stage} ${styles[stage.tone]}`}
+      style={{ "--delay": `${index * 80}ms` } as CSSProperties}
+      text={
+        <>
+          <strong className="block text-[11px] font-semibold uppercase tracking-wide">
+            {stage.label}
+          </strong>
+          <strong className={styles.tooltipMetric}>{money(stage.value)}</strong>
+          <span className="mt-1 block text-muted-foreground">{stage.detail}</span>
+          {stage.balance != null && (
+            <span className="mt-2 block rounded-lg bg-muted/50 p-2 text-muted-foreground">
+              Valor mantido:{" "}
+              <strong className="block font-semibold text-foreground tabular-nums">
+                {money(stage.balance)}
+              </strong>
+            </span>
           )}
-          {(flow.recoveredAmount ?? 0) > 0 && (
-            <p>
-              Recuperado: <strong className="text-success">{money(flow.recoveredAmount!)}</strong>
-            </p>
-          )}
-          <p className="mt-2">
-            Pode incluir cancelamentos e outras perdas. Valores em recuperação não compõem as vendas
-            líquidas.
-          </p>
-        </div>
-      )}
+        </>
+      }
+    >
+      <svg
+        key={revision}
+        className={styles.shape}
+        viewBox="0 0 400 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path d="M 10 2 H 390 Q 398 2 395 10 L 367 91 Q 365 98 357 98 H 43 Q 35 98 33 91 L 5 10 Q 2 2 10 2 Z" />
+      </svg>
+      <span className={styles.stageContent}>
+        <span className={styles.label}>{stage.label}</span>
+        <span className={styles.value}>
+          <AnimatedMetric value={stage.value} format={formatFunnelMoney} duration={650} />
+        </span>
+      </span>
+    </FunnelTooltipTrigger>
+  );
+}
+
+function FunnelTransitionRate({
+  delay,
+  value,
+  label,
+  help,
+}: {
+  delay: number;
+  value: number | null;
+  label: string;
+  help: ReactNode;
+}) {
+  return (
+    <div className={styles.transition} style={{ "--delay": `${delay}ms` } as CSSProperties}>
+      <FunnelTooltipTrigger
+        label={`${percentage(value)} — ${label}`}
+        className={styles.rateTrigger}
+        text={help}
+      >
+        <span className={styles.rateValue}>
+          <AnimatedMetric value={value} format={percentage} duration={650} />
+        </span>
+      </FunnelTooltipTrigger>
     </div>
+  );
+}
+
+function RateDetail({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number | null;
+  detail: string;
+}) {
+  return (
+    <>
+      <strong className="block text-[11px] font-semibold uppercase tracking-wide">{label}</strong>
+      <strong className={styles.tooltipMetric}>{percentage(value)}</strong>
+      <span className="mt-1 block text-muted-foreground">{detail}</span>
+    </>
   );
 }

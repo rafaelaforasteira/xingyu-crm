@@ -89,10 +89,12 @@ function PipelinesNavSection({
   onNavigate: (href: string) => void;
   onPrefetch: (href: string) => void;
 }) {
-  const isPipelinesSection = pathname.startsWith(`${PIPELINES_HREF}/`) || pathname === PIPELINES_HREF;
+  const basePath = item.pipelineBasePath ?? PIPELINES_HREF;
+  const space = item.pipelineSpace ?? "COMMERCIAL";
+  const isPipelinesSection = pathname.startsWith(`${basePath}/`) || pathname === basePath;
   const [expanded, setExpanded] = React.useState(isPipelinesSection);
-  const activePipelineId = extractPipelineIdFromPath(pathname);
-  const sectionActive = isNavActive(pathname, PIPELINES_HREF, pendingHref);
+  const activePipelineId = space === "COMMERCIAL" ? extractPipelineIdFromPath(pathname) : (pathname.startsWith(`${basePath}/`) ? pathname.split("/")[2] ?? null : null);
+  const sectionActive = isNavActive(pathname, basePath, pendingHref);
   const Icon = item.icon;
 
   React.useEffect(() => {
@@ -100,8 +102,8 @@ function PipelinesNavSection({
   }, [isPipelinesSection]);
 
   const navigation = useQuery({
-    queryKey: queryKeys.pipelines.navigation,
-    queryFn: () => pipelinesApi.navigation(),
+    queryKey: [...queryKeys.pipelines.navigation, space],
+    queryFn: () => pipelinesApi.navigation(space),
     staleTime: PIPELINES_NAV_STALE_TIME,
     enabled: expanded || isPipelinesSection,
   });
@@ -109,11 +111,11 @@ function PipelinesNavSection({
   if (collapsed) {
     return (
       <Link
-        href={PIPELINES_HREF}
+        href={basePath}
         title={item.label}
         aria-current={sectionActive ? "page" : undefined}
-        onClick={() => onNavigate(PIPELINES_HREF)}
-        onMouseEnter={() => onPrefetch(PIPELINES_HREF)}
+        onClick={() => onNavigate(basePath)}
+        onMouseEnter={() => onPrefetch(basePath)}
         className={cn(
           "flex items-center justify-center rounded-[11px] py-2.5 transition-colors",
           sectionActive ? "bg-white/10 text-white" : "text-sidebar-foreground/75 hover:bg-white/5",
@@ -128,9 +130,9 @@ function PipelinesNavSection({
     <div className="space-y-0.5">
       <div className={cn("flex items-center gap-1 rounded-[11px]", sectionActive && "bg-white/5")}>
         <Link
-          href={PIPELINES_HREF}
-          onClick={() => onNavigate(PIPELINES_HREF)}
-          onMouseEnter={() => onPrefetch(PIPELINES_HREF)}
+          href={basePath}
+          onClick={() => onNavigate(basePath)}
+          onMouseEnter={() => onPrefetch(basePath)}
           className={cn(
             "flex min-w-0 flex-1 items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors",
             sectionActive ? "text-white" : "text-sidebar-foreground/75 hover:text-white",
@@ -158,7 +160,7 @@ function PipelinesNavSection({
               ))
             : null}
           {navigation.data?.map((pipeline) => {
-            const href = `/pipelines/${pipeline.id}`;
+            const href = `${basePath}/${pipeline.id}`;
             const active =
               activePipelineId === pipeline.id ||
               pendingHref === href ||

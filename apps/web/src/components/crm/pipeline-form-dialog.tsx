@@ -31,11 +31,12 @@ const pipelineSchema = z.object({
 type PipelineFormValues = z.infer<typeof pipelineSchema>;
 const EMPTY_VALUES: PipelineFormValues = { name: "", description: "", color: "#7C3AED", icon: "kanban", defaultTeamId: "", defaultOwnerId: "", favorite: false };
 
-export function PipelineFormDialog({ open, onOpenChange, pipeline, onSaved }: {
+export function PipelineFormDialog({ open, onOpenChange, pipeline, onSaved, initialSpace = "COMMERCIAL" }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pipeline?: Pipeline | null;
   onSaved?: (pipeline: Pipeline, mode: "create" | "edit") => void;
+  initialSpace?: "COMMERCIAL" | "ATTENDANCE";
 }) {
   const queryClient = useQueryClient();
   const mode = pipeline ? "edit" : "create";
@@ -71,7 +72,7 @@ export function PipelineFormDialog({ open, onOpenChange, pipeline, onSaved }: {
 
   const mutation = useMutation({
     mutationFn: (values: PipelineFormValues) => {
-      const input: PipelineInput = { ...values, name: values.name.trim(), description: values.description.trim(), defaultTeamId: values.defaultTeamId || null, defaultOwnerId: values.defaultOwnerId || null };
+      const input: PipelineInput = { ...values, name: values.name.trim(), description: values.description.trim(), defaultTeamId: values.defaultTeamId || null, defaultOwnerId: values.defaultOwnerId || null, space: pipeline?.space ?? initialSpace };
       return pipeline ? pipelinesApi.update(pipeline.id, input) : pipelinesApi.create(input);
     },
     onSuccess: (savedPipeline) => {

@@ -110,7 +110,7 @@ export function SalesTrackingFilters({
           >
             <option value="ALL">Todos</option>
             <option value="NEW">Novos</option>
-            <option value="EXISTING">Antigos</option>
+            <option value="EXISTING">Base existente</option>
             <option value="REACTIVATED">Reativados</option>
           </Select>
         </div>

@@ -1,632 +1,127 @@
+import { addDays, format } from "date-fns";
 import type {
-  SalesOverview,
-  SalesTrackingData,
-  TrackingPeriod,
-  TrackedCustomer,
-} from "./sales-tracking-types";
-import { enrichMockOverview } from "./sales-overview-mock";
-
+  TrackingAttribution,
+  TrackingDataset,
+  TrackingOrder,
+} from "./tracking-analytics-types";
 export { REACTIVATION_DAYS } from "./sales-tracking-rules";
 
-const people: TrackedCustomer[] = [
-  {
-    id: "c-maria",
-    name: "Maria Silva",
-    email: "maria.silva@example.test",
-    phone: "+55 11 90000-1001",
-    customerStatus: "AT_RISK",
-    ordersCount: 8,
-    purchaseStage: 8,
-    periodRevenue: 2100,
-    lifetimeValue: 18420,
-    lastPurchaseAt: "2026-08-28",
-    daysSinceLastPurchase: 14,
-    averageDaysBetweenOrders: 45,
-    salesperson: "Deise",
-    state: "SP",
-    product: "Vestidos",
-  },
-  {
-    id: "c-ana",
-    name: "Ana Beatriz Costa",
-    email: "ana.costa@example.test",
-    phone: "+55 21 90000-1002",
-    customerStatus: "NEW",
-    ordersCount: 1,
-    purchaseStage: 1,
-    periodRevenue: 1561,
-    lifetimeValue: 1561,
-    lastPurchaseAt: "2026-09-05",
-    daysSinceLastPurchase: 6,
-    averageDaysBetweenOrders: null,
-    salesperson: "Larissa",
-    state: "RJ",
-    product: "Conjuntos",
-  },
-  {
-    id: "c-juliana",
-    name: "Juliana Mendes",
-    email: "juliana.mendes@example.test",
-    phone: "+55 31 90000-1003",
-    customerStatus: "RECURRING",
-    ordersCount: 4,
-    purchaseStage: 4,
-    periodRevenue: 3480,
-    lifetimeValue: 9730,
-    lastPurchaseAt: "2026-09-02",
-    daysSinceLastPurchase: 9,
-    averageDaysBetweenOrders: 39,
-    salesperson: "Deise",
-    state: "MG",
-    product: "Alfaiataria",
-  },
-  {
-    id: "c-camila",
-    name: "Camila Rocha",
-    email: "camila.rocha@example.test",
-    phone: "+55 41 90000-1004",
-    customerStatus: "REACTIVATED",
-    ordersCount: 6,
-    purchaseStage: 6,
-    periodRevenue: 2890,
-    lifetimeValue: 12840,
-    lastPurchaseAt: "2026-08-30",
-    daysSinceLastPurchase: 12,
-    averageDaysBetweenOrders: 71,
-    salesperson: "Paula",
-    state: "PR",
-    product: "Vestidos",
-  },
-  {
-    id: "c-fernanda",
-    name: "Fernanda Lima",
-    email: "fernanda.lima@example.test",
-    phone: "+55 51 90000-1005",
-    customerStatus: "RECURRING",
-    ordersCount: 2,
-    purchaseStage: 2,
-    periodRevenue: 1840,
-    lifetimeValue: 3940,
-    lastPurchaseAt: "2026-09-07",
-    daysSinceLastPurchase: 4,
-    averageDaysBetweenOrders: 28,
-    salesperson: "Larissa",
-    state: "RS",
-    product: "Conjuntos",
-  },
-  {
-    id: "c-carolina",
-    name: "Carolina Freitas",
-    email: "carolina.freitas@example.test",
-    phone: "+55 71 90000-1006",
-    customerStatus: "NEW",
-    ordersCount: 1,
-    purchaseStage: 1,
-    periodRevenue: 980,
-    lifetimeValue: 980,
-    lastPurchaseAt: "2026-09-08",
-    daysSinceLastPurchase: 3,
-    averageDaysBetweenOrders: null,
-    salesperson: "Paula",
-    state: "BA",
-    product: "Acessórios",
-  },
-  {
-    id: "c-beatriz",
-    name: "Beatriz Almeida",
-    email: "beatriz.almeida@example.test",
-    phone: "+55 85 90000-1007",
-    customerStatus: "RECURRING",
-    ordersCount: 3,
-    purchaseStage: 3,
-    periodRevenue: 2360,
-    lifetimeValue: 6840,
-    lastPurchaseAt: "2026-08-25",
-    daysSinceLastPurchase: 17,
-    averageDaysBetweenOrders: 52,
-    salesperson: "Deise",
-    state: "CE",
-    product: "Alfaiataria",
-  },
-  {
-    id: "c-renata",
-    name: "Renata Souza",
-    email: "renata.souza@example.test",
-    phone: "+55 62 90000-1008",
-    customerStatus: "REACTIVATED",
-    ordersCount: 9,
-    purchaseStage: 9,
-    periodRevenue: 4250,
-    lifetimeValue: 21640,
-    lastPurchaseAt: "2026-08-21",
-    daysSinceLastPurchase: 21,
-    averageDaysBetweenOrders: 84,
-    salesperson: "Larissa",
-    state: "GO",
-    product: "Vestidos",
-  },
-  {
-    id: "c-patricia",
-    name: "Patrícia Nunes",
-    email: "patricia.nunes@example.test",
-    phone: "+55 19 90000-1009",
-    customerStatus: "AT_RISK",
-    ordersCount: 5,
-    purchaseStage: 5,
-    periodRevenue: 1720,
-    lifetimeValue: 11250,
-    lastPurchaseAt: "2026-06-07",
-    daysSinceLastPurchase: 96,
-    averageDaysBetweenOrders: 61,
-    salesperson: "Paula",
-    state: "SP",
-    product: "Conjuntos",
-  },
-  {
-    id: "c-amanda",
-    name: "Amanda Ribeiro",
-    email: "amanda.ribeiro@example.test",
-    phone: "+55 27 90000-1010",
-    customerStatus: "RECURRING",
-    ordersCount: 2,
-    purchaseStage: 2,
-    periodRevenue: 1340,
-    lifetimeValue: 3120,
-    lastPurchaseAt: "2026-08-31",
-    daysSinceLastPurchase: 11,
-    averageDaysBetweenOrders: 35,
-    salesperson: "Deise",
-    state: "ES",
-    product: "Acessórios",
-  },
-  {
-    id: "c-gabriela",
-    name: "Gabriela Martins",
-    email: "gabriela.martins@example.test",
-    phone: "+55 48 90000-1011",
-    customerStatus: "NEW",
-    ordersCount: 1,
-    purchaseStage: 1,
-    periodRevenue: 2210,
-    lifetimeValue: 2210,
-    lastPurchaseAt: "2026-09-01",
-    daysSinceLastPurchase: 10,
-    averageDaysBetweenOrders: null,
-    salesperson: "Larissa",
-    state: "SC",
-    product: "Alfaiataria",
-  },
-  {
-    id: "c-leticia",
-    name: "Letícia Barbosa",
-    email: "leticia.barbosa@example.test",
-    phone: "+55 81 90000-1012",
-    customerStatus: "REACTIVATED",
-    ordersCount: 7,
-    purchaseStage: 7,
-    periodRevenue: 3760,
-    lifetimeValue: 16980,
-    lastPurchaseAt: "2026-08-18",
-    daysSinceLastPurchase: 24,
-    averageDaysBetweenOrders: 77,
-    salesperson: "Paula",
-    state: "PE",
-    product: "Vestidos",
-  },
-  {
-    id: "c-isabela",
-    name: "Isabela Cardoso",
-    email: "isabela.cardoso@example.test",
-    phone: "+55 11 90000-1013",
-    customerStatus: "RECURRING",
-    ordersCount: 4,
-    purchaseStage: 4,
-    periodRevenue: 2670,
-    lifetimeValue: 8240,
-    lastPurchaseAt: "2026-09-04",
-    daysSinceLastPurchase: 7,
-    averageDaysBetweenOrders: 43,
-    salesperson: "Deise",
-    state: "SP",
-    product: "Conjuntos",
-  },
-  {
-    id: "c-luana",
-    name: "Luana Teixeira",
-    email: "luana.teixeira@example.test",
-    phone: "+55 21 90000-1014",
-    customerStatus: "INACTIVE",
-    ordersCount: 3,
-    purchaseStage: 3,
-    periodRevenue: 890,
-    lifetimeValue: 5760,
-    lastPurchaseAt: "2026-02-12",
-    daysSinceLastPurchase: 211,
-    averageDaysBetweenOrders: 94,
-    salesperson: "Larissa",
-    state: "RJ",
-    product: "Acessórios",
-  },
-  {
-    id: "c-mariana",
-    name: "Mariana Lopes",
-    email: "mariana.lopes@example.test",
-    phone: "+55 31 90000-1015",
-    customerStatus: "RECURRING",
-    ordersCount: 12,
-    purchaseStage: 12,
-    periodRevenue: 5840,
-    lifetimeValue: 32700,
-    lastPurchaseAt: "2026-09-06",
-    daysSinceLastPurchase: 5,
-    averageDaysBetweenOrders: 31,
-    salesperson: "Paula",
-    state: "MG",
-    product: "Vestidos",
-  },
-];
-
-const datasets: Record<
-  TrackingPeriod,
-  Omit<SalesTrackingData, "customers" | "updatedAt" | "overview">
-> = {
-  "30d": {
-    source: "mock",
-    summary: {
-      periodRevenue: 1_842_320,
-      ordersCount: 1284,
-      buyersCount: 996,
-      averageTicket: 1434.83,
-      averageLtv: 7840,
-      averageRepurchaseDays: 47,
-      medianRepurchaseDays: 42,
-      firstToSecondPurchaseDays: 43,
-      newCustomers: 312,
-      existingCustomers: 684,
-      reactivatedCustomers: 123,
-      reactivatedRevenue: 214500,
-      reactivatedAverageLtv: 9480,
-      reactivatedAverageInactiveDays: 236,
-      newRevenue: 487200,
-      repeatRevenue: 1_355_120,
-      newRevenuePercentage: 26.4,
-      repeatRevenuePercentage: 73.6,
+/** Deterministic order-level simulation. One dataset is shared by all period/segment filters.
+ * Never associate these invented purchases with real CRM identities. */
+export function createTrackingDataset(today = new Date()): TrackingDataset {
+  const customers: TrackingDataset["customers"] = [];
+  const orders: TrackingOrder[] = [];
+  const names = [
+    "Marina",
+    "Ana",
+    "Juliana",
+    "Camila",
+    "Fernanda",
+    "Carolina",
+    "Patrícia",
+    "Beatriz",
+    "Larissa",
+    "Renata",
+    "Luciana",
+    "Gabriela",
+  ];
+  const surnames = [
+    "Silva",
+    "Costa",
+    "Mendes",
+    "Rocha",
+    "Lima",
+    "Freitas",
+    "Almeida",
+    "Santos",
+    "Ribeiro",
+    "Oliveira",
+  ];
+  const origins: TrackingAttribution[] = [
+    {
+      channel: "PAID_SOCIAL",
+      platform: "META",
+      placement: "INSTAGRAM",
+      campaignId: "demo-collection",
+      adSetId: "demo-prospecting",
+      creativeId: "demo-04",
+      touchModel: "RECORDED_ORIGIN",
     },
-    purchaseStages: [
-      { stage: "1ª compra", customers: 312, orders: 312, revenue: 487200, percentage: 24.3 },
-      { stage: "2ª compra", customers: 194, orders: 194, revenue: 276400, percentage: 15.1 },
-      { stage: "3ª compra", customers: 137, orders: 137, revenue: 198300, percentage: 10.7 },
-      { stage: "4ª compra", customers: 89, orders: 89, revenue: 132900, percentage: 6.9 },
-      { stage: "5ª compra", customers: 62, orders: 62, revenue: 96400, percentage: 4.8 },
-      { stage: "6ª+", customers: 202, orders: 490, revenue: 651120, percentage: 38.2 },
-    ],
-    repurchaseBuckets: [
-      {
-        label: "Até 30 dias",
-        minDays: 0,
-        maxDays: 30,
-        customers: 191,
-        percentage: 28,
-        revenue: 381200,
-      },
-      {
-        label: "31–60 dias",
-        minDays: 31,
-        maxDays: 60,
-        customers: 232,
-        percentage: 34,
-        revenue: 456800,
-      },
-      {
-        label: "61–90 dias",
-        minDays: 61,
-        maxDays: 90,
-        customers: 144,
-        percentage: 21,
-        revenue: 282400,
-      },
-      {
-        label: "91–180 dias",
-        minDays: 91,
-        maxDays: 180,
-        customers: 82,
-        percentage: 12,
-        revenue: 164300,
-      },
-      {
-        label: "180+ dias",
-        minDays: 181,
-        maxDays: null,
-        customers: 35,
-        percentage: 5,
-        revenue: 70420,
-      },
-    ],
-    ltv: [
-      { key: "all", label: "Todos", value: 7840 },
-      { key: "new", label: "Novos", value: 1561 },
-      { key: "existing", label: "Antigos", value: 10702 },
-      { key: "reactivated", label: "Reativados", value: 9480 },
-    ],
-    health: [
-      { status: "NEW", label: "Novos", customers: 312, percentage: 31.3 },
-      { status: "RECURRING", label: "Recorrentes", customers: 438, percentage: 44 },
-      { status: "REACTIVATED", label: "Reativados", customers: 123, percentage: 12.4 },
-      { status: "AT_RISK", label: "Em risco", customers: 123, percentage: 12.3 },
-    ],
-  },
-  "90d": {
-    source: "mock",
-    summary: {
-      periodRevenue: 5_296_840,
-      ordersCount: 3672,
-      buyersCount: 2514,
-      averageTicket: 1442.49,
-      averageLtv: 8210,
-      averageRepurchaseDays: 51,
-      medianRepurchaseDays: 46,
-      firstToSecondPurchaseDays: 45,
-      newCustomers: 764,
-      existingCustomers: 1750,
-      reactivatedCustomers: 286,
-      reactivatedRevenue: 623800,
-      reactivatedAverageLtv: 9820,
-      reactivatedAverageInactiveDays: 248,
-      newRevenue: 1_382_476,
-      repeatRevenue: 3_914_364,
-      newRevenuePercentage: 26.1,
-      repeatRevenuePercentage: 73.9,
+    {
+      channel: "PAID_SOCIAL",
+      platform: "META",
+      placement: "FACEBOOK",
+      touchModel: "RECORDED_ORIGIN",
     },
-    purchaseStages: [
-      { stage: "1ª compra", customers: 764, orders: 764, revenue: 1382476, percentage: 20.8 },
-      { stage: "2ª compra", customers: 487, orders: 487, revenue: 701200, percentage: 13.3 },
-      { stage: "3ª compra", customers: 352, orders: 352, revenue: 508900, percentage: 9.6 },
-      { stage: "4ª compra", customers: 241, orders: 241, revenue: 349600, percentage: 6.6 },
-      { stage: "5ª compra", customers: 173, orders: 173, revenue: 258400, percentage: 4.7 },
-      { stage: "6ª+", customers: 497, orders: 1655, revenue: 2096264, percentage: 45 },
-    ],
-    repurchaseBuckets: [
-      {
-        label: "Até 30 dias",
-        minDays: 0,
-        maxDays: 30,
-        customers: 455,
-        percentage: 26,
-        revenue: 908100,
-      },
-      {
-        label: "31–60 dias",
-        minDays: 31,
-        maxDays: 60,
-        customers: 578,
-        percentage: 33,
-        revenue: 1162400,
-      },
-      {
-        label: "61–90 dias",
-        minDays: 61,
-        maxDays: 90,
-        customers: 385,
-        percentage: 22,
-        revenue: 774800,
-      },
-      {
-        label: "91–180 dias",
-        minDays: 91,
-        maxDays: 180,
-        customers: 228,
-        percentage: 13,
-        revenue: 456200,
-      },
-      {
-        label: "180+ dias",
-        minDays: 181,
-        maxDays: null,
-        customers: 104,
-        percentage: 6,
-        revenue: 612864,
-      },
-    ],
-    ltv: [
-      { key: "all", label: "Todos", value: 8210 },
-      { key: "new", label: "Novos", value: 1809 },
-      { key: "existing", label: "Antigos", value: 11086 },
-      { key: "reactivated", label: "Reativados", value: 9820 },
-    ],
-    health: [
-      { status: "NEW", label: "Novos", customers: 764, percentage: 30.4 },
-      { status: "RECURRING", label: "Recorrentes", customers: 1132, percentage: 45 },
-      { status: "REACTIVATED", label: "Reativados", customers: 286, percentage: 11.4 },
-      { status: "AT_RISK", label: "Em risco", customers: 332, percentage: 13.2 },
-    ],
-  },
-  "12m": {
-    source: "mock",
-    summary: {
-      periodRevenue: 21_684_590,
-      ordersCount: 14986,
-      buyersCount: 8642,
-      averageTicket: 1446.99,
-      averageLtv: 9380,
-      averageRepurchaseDays: 55,
-      medianRepurchaseDays: 48,
-      firstToSecondPurchaseDays: 46,
-      newCustomers: 2416,
-      existingCustomers: 6226,
-      reactivatedCustomers: 912,
-      reactivatedRevenue: 2634840,
-      reactivatedAverageLtv: 10640,
-      reactivatedAverageInactiveDays: 257,
-      newRevenue: 5_377_779,
-      repeatRevenue: 16_306_811,
-      newRevenuePercentage: 24.8,
-      repeatRevenuePercentage: 75.2,
+    {
+      channel: "PAID_SOCIAL",
+      platform: "META",
+      placement: "INSTAGRAM",
+      touchModel: "RECORDED_ORIGIN",
     },
-    purchaseStages: [
-      { stage: "1ª compra", customers: 2416, orders: 2416, revenue: 5377779, percentage: 16.1 },
-      { stage: "2ª compra", customers: 1562, orders: 1562, revenue: 2254300, percentage: 10.4 },
-      { stage: "3ª compra", customers: 1137, orders: 1137, revenue: 1687500, percentage: 7.6 },
-      { stage: "4ª compra", customers: 842, orders: 842, revenue: 1278900, percentage: 5.6 },
-      { stage: "5ª compra", customers: 617, orders: 617, revenue: 931200, percentage: 4.1 },
-      { stage: "6ª+", customers: 2068, orders: 8412, revenue: 10154911, percentage: 56.2 },
-    ],
-    repurchaseBuckets: [
-      {
-        label: "Até 30 dias",
-        minDays: 0,
-        maxDays: 30,
-        customers: 1494,
-        percentage: 24,
-        revenue: 3250000,
-      },
-      {
-        label: "31–60 dias",
-        minDays: 31,
-        maxDays: 60,
-        customers: 1992,
-        percentage: 32,
-        revenue: 4380000,
-      },
-      {
-        label: "61–90 dias",
-        minDays: 61,
-        maxDays: 90,
-        customers: 1432,
-        percentage: 23,
-        revenue: 3140000,
-      },
-      {
-        label: "91–180 dias",
-        minDays: 91,
-        maxDays: 180,
-        customers: 872,
-        percentage: 14,
-        revenue: 1920000,
-      },
-      {
-        label: "180+ dias",
-        minDays: 181,
-        maxDays: null,
-        customers: 436,
-        percentage: 7,
-        revenue: 3616811,
-      },
-    ],
-    ltv: [
-      { key: "all", label: "Todos", value: 9380 },
-      { key: "new", label: "Novos", value: 2226 },
-      { key: "existing", label: "Antigos", value: 12164 },
-      { key: "reactivated", label: "Reativados", value: 10640 },
-    ],
-    health: [
-      { status: "NEW", label: "Novos", customers: 2416, percentage: 28 },
-      { status: "RECURRING", label: "Recorrentes", customers: 4077, percentage: 47.2 },
-      { status: "REACTIVATED", label: "Reativados", customers: 912, percentage: 10.6 },
-      { status: "AT_RISK", label: "Em risco", customers: 1237, percentage: 14.2 },
-    ],
-  },
-};
-
-const periodPoints: Record<TrackingPeriod, number> = { "30d": 15, "90d": 13, "12m": 12 };
-
-function buildOverview(
-  period: TrackingPeriod,
-  data: (typeof datasets)[TrackingPeriod],
-): Omit<SalesOverview, "financialFlow"> {
-  const { summary } = data;
-  const lossRate = period === "30d" ? 0.10214 : period === "90d" ? 0.094 : 0.087;
-  const grossSales = Math.round(summary.periodRevenue / (1 - lossRate));
-  const totalLoss = grossSales - summary.periodRevenue;
-  const cancellations = Math.round(totalLoss * 0.62865);
-  const refunds = totalLoss - cancellations;
-  const count = periodPoints[period];
-  const timeline = Array.from({ length: count }, (_, index) => {
-    const wave = 0.78 + ((index * 17) % 9) / 20 + Math.sin(index * 1.35) * 0.08;
-    return { index, weight: Math.max(0.55, wave) };
-  });
-  const weightTotal = timeline.reduce((sum, point) => sum + point.weight, 0);
-  let grossAllocated = 0;
-  let netAllocated = 0;
-  const points = timeline.map((point, index) => {
-    const isLast = index === timeline.length - 1;
-    const gross = isLast
-      ? grossSales - grossAllocated
-      : Math.round((grossSales * point.weight) / weightTotal);
-    const netRatio = 0.875 + ((index * 7) % 6) / 100;
-    const net = isLast
-      ? summary.periodRevenue - netAllocated
-      : Math.min(gross, Math.round(gross * netRatio));
-    grossAllocated += gross;
-    netAllocated += net;
-    const date = new Date(2026, 8, 11);
-    if (period === "12m") date.setMonth(date.getMonth() - (count - 1 - index));
-    else date.setDate(date.getDate() - (count - 1 - index) * (period === "30d" ? 2 : 7));
-    return {
-      date: date.toISOString().slice(0, 10),
-      label:
-        period === "12m"
-          ? new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "")
-          : new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" })
-              .format(date)
-              .replace(".", ""),
-      grossSales: gross,
-      netSales: net,
-      paidOrders: Math.max(1, Math.round((summary.ordersCount * point.weight) / weightTotal)),
-    };
-  });
-  const reactivatedCustomersPercentage = summary.buyersCount
-    ? (summary.reactivatedCustomers / summary.buyersCount) * 100
-    : 0;
-  return {
-    grossSales,
-    cancellations,
-    refunds,
-    netSales: summary.periodRevenue,
-    realizationRate: grossSales ? (summary.periodRevenue / grossSales) * 100 : null,
-    paidOrders: summary.ordersCount,
-    buyers: summary.buyersCount,
-    averageTicket: summary.ordersCount ? summary.periodRevenue / summary.ordersCount : 0,
-    averageLtv: summary.averageLtv,
-    averageRepurchaseDays: summary.averageRepurchaseDays,
-    repeatRevenue: summary.repeatRevenue,
-    repeatRevenuePercentage: summary.repeatRevenuePercentage,
-    firstPurchaseRevenue: summary.newRevenue,
-    firstPurchaseRevenuePercentage: summary.newRevenuePercentage,
-    reactivatedCustomers: summary.reactivatedCustomers,
-    reactivatedCustomersPercentage,
-    trends: {
-      netSales: { direction: "up", value: 8.7, suffix: "%", sentiment: "positive" },
-      averageLtv: { direction: "up", value: 4.8, suffix: "%", sentiment: "positive" },
-      averageRepurchaseDays: {
-        direction: "down",
-        value: 6,
-        suffix: "dias",
-        sentiment: "positive",
-      },
-      repeatRevenue: { direction: "up", value: 3.2, suffix: "%", sentiment: "positive" },
-      reactivatedCustomers: { direction: "up", value: 11.4, suffix: "%", sentiment: "positive" },
+    { channel: "PAID_SEARCH", platform: "GOOGLE", touchModel: "RECORDED_ORIGIN" },
+    { channel: "PAID_SEARCH", platform: "GOOGLE", touchModel: "RECORDED_ORIGIN" },
+    { channel: "MESSAGING", platform: "WHATSAPP", touchModel: "RECORDED_ORIGIN" },
+    { channel: "MESSAGING", platform: "WHATSAPP", touchModel: "RECORDED_ORIGIN" },
+    {
+      channel: "ORGANIC_SOCIAL",
+      platform: "META",
+      placement: "INSTAGRAM",
+      touchModel: "RECORDED_ORIGIN",
     },
-    timeline: points,
-  };
-}
-
-export function getSalesTrackingMock(period: TrackingPeriod): SalesTrackingData {
-  const data = datasets[period];
-  const multiplier = period === "30d" ? 1 : period === "90d" ? 1.18 : 1.42;
-  return {
-    ...data,
-    overview: enrichMockOverview(
-      buildOverview(period, data),
-      {
-        startDate: period === "30d" ? "2026-08-13" : period === "90d" ? "2026-06-14" : "2025-09-11",
-        endDate: "2026-09-11",
-      },
-      period === "30d" ? 32450 : period === "90d" ? 87500 : 280000,
-    ),
-    customers: people.map((customer) => ({
-      ...customer,
-      periodRevenue: Math.round(customer.periodRevenue * multiplier),
-    })),
-    updatedAt: new Date().toISOString(),
-  };
+    { channel: "DIRECT", touchModel: "RECORDED_ORIGIN" },
+    { channel: "REFERRAL", touchModel: "RECORDED_ORIGIN" },
+    { channel: "EMAIL", touchModel: "RECORDED_ORIGIN" },
+    { channel: "OTHER", touchModel: "RECORDED_ORIGIN" },
+    { channel: "UNKNOWN", touchModel: "RECORDED_ORIGIN" },
+  ];
+  const dateAt = (days: number) => format(addDays(today, -days), "yyyy-MM-dd");
+  for (let i = 0; i < 360; i++) {
+    const id = "tracking-demo-" + i;
+    customers.push({
+      id,
+      name:
+        names[i % names.length] +
+        " " +
+        surnames[Math.floor(i / names.length) % surnames.length] +
+        (i >= 120 ? " " + surnames[(i + 3) % surnames.length] : ""),
+      email: "cliente" + i + "@example.test",
+      phone: "+55 11 90000-" + String(1000 + i),
+      responsibleUser: { id: "demo-owner-" + (i % 3), name: ["Deise", "Larissa", "Paula"][i % 3]! },
+    });
+    const latest = i % 6 === 0 ? 60 + (i % 150) : i % 29;
+    const isNew = i % 5 === 0;
+    const interval = i % 7 === 0 ? 190 + (i % 100) : 15 + ((i * 17) % 130);
+    const count = isNew ? (i % 2 === 0 ? 2 : 1) : 2 + (i % 8);
+    for (let j = 0; j < count; j++) {
+      const daysAgo = latest + (count - 1 - j) * (isNew ? 7 : interval);
+      const date = dateAt(daysAgo);
+      const grossCents = (780 + ((i * 137 + j * 239) % 4800)) * 100;
+      const refundCents = (i + j) % 13 === 0 ? Math.round(grossCents * 0.25) : 0;
+      orders.push({
+        id: id + "-order-" + j,
+        customerId: id,
+        date,
+        paidAt: date,
+        grossCents,
+        adjustments: refundCents ? [{ kind: "REFUND", date, cents: refundCents }] : [],
+        attribution: origins[(i + j * 3) % origins.length],
+      });
+    }
+    if (i % 9 === 0) {
+      const date = dateAt(latest + 2),
+        grossCents = (600 + i * 9) * 100;
+      orders.push({
+        id: id + "-cancelled",
+        customerId: id,
+        date,
+        paidAt: null,
+        grossCents,
+        adjustments: [{ kind: "CANCELLATION", date, cents: grossCents }],
+        recovery: { date, pendingCents: Math.round(grossCents * 0.3), recoveredCents: 0 },
+        attribution: origins[i % origins.length],
+      });
+    }
+  }
+  return { customers, orders };
 }

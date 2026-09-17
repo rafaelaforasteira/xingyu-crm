@@ -118,7 +118,10 @@ describe("operation filters and search", () => {
           name: "Novo",
           pipelineId: "pipe",
           position: 0,
-          deals: [sample, deal({ id: "d2", name: "Sem conversa", pipelineId: "pipe", stageId: "s1" })],
+          deals: [
+            sample,
+            deal({ id: "d2", name: "Sem conversa", pipelineId: "pipe", stageId: "s1" }),
+          ],
         } as PipelineStage,
       ],
     };
@@ -181,12 +184,20 @@ describe("navigation mode", () => {
   });
 
   it("keeps the compact sidebar separated into product areas", () => {
-    expect(NAV_GROUPS.map((group) => group.label)).toEqual(["Visão geral", "Jornadas", "Gestão", "Infraestrutura"]);
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual([
+      "Visão geral",
+      "Jornadas",
+      "Tracking",
+      "Gestão",
+      "Infraestrutura",
+    ]);
     expect(NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href)).toEqual([
       "/dashboard",
       "/tasks",
       "/pipelines",
       "/orders",
+      "/after-sales",
+      "/tracking/vendas",
       "/finance",
       "/clients",
       "/connections",
@@ -233,9 +244,7 @@ describe("operation view helpers", () => {
   it("removes no-conversation filter when entering conversations view", () => {
     expect(normalizeFilterForView("no-conversation", "conversations")).toBe("all");
     expect(normalizeFilterForView("unread", "conversations")).toBe("unread");
-    expect(normalizeFilterForView("no-conversation", "kanban")).toBe(
-      "no-conversation",
-    );
+    expect(normalizeFilterForView("no-conversation", "kanban")).toBe("no-conversation");
   });
 
   it("finds deal by conversation id", () => {

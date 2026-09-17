@@ -45,8 +45,8 @@ export class PipelinesController {
 
   @Get("navigation")
   @ApiOperation({ summary: "Lightweight pipeline list for sidebar navigation" })
-  async navigation(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.pipelinesService.navigation(orgId, await this.access.accessiblePipelineIds(user));
+  async navigation(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser, @Query("space") space?: string) {
+    return this.pipelinesService.navigation(orgId, await this.access.accessiblePipelineIds(user), space === "ATTENDANCE" ? "ATTENDANCE" : "COMMERCIAL");
   }
 
   @Get(":id/board")

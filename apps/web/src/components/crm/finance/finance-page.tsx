@@ -13,13 +13,17 @@ import {
   CircleDollarSign,
   Download,
   FileCheck2,
+  GitBranch,
   Landmark,
+  Radio,
   ReceiptText,
   Scale,
   TrendingDown,
+  UsersRound,
   WalletCards,
 } from "lucide-react";
 import { financeApi } from "@/lib/api";
+import { FinanceOverview } from "@/components/crm/finance/finance-overview";
 import type { FinanceRevenueRow, FinanceWorkspace } from "@/lib/types";
 import { PageHeader, ErrorBanner } from "@/components/crm/page-header";
 import { Avatar } from "@/components/ui/avatar";
@@ -142,6 +146,9 @@ export function FinancePage() {
   const requested = params.get("tab") as FinanceTab | null;
   const tab = tabs.some((item) => item.value === requested) ? requested! : "overview";
   const period = params.get("period") ?? "month";
+  const pipeline = params.get("pipeline") ?? "all";
+  const owner = params.get("owner") ?? "all";
+  const channel = params.get("channel") ?? "all";
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
   const replace = (changes: Record<string, string | null>) => {
@@ -161,7 +168,7 @@ export function FinancePage() {
       <PageHeader title="Financeiro" description="Receitas, recebíveis, comissões e fechamento contábil em um único espaço." actions={data ? <Button variant="outline" onClick={() => downloadCsv(data, tab)}><Download className="h-4 w-4" />Exportar CSV</Button> : null} />
       <section className="rounded-xl border border-border bg-card p-3 shadow-soft">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="grid flex-1 gap-3 sm:grid-cols-3">
+          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <FilterSelect
               label="Período"
               icon={CalendarDays}
@@ -177,7 +184,10 @@ export function FinancePage() {
               ]}
               onChange={(value) => replace({ period: value, from: null, to: null })}
             />
-            {period === "custom" ? <><div><Label>Início</Label><Input type="date" value={from} onChange={(event) => replace({ from: event.target.value || null })} /></div><div><Label>Fim</Label><Input type="date" value={to} onChange={(event) => replace({ to: event.target.value || null })} /></div></> : <div className="sm:col-span-2 flex items-end"><p className="pb-2 text-xs text-muted-foreground">Visão por competência do pedido. Recebimentos são conciliados pelos pagamentos associados.</p></div>}
+            <FilterSelect label="Pipeline" icon={GitBranch} value={pipeline} aria-label="Filtrar financeiro por pipeline" options={[{ value: "all", label: "Todos acessíveis" }, { value: "commercial", label: "Comercial principal" }, { value: "ecommerce", label: "Pedidos · E-commerce" }]} onChange={(value) => replace({ pipeline: value === "all" ? null : value })} />
+            <FilterSelect label="Responsável" icon={UsersRound} value={owner} aria-label="Filtrar financeiro por responsável" options={[{ value: "all", label: "Todos permitidos" }, { value: "admin", label: "Administradora Xingyu" }, { value: "amanda", label: "Amanda Souza" }, { value: "beatriz", label: "Beatriz Lima" }]} onChange={(value) => replace({ owner: value === "all" ? null : value })} />
+            <FilterSelect label="Canal" icon={Radio} value={channel} aria-label="Filtrar financeiro por canal" options={[{ value: "all", label: "Todos permitidos" }, { value: "site", label: "Site / Shopify" }, { value: "manual", label: "Manual / Indicação" }, { value: "whatsapp", label: "WhatsApp" }]} onChange={(value) => replace({ channel: value === "all" ? null : value })} />
+            {period === "custom" ? <><div><Label>Início</Label><Input type="date" value={from} onChange={(event) => replace({ from: event.target.value || null })} /></div><div><Label>Fim</Label><Input type="date" value={to} onChange={(event) => replace({ to: event.target.value || null })} /></div></> : null}
           </div>
           {data ? <Badge variant={data.closing.ready ? "success" : "warning"} className="mb-1 w-fit">{data.closing.ready ? "Período pronto para fechar" : "Período com pendências"}</Badge> : null}
         </div>
@@ -187,13 +197,7 @@ export function FinancePage() {
         {workspace.error ? <ErrorBanner message={(workspace.error as Error).message} /> : null}
         {workspace.isLoading ? <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 8 }).map((_, index) => <Skeleton key={index} className="h-28" />)}</div> : null}
         {data ? <>
-          <TabsContent value="overview" className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Faturamento bruto" value={money(data.metrics.grossRevenue)} note={`${data.metrics.orderCount} pedidos no período`} icon={CircleDollarSign} /><Metric label="Receita líquida de vendas" value={money(data.metrics.netSales)} note={`${money(data.metrics.discounts)} em descontos`} icon={Landmark} tone="positive" /><Metric label="Recebido" value={money(data.metrics.received)} note={`${money(data.metrics.receivable)} ainda a receber`} icon={Banknote} tone="positive" /><Metric label="Vencido" value={money(data.metrics.overdue)} note="Valores que exigem ação" icon={AlertTriangle} tone={data.metrics.overdue > 0 ? "warning" : "default"} /><Metric label="Frete cobrado" value={money(data.metrics.shipping)} note="Componente da receita" icon={WalletCards} /><Metric label="Impostos registrados" value={money(data.metrics.taxes)} note="Conforme dados dos pedidos" icon={Scale} /><Metric label="Cancelamentos" value={money(data.metrics.cancelled)} note={`${money(data.metrics.refunded)} estornado`} icon={TrendingDown} /><Metric label="Descontos concedidos" value={money(data.metrics.discounts)} note="Cupons e descontos manuais" icon={BadgeDollarSign} /></div>
-            <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-              <section className="rounded-xl border bg-card p-4"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Movimento do período</h2><p className="text-xs text-muted-foreground">Receita líquida e valores efetivamente recebidos.</p></div></div><div className="space-y-3">{data.revenueTimeline.length ? data.revenueTimeline.slice(-12).map((item) => { const max = Math.max(...data.revenueTimeline.map((row) => row.net), 1); return <div key={item.label} className="grid grid-cols-[78px_1fr_100px] items-center gap-3 text-xs"><span className="text-muted-foreground">{date(item.label)}</span><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max((item.net / max) * 100, item.net ? 4 : 0)}%` }} /></div><span className="text-right font-medium tabular-nums">{money(item.net)}</span></div>; }) : <p className="py-12 text-center text-sm text-muted-foreground">Sem movimentos neste período.</p>}</div></section>
-              <section className="rounded-xl border bg-card p-4"><h2 className="font-semibold">Formas de pagamento</h2><p className="mb-4 text-xs text-muted-foreground">Volume informado nos pagamentos.</p><div className="space-y-3">{data.paymentMethods.map((method) => <div key={method.method} className="flex items-center justify-between border-b pb-3 last:border-0"><div><p className="text-sm font-medium">{paymentMethods[method.method] ?? method.method}</p><p className="text-xs text-muted-foreground">{method.count} lançamento(s)</p></div><p className="font-semibold tabular-nums">{money(method.amount)}</p></div>)}</div></section>
-            </div>
-          </TabsContent>
+          <TabsContent value="overview"><FinanceOverview data={data} /></TabsContent>
           <TabsContent value="revenue"><FinancialTable rows={data.revenues} empty="Nenhuma receita registrada no período." /></TabsContent>
           <TabsContent value="receivables" className="space-y-3"><div className="grid gap-3 sm:grid-cols-3"><Metric label="Total em aberto" value={money(data.metrics.receivable)} note={`${data.receivables.length} título(s)`} icon={ReceiptText} /><Metric label="Vencido" value={money(data.metrics.overdue)} note="Prioridade de cobrança" icon={AlertTriangle} tone="warning" /><Metric label="Recebido" value={money(data.metrics.received)} note="Pagamentos aprovados" icon={CheckCircle2} tone="positive" /></div><FinancialTable rows={data.receivables} empty="Não há contas a receber neste período." /></TabsContent>
           <TabsContent value="commissions" className="space-y-4"><div className="rounded-xl border border-primary/15 bg-primary/[0.035] p-4"><div className="flex gap-3"><BadgeDollarSign className="mt-0.5 h-5 w-5 text-primary" /><div><h2 className="font-semibold">Base de apuração de comissões</h2><p className="mt-1 text-sm text-muted-foreground">A base considera pagamentos aprovados, descontando estornos. Nenhum percentual foi presumido: as regras de comissão ainda precisam ser cadastradas.</p></div></div></div><div className="grid gap-3 lg:grid-cols-2">{data.commissions.map((row) => <Card key={row.ownerId ?? "unassigned"}><CardContent className="p-4"><div className="flex items-center gap-3"><Avatar name={row.ownerName} src={row.avatarUrl ?? undefined} /><div className="min-w-0 flex-1"><p className="font-semibold">{row.ownerName}</p><p className="text-xs text-muted-foreground">{row.orders} venda(s) elegível(is)</p></div><Badge variant="outline">Regra pendente</Badge></div><div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/35 p-3"><div><p className="text-[11px] uppercase text-muted-foreground">Base elegível</p><p className="mt-1 font-semibold text-primary">{money(row.eligibleRevenue)}</p></div><div><p className="text-[11px] uppercase text-muted-foreground">Comissão calculada</p><p className="mt-1 font-semibold">A configurar</p></div></div></CardContent></Card>)}</div>{!data.commissions.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Nenhuma venda paga compõe a base de comissão neste período.</div> : null}</TabsContent>

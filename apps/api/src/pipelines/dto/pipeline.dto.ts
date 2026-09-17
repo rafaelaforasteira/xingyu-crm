@@ -19,6 +19,7 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { PaginationQueryDto } from "../../common/dto/pagination.dto";
 
 export const PIPELINE_STAGE_TYPES = ["OPEN", "WON", "LOST"] as const;
+export const PIPELINE_SPACES = ["COMMERCIAL", "ATTENDANCE"] as const;
 export const PIPELINE_ICON_KEYS = ["kanban", "briefcase", "target", "sales", "shopping-cart", "shopping-bag", "package", "refresh", "users", "relationship", "messages", "support", "check", "launch", "tasks", "portfolio", "goal", "Kanban", "ShoppingBag", "Handshake", "Rocket", "Headphones"] as const;
 export type PipelineStageTypeValue = (typeof PIPELINE_STAGE_TYPES)[number];
 
@@ -114,6 +115,11 @@ export class CreatePipelineDto {
   @IsNotEmpty()
   @MaxLength(120)
   name!: string;
+
+  @ApiPropertyOptional({ enum: PIPELINE_SPACES, default: "COMMERCIAL" })
+  @IsOptional()
+  @IsIn(PIPELINE_SPACES)
+  space?: (typeof PIPELINE_SPACES)[number];
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -217,6 +223,10 @@ export class QueryStagesDto {
 }
 
 export class QueryPipelinesDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ enum: PIPELINE_SPACES })
+  @IsOptional()
+  @IsIn(PIPELINE_SPACES)
+  space?: (typeof PIPELINE_SPACES)[number];
   @ApiPropertyOptional()
   @IsOptional()
   @Transform(optionalBoolean)

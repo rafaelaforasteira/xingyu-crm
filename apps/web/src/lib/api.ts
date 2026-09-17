@@ -399,7 +399,7 @@ export const pipelinesApi = {
     data: { accessMode: "ORGANIZATION" | "RESTRICTED"; teamIds: string[]; userIds: string[] },
   ) => api.put<PipelineAccessOverview>(`/pipelines/access/${id}`, data),
   eligibleUsers: (id: string) => api.get<UserRef[]>(`/pipelines/access/${id}/eligible-users`),
-  navigation: () => api.get<PipelineNavigationItem[]>("/pipelines/navigation"),
+  navigation: (space: "COMMERCIAL" | "ATTENDANCE" = "COMMERCIAL") => api.get<PipelineNavigationItem[]>("/pipelines/navigation", { space }),
   list: async (query?: PipelineListQuery): Promise<PaginatedResponse<Pipeline>> => {
     const res = await api.get<Pipeline[] | PaginatedResponse<Pipeline>>("/pipelines", {
       page: query?.page,
@@ -407,6 +407,7 @@ export const pipelinesApi = {
       search: query?.search,
       archived: query?.archived,
       favorite: query?.favorite,
+      space: query?.space,
     });
     if (!Array.isArray(res)) return res;
     return {
