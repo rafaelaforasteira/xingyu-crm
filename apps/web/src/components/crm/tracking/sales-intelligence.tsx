@@ -1,5 +1,5 @@
 "use client";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import type { SalesTrackingData } from "./sales-tracking-types";
 import {
   Wallet,
@@ -9,7 +9,6 @@ import {
   ShoppingBag,
   UsersRound,
   Receipt,
-  Info,
   ArrowUp,
   ArrowDown,
   Minus,
@@ -34,7 +33,7 @@ export function SalesIntelligence({ data }: { data: SalesTrackingData }) {
       label: "LTV médio",
       value: model.averageLtv,
       format: money,
-      detail: "dos compradores do período",
+      detail: "Valor histórico médio por comprador",
       trend: model.trends.averageLtv,
       help: "Valor líquido histórico acumulado pelos compradores selecionados até a data final da análise.",
     },
@@ -47,7 +46,7 @@ export function SalesIntelligence({ data }: { data: SalesTrackingData }) {
       detail:
         model.repeatCustomerRate.rate == null
           ? "Coorte ainda não disponível"
-          : "dos elegíveis voltaram a comprar",
+          : "Clientes elegíveis que voltaram a comprar",
       trend: model.trends.repeatCustomerRate,
       help: model.isDemonstrative
         ? "Coorte demonstrativa: 96 de 250 clientes elegíveis voltaram a comprar em uma janela de 60 dias (38,4%). Variação ilustrativa de +4,2 pontos percentuais. Não equivale à participação da receita de recompra."
@@ -59,7 +58,7 @@ export function SalesIntelligence({ data }: { data: SalesTrackingData }) {
       label: "Tempo médio até recompra",
       value: model.averageRepurchaseDays,
       format: days,
-      detail: "entre compras válidas",
+      detail: "Intervalo médio entre compras válidas",
       trend: model.trends.averageRepurchaseDays,
       help: "Intervalo médio entre compras válidas dos clientes que realizaram pelo menos uma recompra.",
     },
@@ -69,17 +68,7 @@ export function SalesIntelligence({ data }: { data: SalesTrackingData }) {
       label: "Clientes reativados",
       value: reactivation.reactivatedCustomers,
       format: integer,
-      detail:
-        reactivation.reactivationRate == null ? (
-          "Base elegível indisponível"
-        ) : (
-          <>
-            <span className="font-semibold text-success">
-              {percentage(reactivation.reactivationRate)}
-            </span>{" "}
-            dos elegíveis
-          </>
-        ),
+      detail: "Clientes que retornaram após inatividade",
       trend: model.trends.reactivatedCustomers,
       help: `${model.isDemonstrative ? "Comparativo demonstrativo de +11,4%. " : ""}Clientes que voltaram a comprar após ${REACTIVATION_DAYS} dias ou mais sem uma compra válida. ${reactivation.eligibleCustomers == null ? "Base elegível indisponível neste recorte." : `${integer(reactivation.reactivatedCustomers)} de ${integer(reactivation.eligibleCustomers)} clientes elegíveis voltaram no período. Taxa de reativação: ${percentage(reactivation.reactivationRate)}.`}`,
     },
@@ -100,7 +89,7 @@ export function SalesIntelligence({ data }: { data: SalesTrackingData }) {
           ].map((metric) => (
             <div key={metric.label} className={styles.secondary}>
               <p className={styles.secondaryLabel}>
-                <metric.icon size={14} aria-hidden="true" />
+                <metric.icon size={15} aria-hidden="true" />
                 {metric.label}
               </p>
               <p className={styles.secondaryValue}>
@@ -128,7 +117,7 @@ function IntelligenceMetric({
   icon: LucideIcon;
   value: number | null;
   format: (value: number | null) => string;
-  detail: ReactNode;
+  detail: string;
   help: string;
   trend: IntelligenceTrend | null;
   tone: string;
@@ -140,6 +129,27 @@ function IntelligenceMetric({
       data-tone={tone}
       style={{ "--delay": `${index * 50}ms` } as CSSProperties}
     >
+      <div className={styles.header}>
+        <Icon className={styles.metricIcon} size={16} aria-hidden="true" />
+        <FunnelTooltipTrigger
+          label={label}
+          className={styles.title}
+          text={
+            <>
+              <strong className="mb-2 block font-semibold text-primary">{label}</strong>
+              <span className="block">{help}</span>
+            </>
+          }
+        >
+          {label}
+        </FunnelTooltipTrigger>
+      </div>
+      <div className={styles.body}>
+        <p className={styles.value}>
+          <AnimatedMetric value={value} format={format} duration={650} />
+        </p>
+        <p className={styles.detail}>{detail}</p>
+      </div>
       <div
         className={styles.trend}
         data-sentiment={trend?.sentiment ?? "neutral"}
@@ -159,31 +169,6 @@ function IntelligenceMetric({
           "—"
         )}
       </div>
-      <div className={styles.header}>
-        <Icon className={styles.metricIcon} size={17} aria-hidden="true" />
-        <p className={styles.title}>{label}</p>
-        <FunnelTooltipTrigger
-          label={label}
-          className={styles.info}
-          text={
-            <>
-              <strong className="mb-2 block font-semibold text-primary">{label}</strong>
-              <span className="block">{help}</span>
-              <span className="mt-2 block text-muted-foreground">{detail}</span>
-              <span className="mt-2 block text-muted-foreground">
-                {trend
-                  ? "A tag compara com o período anterior."
-                  : "Sem comparativo anterior disponível."}
-              </span>
-            </>
-          }
-        >
-          <Info size={13} aria-hidden="true" />
-        </FunnelTooltipTrigger>
-      </div>
-      <p className={styles.value}>
-        <AnimatedMetric value={value} format={format} duration={650} />
-      </p>
     </div>
   );
 }

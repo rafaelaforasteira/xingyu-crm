@@ -1,161 +1,208 @@
 "use client";
+import type { CSSProperties } from "react";
+import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CHANNEL_LABELS } from "./tracking-dictionary";
+import { FunnelTooltipScope, FunnelTooltipTrigger } from "./financial-funnel-tooltip";
 import { ConceptHelp } from "./tracking-help";
-import { money, percentage, integer } from "./tracking-format";
+import { METRIC_DEFINITIONS } from "./tracking-dictionary";
+import { money, percentage } from "./tracking-format";
 import { AnimatedMetric, AnimatedProgress, useTrackingMotion } from "./tracking-motion";
 import type { SalesTrackingData } from "./sales-tracking-types";
-import styles from "./tracking-overview.module.css";
+import { buildChannelOriginView, type ChannelBarPoint } from "./channel-origin-model";
+import styles from "./channel-origin-section.module.css";
 
-const channelColors = [
-  "hsl(var(--primary))",
-  "hsl(248 48% 55%)",
-  "hsl(274 42% 64%)",
-  "hsl(240 38% 68%)",
-  "hsl(265 40% 76%)",
-  "hsl(250 28% 47%)",
-  "hsl(280 24% 57%)",
-  "hsl(255 25% 82%)",
-];
-const channelKeys = Object.keys(CHANNEL_LABELS);
-function color(channel: string) {
-  return channel === "UNIDENTIFIED"
-    ? "hsl(var(--muted-foreground) / .45)"
-    : channelColors[channelKeys.indexOf(channel) % channelColors.length];
+function signedMoney(value: number) {
+  if (value > 0) return "+" + money(value);
+  if (value < 0) return money(value);
+  return money(0);
 }
+
+function signedPercent(value: number | null) {
+  if (value == null) return "—";
+  if (value > 0) return "+" + percentage(value);
+  if (value < 0) return "-" + percentage(Math.abs(value));
+  return percentage(0);
+}
+
+function deltaSentiment(value: number | null) {
+  if (value == null || value === 0) return "neutral";
+  return value > 0 ? "positive" : "negative";
+}
+
 export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
   const { attribution } = data;
   const { revision } = useTrackingMotion();
-  const channels = [...data.channels].sort((a, b) => b.netRevenue - a.netRevenue);
-  const describe = (row: (typeof channels)[number]) => (
-    <>
-      <strong className="mb-2 block">{CHANNEL_LABELS[row.channel]}</strong>
-      <span className="block font-semibold">
-        {money(row.netRevenue)} · {percentage(row.revenueShare)} da receita
-      </span>
-      <span className="mt-2 block">
-        {integer(row.orders)} pedidos · {integer(row.buyers)} compradores ·{" "}
-        {integer(row.newCustomers)} novos clientes
-      </span>
-      <span className="mt-1 block">Ticket médio: {money(row.averageTicket)}</span>
-    </>
-  );
+  const view = buildChannelOriginView(data.channels, attribution.totalNetRevenue);
   return (
-    <Card className="min-w-0 rounded-2xl shadow-soft">
-      <CardHeader>
+    <Card className={"min-w-0 rounded-2xl shadow-soft " + styles.section}>
+      <CardHeader className="space-y-1.5">
         <CardTitle>De onde vêm as vendas?</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Entenda quais canais estão associados à receita realizada no período.
+          Entenda quais canais estão associados à receita líquida realizada no período.
         </p>
       </CardHeader>
-      <CardContent className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.9fr)]">
-        <div className="min-w-0">
-          {attribution.totalNetRevenue > 0 ? (
-            <>
-              <div
-                key={revision}
-                className={styles.channelBar + " mb-5 flex h-8 gap-0.5 rounded-xl bg-muted"}
-                aria-label="Composição da receita por canal"
-              >
-                {channels
-                  .filter((row) => row.netRevenue > 0)
-                  .map((row) => (
-                    <ConceptHelp
-                      key={row.channel}
-                      label={CHANNEL_LABELS[row.channel]}
-                      text={describe(row)}
-                      className={
-                        styles.segment + " h-full min-w-0 first:rounded-l-xl last:rounded-r-xl"
-                      }
-                      style={{
-                        width: (row.revenueShare ?? 0) + "%",
-                        background: color(row.channel),
-                      }}
-                    >
-                      <span className="sr-only">{CHANNEL_LABELS[row.channel]}</span>
-                    </ConceptHelp>
-                  ))}
-              </div>
-              {attribution.attributedRevenue === 0 && (
-                <p className="mb-3 text-xs text-muted-foreground">
-                  100% da receita está sem origem identificada.
-                </p>
-              )}
-            </>
+      <CardContent className={styles.layout}>
+        <FunnelTooltipScope
+          className={styles.ranking}
+          revision={revision}
+        >
+          {view.bars.length ? (
+            view.bars.map((row, index) => (
+              <ChannelRankRow key={row.channel} row={row} index={index} />
+            ))
           ) : (
-            <p className="mb-4 text-sm text-muted-foreground">
+            <p className="rounded-xl bg-muted/40 p-6 text-sm text-muted-foreground">
               Não há receita líquida para atribuir neste recorte.
             </p>
           )}
-          <div className="grid gap-x-5 gap-y-1 sm:grid-cols-2">
-            {channels.map((row) => (
-              <div
-                key={row.channel}
-                className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 transition-colors hover:bg-muted/50"
-              >
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: color(row.channel) }}
+        </FunnelTooltipScope>
+        <aside className={styles.aside}>
+          <div>
+            <div className="flex items-center gap-1 text-sm font-medium">
+              Cobertura de atribuição
+              <ConceptHelp label="Cobertura de atribuição" text={METRIC_DEFINITIONS.coverage} />
+            </div>
+            <p className={styles.coverageValue}>
+              <AnimatedMetric
+                value={attribution.attributedRevenueShare}
+                format={percentage}
+                duration={750}
+              />
+            </p>
+            <p className={styles.coverageHint}>da receita líquida possui origem identificada</p>
+            <div className={styles.coverageTrack}>
+              <AnimatedProgress
+                value={attribution.attributedRevenueShare}
+                className={styles.identified}
+              />
+            </div>
+          </div>
+          <dl className={styles.split}>
+            <div>
+              <dt>Identificada</dt>
+              <dd data-tone="identified">
+                <AnimatedMetric value={attribution.attributedRevenue} format={money} duration={500} />
+              </dd>
+              <dd className={styles.splitShare}>{percentage(attribution.attributedRevenueShare)}</dd>
+            </div>
+            <div>
+              <dt>Não identificada</dt>
+              <dd>
+                <AnimatedMetric
+                  value={attribution.unattributedRevenue}
+                  format={money}
+                  duration={500}
                 />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-0.5 text-xs font-medium">
-                    {CHANNEL_LABELS[row.channel]}
-                    <ConceptHelp label={CHANNEL_LABELS[row.channel]} text={describe(row)} />
-                  </div>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {money(row.netRevenue)}
-                  </span>
-                </div>
-                <strong className="text-xs tabular-nums">{percentage(row.revenueShare)}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-        <aside className="rounded-2xl bg-primary/[0.025] p-4 sm:p-5">
-          <div className="flex items-center gap-1 text-sm font-medium">
-            Cobertura de atribuição
-            <ConceptHelp
-              label="Cobertura de atribuição"
-              text="Percentual da receita líquida em que o FAROL conseguiu identificar uma origem. Não representa ROAS ou retorno de mídia."
-            />
-          </div>
-          <strong className="mt-3 block text-4xl font-semibold tracking-tight text-primary">
-            <AnimatedMetric
-              value={attribution.attributedRevenueShare}
-              format={percentage}
-              duration={750}
-            />
-          </strong>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            da receita possui origem identificada
-          </p>
-          <div className="my-4 h-2 overflow-hidden rounded-full bg-muted">
-            <AnimatedProgress value={attribution.attributedRevenueShare} className="bg-primary" />
-          </div>
-          <dl className="grid grid-cols-2 gap-3 text-[11px]">
-            {[
-              {
-                label: "Identificada",
-                value: attribution.attributedRevenue,
-                share: attribution.attributedRevenueShare,
-              },
-              {
-                label: "Não identificada",
-                value: attribution.unattributedRevenue,
-                share: attribution.unattributedRevenueShare,
-              },
-            ].map((row) => (
-              <div key={row.label} className="min-w-0">
-                <dt className="text-muted-foreground">{row.label}</dt>
-                <dd className="mt-1 font-semibold tabular-nums">
-                  <AnimatedMetric value={row.value} format={money} duration={500} />
-                </dd>
-                <dd className="mt-1 text-muted-foreground">{percentage(row.share)}</dd>
-              </div>
-            ))}
+              </dd>
+              <dd className={styles.splitShare}>
+                {percentage(attribution.unattributedRevenueShare)}
+              </dd>
+            </div>
           </dl>
+          <div className={styles.facts}>
+            <div>
+              <p className={styles.factLabel}>Canal campeão</p>
+              {view.champion ? (
+                <>
+                  <p className={styles.factTitle}>{view.champion.label}</p>
+                  <p className={styles.factMeta}>
+                    <span className={styles.emphasis}>{money(view.champion.netRevenue)}</span>
+                    <span>{percentage(view.champion.share)} da receita líquida</span>
+                  </p>
+                </>
+              ) : (
+                <p className={styles.coverageHint}>Sem canal em destaque neste recorte.</p>
+              )}
+            </div>
+            <div>
+              <p className={styles.factLabel}>Maior crescimento</p>
+              {view.fastestGrowth ? (
+                <>
+                  <p className={styles.factTitle}>{view.fastestGrowth.label}</p>
+                  <p className={styles.factMeta}>
+                    <span className={styles.growth}>
+                      {signedPercent(view.fastestGrowth.growthRate)}
+                    </span>
+                    <span>{signedMoney(view.fastestGrowth.delta)}</span>
+                  </p>
+                </>
+              ) : (
+                <p className={styles.coverageHint}>Sem comparativo anterior para crescimento.</p>
+              )}
+            </div>
+            <div>
+              <p className={styles.factLabel}>Concentração</p>
+              <p className={styles.factTitle}>
+                Top 3 representam{" "}
+                <span className={styles.emphasis}>
+                  <AnimatedMetric value={view.top3Share} format={percentage} duration={500} />
+                </span>
+              </p>
+              <p className={styles.factMeta}>da receita líquida do período</p>
+            </div>
+          </div>
         </aside>
       </CardContent>
     </Card>
+  );
+}
+
+function ChannelRankRow({ row, index }: { row: ChannelBarPoint; index: number }) {
+  const TrendIcon =
+    row.growthRate == null || row.growthRate === 0
+      ? Minus
+      : row.growthRate > 0
+        ? ArrowUp
+        : ArrowDown;
+  return (
+    <FunnelTooltipTrigger
+      label={row.label}
+      className={styles.row}
+      style={{ "--delay": `${index * 40}ms` } as CSSProperties}
+      text={
+        <>
+          <strong className="mb-2 block font-semibold text-primary">{row.label}</strong>
+          <span className="flex justify-between gap-5 py-0.5">
+            <span className="text-muted-foreground">Receita atual</span>
+            <strong className="tabular-nums">{money(row.netRevenue)}</strong>
+          </span>
+          <span className="flex justify-between gap-5 py-0.5">
+            <span className="text-muted-foreground">Receita anterior</span>
+            <strong className="tabular-nums">{money(row.previousNetRevenue)}</strong>
+          </span>
+          <span className="flex justify-between gap-5 py-0.5">
+            <span className="text-muted-foreground">Variação</span>
+            <strong className="tabular-nums">{signedMoney(row.delta)}</strong>
+          </span>
+          <span className="flex justify-between gap-5 py-0.5">
+            <span className="text-muted-foreground">Crescimento</span>
+            <strong className="tabular-nums">{signedPercent(row.growthRate)}</strong>
+          </span>
+          <span className="flex justify-between gap-5 py-0.5">
+            <span className="text-muted-foreground">Participação na receita líquida</span>
+            <strong className="tabular-nums">{percentage(row.revenueShare)}</strong>
+          </span>
+        </>
+      }
+    >
+      <span className={styles.heading}>
+        <span className={styles.name}>{row.label}</span>
+        <span className={styles.metrics}>
+          <span className={styles.amount}>{money(row.netRevenue)}</span>
+          <span>{percentage(row.revenueShare)}</span>
+          <span className={styles.delta} data-sentiment={deltaSentiment(row.growthRate)}>
+            <TrendIcon size={11} aria-hidden="true" />
+            {signedPercent(row.growthRate)}
+          </span>
+        </span>
+      </span>
+      <span className={styles.track} aria-hidden="true">
+        <span className={styles.previous} style={{ width: row.previousWidth + "%" }} />
+        <span
+          className={styles.current}
+          style={{ width: row.currentWidth + "%", background: row.color }}
+        />
+      </span>
+    </FunnelTooltipTrigger>
   );
 }

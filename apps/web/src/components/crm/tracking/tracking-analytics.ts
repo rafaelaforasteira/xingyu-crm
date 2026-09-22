@@ -5,6 +5,7 @@ import { overviewChannel } from "./tracking-dictionary";
 import { timelineGranularity } from "./tracking-dates";
 import type {
   ResolvedTrackingRange,
+  TrackingChannelRow,
   TrackingDataset,
   TrackingOrder,
 } from "./tracking-analytics-types";
@@ -259,6 +260,7 @@ function aggregate(
       return {
         channel,
         netRevenue: centsToMoney(revenue),
+        previousNetRevenue: 0,
         revenueShare: safeRate(revenue, netCents),
         orders: rows.length,
         buyers: ids.size,
@@ -384,6 +386,32 @@ function aggregate(
         : null,
   };
 }
+function mergeChannelPeriods(
+  current: TrackingChannelRow[],
+  previous: TrackingChannelRow[],
+): TrackingChannelRow[] {
+  const previousRevenue = new Map(previous.map((row) => [row.channel, row.netRevenue]));
+  const rows = current.map((row) => ({
+    ...row,
+    previousNetRevenue: previousRevenue.get(row.channel) ?? 0,
+  }));
+  const seen = new Set(rows.map((row) => row.channel));
+  for (const row of previous) {
+    if (seen.has(row.channel)) continue;
+    rows.push({
+      ...row,
+      netRevenue: 0,
+      revenueShare: 0,
+      orders: 0,
+      buyers: 0,
+      newCustomers: 0,
+      averageTicket: null,
+      previousNetRevenue: row.netRevenue,
+    });
+  }
+  return rows.sort((a, b) => b.netRevenue - a.netRevenue);
+}
+
 export function median(values: number[]): number | null {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -436,7 +464,7 @@ export function analyzeTrackingOverview(
     granularity: current.granularity,
     summary: current.summary,
     overview: { ...overview, trends: overviewTrends(overview, previousPeriod) },
-    channels: current.channels,
+    channels: mergeChannelPeriods(current.channels, previous.channels),
     attribution: current.attribution,
     reactivation: current.reactivation,
     firstToSecondConversion: current.firstToSecondConversion,

@@ -56,6 +56,7 @@ export interface TrackingDataset {
 export interface TrackingChannelRow {
   channel: TrackingChannel;
   netRevenue: number;
+  previousNetRevenue: number;
   revenueShare: number | null;
   orders: number;
   buyers: number;
