@@ -4,21 +4,95 @@ import type { TrackingChannel, TrackingChannelRow } from "./tracking-analytics-t
 
 export const MAX_CHANNEL_BARS = 8;
 
-const RANK_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(262 42% 56%)",
-  "hsl(270 32% 60%)",
-  "hsl(255 26% 58%)",
-  "hsl(268 22% 64%)",
-  "hsl(250 16% 56%)",
-  "hsl(255 14% 62%)",
-];
+/** Channel accents derived from FAROL tokens (primary, info, success, warning, muted). */
+export const CHANNEL_COLORS: Record<TrackingChannel, string> = {
+  META_ADS: "hsl(var(--info))",
+  WHATSAPP: "hsl(var(--success))",
+  GOOGLE_ADS: "hsl(var(--warning))",
+  ORGANIC_SOCIAL: "hsl(var(--primary))",
+  REFERRAL: "hsl(212 42% 44%)",
+  EMAIL: "hsl(262 38% 58%)",
+  DIRECT: "hsl(var(--muted-foreground))",
+  OTHER: "hsl(255 18% 52%)",
+  UNIDENTIFIED: "hsl(250 8% 62%)",
+};
 
-function rankColor(channel: TrackingChannel, index: number, isChampion: boolean) {
-  if (channel === "UNIDENTIFIED") return "hsl(var(--muted-foreground) / 0.45)";
-  if (isChampion) return "hsl(var(--success))";
-  return RANK_COLORS[Math.min(index, RANK_COLORS.length - 1)]!;
+export const COVERAGE_COLORS = {
+  identified: "hsl(var(--success))",
+  unidentified: "hsl(var(--primary) / 0.42)",
+};
+
+export type TreemapRect = ChannelTreemapCell & {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/** Binary treemap: area of each cell is proportional to channel net revenue. */
+export function layoutTreemap(
+  items: ChannelTreemapCell[],
+  width: number,
+  height: number,
+  gap = 3,
+): TreemapRect[] {
+  const nodes = items.filter((item) => item.size > 0).sort((a, b) => b.size - a.size);
+  const total = nodes.reduce((sum, item) => sum + item.size, 0);
+  if (!total || width <= 0 || height <= 0) return [];
+
+  const place = (
+    item: ChannelTreemapCell,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): TreemapRect => ({
+    ...item,
+    x: x + gap / 2,
+    y: y + gap / 2,
+    width: Math.max(0, w - gap),
+    height: Math.max(0, h - gap),
+  });
+
+  const split = (
+    list: ChannelTreemapCell[],
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): TreemapRect[] => {
+    if (!list.length) return [];
+    const first = list[0];
+    if (list.length === 1 && first) return [place(first, x, y, w, h)];
+    const sum = list.reduce((acc, item) => acc + item.size, 0);
+    let acc = 0;
+    let cut = 1;
+    for (let index = 0; index < list.length - 1; index += 1) {
+      acc += list[index]!.size;
+      cut = index + 1;
+      if (acc >= sum / 2) break;
+    }
+    const left = list.slice(0, cut);
+    const right = list.slice(cut);
+    const fraction = left.reduce((value, item) => value + item.size, 0) / sum;
+    if (w >= h) {
+      const splitWidth = w * fraction;
+      return [...split(left, x, y, splitWidth, h), ...split(right, x + splitWidth, y, w - splitWidth, h)];
+    }
+    const splitHeight = h * fraction;
+    return [...split(left, x, y, w, splitHeight), ...split(right, x, y + splitHeight, w, h - splitHeight)];
+  };
+
+  return split(nodes, 0, 0, width, height);
 }
+
+export type ChannelTreemapCell = {
+  name: string;
+  size: number;
+  fill: string;
+  share: number | null;
+  channel: TrackingChannel;
+};
 
 export type ChannelBarPoint = {
   channel: TrackingChannel;
@@ -46,6 +120,7 @@ export type ChannelInsight = {
 
 export type ChannelOriginView = {
   bars: ChannelBarPoint[];
+  treemap: ChannelTreemapCell[];
   champion: ChannelInsight | null;
   fastestGrowth: ChannelInsight | null;
   top3Share: number | null;
@@ -170,7 +245,7 @@ export function buildChannelOriginView(
     1,
   );
   return {
-    bars: barsSource.map((row, index) => {
+    bars: barsSource.map((row) => {
       const isChampion = championRow?.channel === row.channel && row.channel !== "UNIDENTIFIED";
       return {
         channel: row.channel,
@@ -181,12 +256,21 @@ export function buildChannelOriginView(
         delta: channelDelta(row.netRevenue, row.previousNetRevenue),
         growthRate: channelGrowthRate(row.netRevenue, row.previousNetRevenue),
         revenueShare: row.revenueShare ?? safeRate(row.netRevenue, totalNetRevenue),
-        color: rankColor(row.channel, index, isChampion),
+        color: CHANNEL_COLORS[row.channel],
         isChampion,
-        currentWidth: (row.netRevenue / scale) * 100,
+        currentWidth: Math.min(100, row.revenueShare ?? safeRate(row.netRevenue, totalNetRevenue) ?? 0),
         previousWidth: (row.previousNetRevenue / scale) * 100,
       };
     }),
+    treemap: barsSource
+      .filter((row) => row.netRevenue > 0)
+      .map((row) => ({
+        channel: row.channel,
+        name: CHANNEL_LABELS[row.channel],
+        size: row.netRevenue,
+        fill: CHANNEL_COLORS[row.channel],
+        share: row.revenueShare ?? safeRate(row.netRevenue, totalNetRevenue),
+      })),
     champion: championRow ? toInsight(championRow) : null,
     fastestGrowth: fastest ? toInsight(fastest) : null,
     top3Share,

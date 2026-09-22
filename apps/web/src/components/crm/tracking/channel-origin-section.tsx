@@ -1,38 +1,45 @@
 "use client";
-import type { CSSProperties } from "react";
-import { ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
 import { FunnelTooltipScope, FunnelTooltipTrigger } from "./financial-funnel-tooltip";
-import { ConceptHelp } from "./tracking-help";
+import { ChartTooltip, ConceptHelp } from "./tracking-help";
 import { METRIC_DEFINITIONS } from "./tracking-dictionary";
 import { money, percentage } from "./tracking-format";
-import { AnimatedMetric, AnimatedProgress, useTrackingMotion } from "./tracking-motion";
+import { AnimatedMetric, useTrackingMotion } from "./tracking-motion";
 import type { SalesTrackingData } from "./sales-tracking-types";
-import { buildChannelOriginView, type ChannelBarPoint } from "./channel-origin-model";
+import {
+  CHANNEL_COLORS,
+  COVERAGE_COLORS,
+  buildChannelOriginView,
+  layoutTreemap,
+  type ChannelInsight,
+  type ChannelTreemapCell,
+} from "./channel-origin-model";
+import { ChannelBrandMark } from "./channel-origin-brand";
+import { ChannelCard, ChannelInsightScope, signedMoney, signedPercent } from "./channel-origin-popover";
 import styles from "./channel-origin-section.module.css";
-
-function signedMoney(value: number) {
-  if (value > 0) return "+" + money(value);
-  if (value < 0) return money(value);
-  return money(0);
-}
-
-function signedPercent(value: number | null) {
-  if (value == null) return "—";
-  if (value > 0) return "+" + percentage(value);
-  if (value < 0) return "-" + percentage(Math.abs(value));
-  return percentage(0);
-}
-
-function deltaSentiment(value: number | null) {
-  if (value == null || value === 0) return "neutral";
-  return value > 0 ? "positive" : "negative";
-}
 
 export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
   const { attribution } = data;
-  const { revision } = useTrackingMotion();
+  const { revision, initial } = useTrackingMotion();
+  const reduced = useReducedMotion();
   const view = buildChannelOriginView(data.channels, attribution.totalNetRevenue);
+  const coverageSlices = [
+    {
+      name: "Identificada",
+      value: attribution.attributedRevenue,
+      share: attribution.attributedRevenueShare,
+      color: COVERAGE_COLORS.identified,
+    },
+    {
+      name: "Não identificada",
+      value: attribution.unattributedRevenue,
+      share: attribution.unattributedRevenueShare,
+      color: COVERAGE_COLORS.unidentified,
+    },
+  ].filter((slice) => slice.value > 0);
   return (
     <Card className={"min-w-0 rounded-2xl shadow-soft " + styles.section}>
       <CardHeader className="space-y-1.5">
@@ -42,51 +49,96 @@ export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
         </p>
       </CardHeader>
       <CardContent className={styles.layout}>
-        <FunnelTooltipScope
-          className={styles.ranking}
-          revision={revision}
-        >
+        <ChannelInsightScope className={styles.channels} revision={revision}>
           {view.bars.length ? (
             view.bars.map((row, index) => (
-              <ChannelRankRow key={row.channel} row={row} index={index} />
+              <ChannelCard key={row.channel} row={row} index={index} />
             ))
           ) : (
-            <p className="rounded-xl bg-muted/40 p-6 text-sm text-muted-foreground">
-              Não há receita líquida para atribuir neste recorte.
-            </p>
+            <p className={styles.empty}>Não há receita líquida para atribuir neste recorte.</p>
           )}
-        </FunnelTooltipScope>
-        <aside className={styles.aside}>
-          <div>
-            <div className="flex items-center gap-1 text-sm font-medium">
-              Cobertura de atribuição
-              <ConceptHelp label="Cobertura de atribuição" text={METRIC_DEFINITIONS.coverage} />
-            </div>
-            <p className={styles.coverageValue}>
-              <AnimatedMetric
-                value={attribution.attributedRevenueShare}
-                format={percentage}
-                duration={750}
-              />
-            </p>
-            <p className={styles.coverageHint}>da receita líquida possui origem identificada</p>
-            <div className={styles.coverageTrack}>
-              <AnimatedProgress
-                value={attribution.attributedRevenueShare}
-                className={styles.identified}
-              />
+        </ChannelInsightScope>
+
+        <section className={styles.coverage} aria-label="Cobertura de atribuição">
+          <div className={styles.coverageHead}>
+            <h4 className={styles.blockTitle}>Cobertura de atribuição</h4>
+            <ConceptHelp label="Cobertura de atribuição" text={METRIC_DEFINITIONS.coverage} />
+          </div>
+          <div className={styles.donutStage}>
+            <div className={styles.donutWrap}>
+              {coverageSlices.length ? (
+                <>
+                  <div className={styles.donutChart}>
+                    <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        key={"coverage-" + revision}
+                        data={coverageSlices}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius="62%"
+                        outerRadius="88%"
+                        paddingAngle={coverageSlices.length > 1 ? 3 : 0}
+                        cornerRadius={5}
+                        stroke="none"
+                        isAnimationActive={!reduced}
+                        animationDuration={initial ? 700 : 380}
+                      >
+                        {coverageSlices.map((slice) => (
+                          <Cell key={slice.name} fill={slice.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          const item = payload?.[0]?.payload as
+                            | (typeof coverageSlices)[number]
+                            | undefined;
+                          return active && item ? (
+                            <ChartTooltip
+                              title={item.name}
+                              rows={[
+                                ["Receita líquida", money(item.value)],
+                                ["Participação", percentage(item.share)],
+                              ]}
+                            />
+                          ) : null;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  </div>
+                  <div className={styles.donutCenter}>
+                    <p className={styles.coverageValue}>
+                      <AnimatedMetric
+                        value={attribution.attributedRevenueShare}
+                        format={percentage}
+                        duration={750}
+                      />
+                    </p>
+                    <p className={styles.coverageHint}>identificada</p>
+                  </div>
+                </>
+              ) : (
+                <p className={styles.coverageHint}>Sem receita no recorte para medir cobertura.</p>
+              )}
             </div>
           </div>
           <dl className={styles.split}>
             <div>
-              <dt>Identificada</dt>
+              <dt>
+                <span className={styles.dot} style={{ background: COVERAGE_COLORS.identified }} />
+                Identificada
+              </dt>
               <dd data-tone="identified">
                 <AnimatedMetric value={attribution.attributedRevenue} format={money} duration={500} />
               </dd>
               <dd className={styles.splitShare}>{percentage(attribution.attributedRevenueShare)}</dd>
             </div>
             <div>
-              <dt>Não identificada</dt>
+              <dt>
+                <span className={styles.dot} style={{ background: COVERAGE_COLORS.unidentified }} />
+                Não identificada
+              </dt>
               <dd>
                 <AnimatedMetric
                   value={attribution.unattributedRevenue}
@@ -99,110 +151,166 @@ export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
               </dd>
             </div>
           </dl>
-          <div className={styles.facts}>
-            <div>
-              <p className={styles.factLabel}>Canal campeão</p>
-              {view.champion ? (
-                <>
-                  <p className={styles.factTitle}>{view.champion.label}</p>
-                  <p className={styles.factMeta}>
-                    <span className={styles.emphasis}>{money(view.champion.netRevenue)}</span>
-                    <span>{percentage(view.champion.share)} da receita líquida</span>
-                  </p>
-                </>
-              ) : (
-                <p className={styles.coverageHint}>Sem canal em destaque neste recorte.</p>
-              )}
-            </div>
-            <div>
-              <p className={styles.factLabel}>Maior crescimento</p>
-              {view.fastestGrowth ? (
-                <>
-                  <p className={styles.factTitle}>{view.fastestGrowth.label}</p>
-                  <p className={styles.factMeta}>
-                    <span className={styles.growth}>
-                      {signedPercent(view.fastestGrowth.growthRate)}
-                    </span>
-                    <span>{signedMoney(view.fastestGrowth.delta)}</span>
-                  </p>
-                </>
-              ) : (
-                <p className={styles.coverageHint}>Sem comparativo anterior para crescimento.</p>
-              )}
-            </div>
-            <div>
-              <p className={styles.factLabel}>Concentração</p>
-              <p className={styles.factTitle}>
-                Top 3 representam{" "}
-                <span className={styles.emphasis}>
-                  <AnimatedMetric value={view.top3Share} format={percentage} duration={500} />
-                </span>
-              </p>
-              <p className={styles.factMeta}>da receita líquida do período</p>
-            </div>
-          </div>
+        </section>
+
+        <aside className={styles.insights} aria-label="Insights estratégicos">
+          <InsightCard title="Canal campeão">
+            {view.champion ? (
+              <ChampionBody item={view.champion} />
+            ) : (
+              <p className={styles.coverageHint}>Sem canal em destaque neste recorte.</p>
+            )}
+          </InsightCard>
+          <InsightCard title="Maior crescimento">
+            {view.fastestGrowth ? (
+              <GrowthBody item={view.fastestGrowth} />
+            ) : (
+              <p className={styles.coverageHint}>Sem comparativo anterior para crescimento.</p>
+            )}
+          </InsightCard>
+          <InsightCard title="Concentração" subtitle="Top canais por participação na receita">
+            <ConcentrationTreemap items={view.treemap} revision={revision} />
+            <p className={styles.concentrationSummary}>
+              Top 3 canais representam{" "}
+              <strong>
+                <AnimatedMetric value={view.top3Share} format={percentage} duration={500} />
+              </strong>{" "}
+              da receita líquida
+            </p>
+          </InsightCard>
         </aside>
       </CardContent>
     </Card>
   );
 }
 
-function ChannelRankRow({ row, index }: { row: ChannelBarPoint; index: number }) {
-  const TrendIcon =
-    row.growthRate == null || row.growthRate === 0
-      ? Minus
-      : row.growthRate > 0
-        ? ArrowUp
-        : ArrowDown;
+function InsightCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
   return (
-    <FunnelTooltipTrigger
-      label={row.label}
-      className={styles.row}
-      style={{ "--delay": `${index * 40}ms` } as CSSProperties}
-      text={
-        <>
-          <strong className="mb-2 block font-semibold text-primary">{row.label}</strong>
-          <span className="flex justify-between gap-5 py-0.5">
-            <span className="text-muted-foreground">Receita atual</span>
-            <strong className="tabular-nums">{money(row.netRevenue)}</strong>
-          </span>
-          <span className="flex justify-between gap-5 py-0.5">
-            <span className="text-muted-foreground">Receita anterior</span>
-            <strong className="tabular-nums">{money(row.previousNetRevenue)}</strong>
-          </span>
-          <span className="flex justify-between gap-5 py-0.5">
-            <span className="text-muted-foreground">Variação</span>
-            <strong className="tabular-nums">{signedMoney(row.delta)}</strong>
-          </span>
-          <span className="flex justify-between gap-5 py-0.5">
-            <span className="text-muted-foreground">Crescimento</span>
-            <strong className="tabular-nums">{signedPercent(row.growthRate)}</strong>
-          </span>
-          <span className="flex justify-between gap-5 py-0.5">
-            <span className="text-muted-foreground">Participação na receita líquida</span>
-            <strong className="tabular-nums">{percentage(row.revenueShare)}</strong>
-          </span>
-        </>
-      }
-    >
-      <span className={styles.heading}>
-        <span className={styles.name}>{row.label}</span>
-        <span className={styles.metrics}>
-          <span className={styles.amount}>{money(row.netRevenue)}</span>
-          <span>{percentage(row.revenueShare)}</span>
-          <span className={styles.delta} data-sentiment={deltaSentiment(row.growthRate)}>
-            <TrendIcon size={11} aria-hidden="true" />
-            {signedPercent(row.growthRate)}
-          </span>
-        </span>
+    <div className={styles.insightCard}>
+      <p className={styles.insightLabel}>{title}</p>
+      {subtitle ? <p className={styles.insightSubtitle}>{subtitle}</p> : null}
+      {children}
+    </div>
+  );
+}
+
+function ChampionBody({ item }: { item: ChannelInsight }) {
+  return (
+    <div className={styles.insightRow}>
+      <span className={styles.insightMark} style={{ "--accent": itemColor(item) } as CSSProperties}>
+        <ChannelBrandMark channel={item.channel} size={20} />
       </span>
-      <span className={styles.track} aria-hidden="true">
-        <span className={styles.previous} style={{ width: row.previousWidth + "%" }} />
-        <span
-          className={styles.current}
-          style={{ width: row.currentWidth + "%", background: row.color }}
-        />
+      <div className={styles.insightCopy}>
+        <p className={styles.insightTitle}>{item.label}</p>
+        <p className={styles.insightValue}>
+          <AnimatedMetric value={item.netRevenue} format={money} duration={500} />
+        </p>
+        <p className={styles.insightMeta}>{percentage(item.share)} da receita líquida</p>
+      </div>
+    </div>
+  );
+}
+
+function GrowthBody({ item }: { item: ChannelInsight }) {
+  return (
+    <div className={styles.insightRow}>
+      <span className={styles.insightMark} style={{ "--accent": itemColor(item) } as CSSProperties}>
+        <ChannelBrandMark channel={item.channel} size={20} />
       </span>
-    </FunnelTooltipTrigger>
+      <div className={styles.insightCopy}>
+        <p className={styles.insightTitle}>{item.label}</p>
+        <p className={styles.growthValue}>{signedPercent(item.growthRate)}</p>
+        <p className={styles.insightMeta}>{signedMoney(item.delta)}</p>
+      </div>
+    </div>
+  );
+}
+
+function itemColor(item: ChannelInsight) {
+  return CHANNEL_COLORS[item.channel];
+}
+
+function cellLabel(name: string, width: number, height: number) {
+  if (width < 58 || height < 28) return "";
+  const short = name.split(" / ")[0] ?? name;
+  if (width >= 96 && height >= 36) return name;
+  return short;
+}
+
+function ConcentrationTreemap({
+  items,
+  revision,
+}: {
+  items: ChannelTreemapCell[];
+  revision: number;
+}) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const node = frame.current;
+    if (!node) return;
+    const update = () => {
+      const next = node.getBoundingClientRect();
+      setBox({ width: next.width, height: next.height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [revision, items.length]);
+  if (!items.length) {
+    return <p className={styles.coverageHint}>Sem canais para calcular concentração.</p>;
+  }
+  const cells = layoutTreemap(items, box.width, box.height);
+  return (
+    <FunnelTooltipScope revision={revision} className={styles.treemap}>
+      <div ref={frame} className={styles.treemapCanvas} aria-hidden={cells.length === 0}>
+        {cells.map((cell) => (
+          <FunnelTooltipTrigger
+            key={cell.channel}
+            label={cell.name}
+            className={styles.treemapCell}
+            style={{
+              left: cell.x,
+              top: cell.y,
+              width: cell.width,
+              height: cell.height,
+              background: cell.fill,
+              color:
+                cell.channel === "GOOGLE_ADS"
+                  ? "hsl(var(--warning-foreground))"
+                  : "hsl(var(--primary-foreground))",
+            }}
+            text={
+              <>
+                <strong className="mb-2 block font-semibold text-primary">{cell.name}</strong>
+                <span className="flex justify-between gap-5 py-0.5">
+                  <span className="text-muted-foreground">Receita líquida</span>
+                  <strong className="tabular-nums">{money(cell.size)}</strong>
+                </span>
+                <span className="flex justify-between gap-5 py-0.5">
+                  <span className="text-muted-foreground">Participação</span>
+                  <strong className="tabular-nums">{percentage(cell.share)}</strong>
+                </span>
+              </>
+            }
+          >
+            {cellLabel(cell.name, cell.width, cell.height) ? (
+              <span className={styles.treemapLabel}>
+                {cellLabel(cell.name, cell.width, cell.height)}
+              </span>
+            ) : null}
+          </FunnelTooltipTrigger>
+        ))}
+      </div>
+    </FunnelTooltipScope>
   );
 }

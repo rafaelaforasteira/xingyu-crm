@@ -1,0 +1,263 @@
+"use client";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import { ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { money, percentage } from "./tracking-format";
+import { AnimatedMetric } from "./tracking-motion";
+import { ChannelBrandMark } from "./channel-origin-brand";
+import type { ChannelBarPoint } from "./channel-origin-model";
+import styles from "./channel-origin-section.module.css";
+
+type ActiveInsight = { channel: string; anchor: HTMLButtonElement; row: ChannelBarPoint };
+
+const InsightContext = createContext<{
+  active: ActiveInsight | null;
+  tooltipId: string;
+  open: (item: ActiveInsight) => void;
+  close: () => void;
+} | null>(null);
+
+export function signedMoney(value: number) {
+  if (value > 0) return "+" + money(value);
+  if (value < 0) return money(value);
+  return money(0);
+}
+
+export function signedPercent(value: number | null) {
+  if (value == null) return "—";
+  if (value > 0) return "+" + percentage(value);
+  if (value < 0) return "-" + percentage(Math.abs(value));
+  return percentage(0);
+}
+
+export function deltaSentiment(value: number | null) {
+  if (value == null || value === 0) return "neutral";
+  return value > 0 ? "positive" : "negative";
+}
+
+function TrendIcon({ value }: { value: number | null }) {
+  const Icon = value == null || value === 0 ? Minus : value > 0 ? ArrowUp : ArrowDown;
+  return <Icon size={10} aria-hidden="true" />;
+}
+
+export function ChannelInsightScope({
+  children,
+  className,
+  revision,
+}: {
+  revision: number;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [active, setActive] = useState<ActiveInsight | null>(null);
+  const tooltipId = useId();
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => setActive(null), [revision]);
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActive(null);
+    };
+    const outside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest("[data-channel-insight-trigger]")) {
+        setActive(null);
+      }
+    };
+    document.addEventListener("keydown", escape);
+    document.addEventListener("pointerdown", outside);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      document.removeEventListener("pointerdown", outside);
+    };
+  }, []);
+  return (
+    <InsightContext.Provider value={{ active, tooltipId, open: setActive, close: () => setActive(null) }}>
+      <div
+        ref={root}
+        className={className}
+        onPointerLeave={(event) => {
+          if (event.pointerType !== "touch") setActive(null);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setActive(null);
+        }}
+      >
+        {children}
+      </div>
+      {active ? <ChannelInsightPopover item={active} id={tooltipId} /> : null}
+    </InsightContext.Provider>
+  );
+}
+
+export function ChannelCard({ row, index }: { row: ChannelBarPoint; index: number }) {
+  const context = useContext(InsightContext);
+  if (!context) throw new Error("ChannelCard requires ChannelInsightScope");
+  const open = context.active?.channel === row.channel;
+  const show = (anchor: HTMLButtonElement) =>
+    context.open({ channel: row.channel, anchor, row });
+  return (
+    <button
+      type="button"
+      data-channel-insight-trigger={row.channel}
+      data-open={open ? "true" : undefined}
+      aria-label={"Entender " + row.label}
+      aria-expanded={open}
+      aria-describedby={open ? context.tooltipId : undefined}
+      className={styles.channelCard}
+      style={{ "--delay": `${index * 45}ms`, "--accent": row.color } as CSSProperties}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch") show(event.currentTarget);
+      }}
+      onFocus={(event) => show(event.currentTarget)}
+      onClick={(event) => {
+        const pointerType = "pointerType" in event.nativeEvent
+          ? (event.nativeEvent as PointerEvent).pointerType
+          : "";
+        if (pointerType === "mouse") return;
+        if (open) context.close();
+        else show(event.currentTarget);
+      }}
+    >
+      <span className={styles.channelTop}>
+        <span className={styles.channelIdentity}>
+          <span className={styles.channelMark}>
+            <ChannelBrandMark channel={row.channel} size={16} />
+          </span>
+          <span className={styles.channelName}>{row.label}</span>
+        </span>
+        <span className={styles.delta} data-sentiment={deltaSentiment(row.growthRate)}>
+          <TrendIcon value={row.growthRate} />
+          {signedPercent(row.growthRate)}
+        </span>
+      </span>
+      <span className={styles.channelMetrics}>
+        <span className={styles.channelValue}>
+          <AnimatedMetric value={row.netRevenue} format={money} duration={500} />
+        </span>
+        <span className={styles.channelShare}>{percentage(row.revenueShare)}</span>
+      </span>
+      <span className={styles.channelBar} aria-hidden="true">
+        <span className={styles.channelBarFill} style={{ width: row.currentWidth + "%" }} />
+      </span>
+    </button>
+  );
+}
+
+function ChannelInsightPopover({ item, id }: { item: ActiveInsight; id: string }) {
+  const card = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const update = () => {
+      if (!card.current || !item.anchor.isConnected) return;
+      setPosition(placeInsight(item.anchor, card.current));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    const node = card.current;
+    if (!node) return;
+    observer.observe(node);
+    observer.observe(item.anchor);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [item]);
+  const { row } = item;
+  const scale = Math.max(row.netRevenue, row.previousNetRevenue, 1);
+  return createPortal(
+    <div
+      ref={card}
+      id={id}
+      role="tooltip"
+      className={styles.insightPopover}
+      style={{
+        left: position?.left ?? 0,
+        top: position?.top ?? 0,
+        visibility: position ? "visible" : "hidden",
+        "--accent": row.color,
+      } as CSSProperties}
+    >
+      <div key={row.channel} className={styles.insightPopoverBody}>
+        <header className={styles.insightPopoverHead}>
+          <span className={styles.channelIdentity}>
+            <span className={styles.channelMark}>
+              <ChannelBrandMark channel={row.channel} size={16} />
+            </span>
+            <span className={styles.insightPopoverTitle}>{row.label}</span>
+          </span>
+          <span className={styles.delta} data-sentiment={deltaSentiment(row.growthRate)}>
+            <TrendIcon value={row.growthRate} />
+            {signedPercent(row.growthRate)}
+          </span>
+        </header>
+        <p className={styles.insightPopoverLabel}>Receita atual</p>
+        <p className={styles.insightPopoverValue}>{money(row.netRevenue)}</p>
+        <span className={styles.compareTrack} aria-hidden="true">
+          <span
+            className={styles.compareFill}
+            data-tone="current"
+            style={{ width: (row.netRevenue / scale) * 100 + "%" }}
+          />
+        </span>
+        <p className={styles.insightPopoverLabel}>Receita anterior</p>
+        <p className={styles.insightPopoverValueMuted}>{money(row.previousNetRevenue)}</p>
+        <span className={styles.compareTrack} aria-hidden="true">
+          <span
+            className={styles.compareFill}
+            data-tone="previous"
+            style={{ width: (row.previousNetRevenue / scale) * 100 + "%" }}
+          />
+        </span>
+        <div className={styles.insightPopoverFoot}>
+          <div>
+            <p className={styles.insightPopoverLabel}>Variação</p>
+            <p className={styles.insightPopoverFootValue} data-sentiment={deltaSentiment(row.delta)}>
+              {signedMoney(row.delta)}
+            </p>
+          </div>
+          <div>
+            <p className={styles.insightPopoverLabel}>Participação</p>
+            <p className={styles.insightPopoverFootValue}>{percentage(row.revenueShare)}</p>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function placeInsight(anchorEl: HTMLElement, tooltipEl: HTMLElement) {
+  const anchor = anchorEl.getBoundingClientRect();
+  const { width, height } = tooltipEl.getBoundingClientRect();
+  const pad = 12;
+  const gap = 10;
+  const candidates = [
+    { left: anchor.left + (anchor.width - width) / 2, top: anchor.top - height - gap },
+    { left: anchor.right + gap, top: anchor.top + (anchor.height - height) / 2 },
+    { left: anchor.left - width - gap, top: anchor.top + (anchor.height - height) / 2 },
+    { left: anchor.left + (anchor.width - width) / 2, top: anchor.bottom + gap },
+  ];
+  const fits = (point: { left: number; top: number }) =>
+    point.left >= pad &&
+    point.top >= pad &&
+    point.left + width <= window.innerWidth - pad &&
+    point.top + height <= window.innerHeight - pad;
+  const chosen = candidates.find(fits) ?? candidates[0]!;
+  return {
+    left: Math.max(pad, Math.min(chosen.left, window.innerWidth - width - pad)),
+    top: Math.max(pad, Math.min(chosen.top, window.innerHeight - height - pad)),
+  };
+}

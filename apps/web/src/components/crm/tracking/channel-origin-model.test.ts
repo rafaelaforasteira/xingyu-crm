@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHANNEL_COLORS,
   buildChannelOriginView,
   groupChannelBars,
+  layoutTreemap,
   MAX_CHANNEL_BARS,
 } from "./channel-origin-model";
 import type { TrackingChannel, TrackingChannelRow } from "./tracking-analytics-types";
@@ -56,6 +58,30 @@ describe("channel origin view", () => {
     expect(view.fastestGrowth?.channel).toBe("WHATSAPP");
     expect(view.top3Share).toBeCloseTo(93.75);
     expect(view.bars[0]?.isChampion).toBe(true);
-    expect(view.bars[0]?.color).toContain("success");
+    expect(view.bars[0]?.color).toBe(CHANNEL_COLORS.META_ADS);
+    expect(view.treemap.map((cell) => cell.channel)).toEqual([
+      "META_ADS",
+      "WHATSAPP",
+      "GOOGLE_ADS",
+      "UNIDENTIFIED",
+    ]);
+    expect(view.bars.find((row) => row.channel === "UNIDENTIFIED")?.color).toBe(
+      CHANNEL_COLORS.UNIDENTIFIED,
+    );
+  });
+
+  it("layouts a binary treemap with areas proportional to revenue", () => {
+    const cells = [
+      { channel: "META_ADS" as const, name: "Meta Ads", size: 50, fill: "a", share: 50 },
+      { channel: "WHATSAPP" as const, name: "WhatsApp", size: 30, fill: "b", share: 30 },
+      { channel: "GOOGLE_ADS" as const, name: "Google Ads", size: 20, fill: "c", share: 20 },
+    ];
+    const rects = layoutTreemap(cells, 100, 100, 0);
+    const area = (rect: { width: number; height: number }) => rect.width * rect.height;
+    const total = rects.reduce((sum, rect) => sum + area(rect), 0);
+    expect(total).toBeCloseTo(10_000);
+    expect(area(rects.find((rect) => rect.channel === "META_ADS")!)).toBeCloseTo(5_000);
+    expect(area(rects.find((rect) => rect.channel === "WHATSAPP")!)).toBeCloseTo(3_000);
+    expect(area(rects.find((rect) => rect.channel === "GOOGLE_ADS")!)).toBeCloseTo(2_000);
   });
 });
