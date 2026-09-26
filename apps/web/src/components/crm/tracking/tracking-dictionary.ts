@@ -1,24 +1,36 @@
 import type { TrackingAttribution, TrackingChannel } from "./tracking-analytics-types";
 import { REACTIVATION_DAYS, FIRST_TO_SECOND_WINDOW_DAYS } from "./sales-tracking-rules";
-export const CHANNEL_LABELS: Record<TrackingChannel, string> = {
-  META_ADS: "Meta Ads",
-  GOOGLE_ADS: "Google Ads",
-  WHATSAPP: "WhatsApp",
-  ORGANIC_SOCIAL: "Social orgânico",
-  DIRECT: "Direto",
-  REFERRAL: "Indicação / Referral",
-  EMAIL: "E-mail",
-  OTHER: "Outros",
-  UNIDENTIFIED: "Não identificado",
-};
+import { CHANNEL_LABELS } from "./channel-origin-config";
+
+export { CHANNEL_LABELS };
+
+/**
+ * One primary acquisition origin for “De onde vêm as vendas?”.
+ * Future detail (placement, journey) stays on the raw attribution and is not a second row.
+ *
+ * Paid Meta, including an Instagram or Facebook placement → Meta Ads.
+ * Organic Instagram (bio, story, reel, profile, DM) → Instagram.
+ * Other organic social that is not Instagram → Outros, until that network has its own channel.
+ * WhatsApp only when WhatsApp itself is the recorded origin, not a later touchpoint of Meta Ads.
+ * Google paid search → Google Ads.
+ * Referral and e-mail stay themselves.
+ * A known source outside this set → Outros.
+ * Missing or unknown source → Não identificado.
+ * Only Não identificado reduces attribution coverage.
+ */
 export function overviewChannel(origin?: TrackingAttribution): TrackingChannel {
   if (!origin || origin.channel === "UNKNOWN") return "UNIDENTIFIED";
   if (origin.channel === "PAID_SOCIAL" && origin.platform === "META") return "META_ADS";
   if (origin.channel === "PAID_SEARCH" && origin.platform === "GOOGLE") return "GOOGLE_ADS";
   if (origin.channel === "MESSAGING" && origin.platform === "WHATSAPP") return "WHATSAPP";
-  if (["ORGANIC_SOCIAL", "DIRECT", "REFERRAL", "EMAIL"].includes(origin.channel))
-    return origin.channel as TrackingChannel;
+  if (origin.channel === "ORGANIC_SOCIAL") return isInstagramOrganic(origin) ? "INSTAGRAM" : "OTHER";
+  if (origin.channel === "DIRECT" || origin.channel === "REFERRAL" || origin.channel === "EMAIL")
+    return origin.channel;
   return "OTHER";
+}
+
+function isInstagramOrganic(origin: TrackingAttribution) {
+  return origin.placement?.toUpperCase() === "INSTAGRAM";
 }
 export const METRIC_DEFINITIONS = {
   grossSales: "Valor total gerado pelas vendas antes dos ajustes considerados pelo FAROL.",

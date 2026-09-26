@@ -184,7 +184,22 @@ describe("Tracking overview analytics", () => {
         placement: "INSTAGRAM",
         touchModel: "RECORDED_ORIGIN",
       }),
-    ).toBe("ORGANIC_SOCIAL");
+    ).toBe("INSTAGRAM");
+    expect(
+      overviewChannel({
+        channel: "ORGANIC_SOCIAL",
+        platform: "META",
+        placement: "FACEBOOK",
+        touchModel: "RECORDED_ORIGIN",
+      }),
+    ).toBe("OTHER");
+    expect(
+      overviewChannel({
+        channel: "MESSAGING",
+        platform: "WHATSAPP",
+        touchModel: "RECORDED_ORIGIN",
+      }),
+    ).toBe("WHATSAPP");
   });
   it("keeps zero denominators unavailable and rejects impossible financial inputs", () => {
     const data = analyzeTrackingOverview({ customers: [], orders: [] }, base, {

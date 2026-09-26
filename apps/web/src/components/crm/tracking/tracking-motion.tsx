@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
 import styles from "./tracking-overview.module.css";
 
@@ -14,21 +23,56 @@ export function TrackingMotion({ revision, children }: { revision: number; child
 
 export const useTrackingMotion = () => useContext(MotionContext);
 
+/** Fires once when a relevant slice of the node enters the viewport. */
+export function useInViewOnce<T extends Element>(threshold = 0.25): {
+  ref: RefObject<T | null>;
+  seen: boolean;
+} {
+  const ref = useRef<T>(null);
+  const [seen, setSeen] = useState(false);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setSeen(true);
+      return;
+    }
+    if (!node || typeof IntersectionObserver === "undefined") {
+      setSeen(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return;
+        setSeen(true);
+        observer.disconnect();
+      },
+      { threshold },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [threshold]);
+  return { ref, seen };
+}
+
 /** Frames update only this metric; the dashboard and charts never render per frame. */
 export function AnimatedMetric({
   value,
   format,
   duration = 650,
+  active = true,
 }: {
   value: number | null;
   format: (value: number | null) => string;
   duration?: number;
+  /** When false, hold the visual count until the surrounding section is on screen. */
+  active?: boolean;
 }) {
   const { revision, reduced } = useTrackingMotion();
   const [shown, setShown] = useState(0);
   const current = useRef(0);
   const initialized = useRef(false);
   useEffect(() => {
+    if (!active) return;
     if (value == null || !Number.isFinite(value)) return;
     if (reduced || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       current.current = value;
@@ -55,7 +99,7 @@ export function AnimatedMetric({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [value, revision, reduced, duration]);
+  }, [value, revision, reduced, duration, active]);
   const final = format(value);
   return (
     <span className="tabular-nums">

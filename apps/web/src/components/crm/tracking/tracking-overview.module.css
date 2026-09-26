@@ -137,3 +137,32 @@
 .metricUpdate { animation: metric-update 300ms ease-out both; }
 @keyframes metric-update { from { opacity: .65; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .metricUpdate { animation: none; } }
+
+.mix[data-revealed="false"] {
+  opacity: 0;
+  animation: none;
+}
+.mix[data-revealed="true"] {
+  animation: section-in 300ms ease-out both;
+}
+.mix[data-revealed="true"] .mixCard {
+  animation: mix-card-in 300ms ease-out var(--delay, 0ms) both;
+}
+@keyframes mix-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mix[data-revealed="false"],
+  .mix[data-revealed="true"],
+  .mix[data-revealed="true"] .mixCard {
+    opacity: 1;
+    animation: none;
+  }
+}

@@ -1,5 +1,49 @@
-import { HelpCircle, Layers, Mail, MousePointerClick, Share2, Users } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
 import type { TrackingChannel } from "./tracking-analytics-types";
+import { CHANNEL_CONFIG } from "./channel-origin-config";
+
+const knockoutCache = new Map<string, Promise<string>>();
+
+/** Drops an opaque black export matte without blending the logo colors away. */
+function knockoutBlackMatte(src: string) {
+  const cached = knockoutCache.get(src);
+  if (cached) return cached;
+  const pending = new Promise<string>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        reject(new Error("canvas"));
+        return;
+      }
+      context.drawImage(image, 0, 0);
+      const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = frame.data;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index]! < 16 && pixels[index + 1]! < 16 && pixels[index + 2]! < 16) {
+          pixels[index + 3] = 0;
+        }
+      }
+      context.putImageData(frame, 0, 0);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("blob"));
+          return;
+        }
+        resolve(URL.createObjectURL(blob));
+      });
+    };
+    image.onerror = () => reject(new Error("image"));
+    image.src = src;
+  });
+  knockoutCache.set(src, pending);
+  return pending;
+}
 
 function MetaMark({ size }: { size: number }) {
   return (
@@ -41,6 +85,14 @@ function GoogleAdsMark({ size }: { size: number }) {
   );
 }
 
+function FallbackMark({ channel, size }: { channel: TrackingChannel; size: number }) {
+  if (channel === "META_ADS") return <MetaMark size={size} />;
+  if (channel === "WHATSAPP") return <WhatsAppMark size={size} />;
+  if (channel === "GOOGLE_ADS") return <GoogleAdsMark size={size} />;
+  const Icon = CHANNEL_CONFIG[channel].fallback;
+  return <Icon size={size - 2} strokeWidth={2} aria-hidden="true" />;
+}
+
 export function ChannelBrandMark({
   channel,
   size = 18,
@@ -48,20 +100,36 @@ export function ChannelBrandMark({
   channel: TrackingChannel;
   size?: number;
 }) {
-  if (channel === "META_ADS") return <MetaMark size={size} />;
-  if (channel === "WHATSAPP") return <WhatsAppMark size={size} />;
-  if (channel === "GOOGLE_ADS") return <GoogleAdsMark size={size} />;
-  const Icon =
-    channel === "ORGANIC_SOCIAL"
-      ? Share2
-      : channel === "REFERRAL"
-        ? Users
-        : channel === "EMAIL"
-          ? Mail
-          : channel === "DIRECT"
-            ? MousePointerClick
-            : channel === "UNIDENTIFIED"
-              ? HelpCircle
-              : Layers;
-  return <Icon size={size - 2} strokeWidth={2} aria-hidden="true" />;
+  const config = CHANNEL_CONFIG[channel];
+  const [failedChannel, setFailedChannel] = useState<TrackingChannel | null>(null);
+  const [src, setSrc] = useState(config.matte ? "" : config.asset ?? "");
+  useEffect(() => {
+    if (!config.asset || !config.matte) return;
+    let cancelled = false;
+    knockoutBlackMatte(config.asset).then(
+      (url) => {
+        if (!cancelled) setSrc(url);
+      },
+      () => {
+        if (!cancelled) setFailedChannel(channel);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [channel, config.asset, config.matte]);
+  if (config.asset && failedChannel !== channel) {
+    if (!src) return null;
+    return (
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        draggable={false}
+        onError={() => setFailedChannel(channel)}
+      />
+    );
+  }
+  return <FallbackMark channel={channel} size={size} />;
 }

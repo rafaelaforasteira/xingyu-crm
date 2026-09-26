@@ -1,25 +1,14 @@
 import { safeRate } from "./financial-flow";
-import { CHANNEL_LABELS } from "./tracking-dictionary";
+import { CHANNEL_COLORS, CHANNEL_LABELS } from "./channel-origin-config";
 import type { TrackingChannel, TrackingChannelRow } from "./tracking-analytics-types";
+
+export { CHANNEL_COLORS };
 
 export const MAX_CHANNEL_BARS = 8;
 
-/** Channel accents derived from FAROL tokens (primary, info, success, warning, muted). */
-export const CHANNEL_COLORS: Record<TrackingChannel, string> = {
-  META_ADS: "hsl(var(--info))",
-  WHATSAPP: "hsl(var(--success))",
-  GOOGLE_ADS: "hsl(var(--warning))",
-  ORGANIC_SOCIAL: "hsl(var(--primary))",
-  REFERRAL: "hsl(212 42% 44%)",
-  EMAIL: "hsl(262 38% 58%)",
-  DIRECT: "hsl(var(--muted-foreground))",
-  OTHER: "hsl(255 18% 52%)",
-  UNIDENTIFIED: "hsl(250 8% 62%)",
-};
-
 export const COVERAGE_COLORS = {
-  identified: "hsl(var(--success))",
-  unidentified: "hsl(var(--primary) / 0.42)",
+  identified: "#2563eb",
+  unidentified: "hsl(0 62% 46%)",
 };
 
 export type TreemapRect = ChannelTreemapCell & {
@@ -34,7 +23,7 @@ export function layoutTreemap(
   items: ChannelTreemapCell[],
   width: number,
   height: number,
-  gap = 3,
+  gap = 0,
 ): TreemapRect[] {
   const nodes = items.filter((item) => item.size > 0).sort((a, b) => b.size - a.size);
   const total = nodes.reduce((sum, item) => sum + item.size, 0);
@@ -163,19 +152,28 @@ function mergeRows(rows: TrackingChannelRow[], channel: TrackingChannel): Tracki
   );
 }
 
+function compareNetRevenueDesc(a: TrackingChannelRow, b: TrackingChannelRow) {
+  return (
+    b.netRevenue - a.netRevenue ||
+    b.previousNetRevenue - a.previousNetRevenue ||
+    a.channel.localeCompare(b.channel)
+  );
+}
+
 export function groupChannelBars(
   channels: TrackingChannelRow[],
   maxBars = MAX_CHANNEL_BARS,
 ): TrackingChannelRow[] {
   const active = channels
     .filter((row) => row.netRevenue > 0 || row.previousNetRevenue > 0)
-    .sort((a, b) => b.netRevenue - a.netRevenue || b.previousNetRevenue - a.previousNetRevenue);
+    .sort(compareNetRevenueDesc);
   const unidentified = active.find((row) => row.channel === "UNIDENTIFIED");
   const identified = active.filter((row) => row.channel !== "UNIDENTIFIED");
   const unidentifiedSlot = unidentified ? 1 : 0;
   const capacity = Math.max(1, maxBars - unidentifiedSlot);
   if (identified.length <= capacity) {
-    return unidentified ? [...identified, unidentified] : identified;
+    const listed = unidentified ? [...identified, unidentified] : identified;
+    return [...listed].sort(compareNetRevenueDesc);
   }
   const keepCount = Math.max(1, capacity - 1);
   const kept: TrackingChannelRow[] = [];
@@ -186,9 +184,7 @@ export function groupChannelBars(
   }
   const others = mergeRows(rest, "OTHER");
   const grouped = unidentified ? [...kept, others, unidentified] : [...kept, others];
-  return grouped.sort(
-    (a, b) => b.netRevenue - a.netRevenue || b.previousNetRevenue - a.previousNetRevenue,
-  );
+  return [...grouped].sort(compareNetRevenueDesc);
 }
 
 function toInsight(row: TrackingChannelRow): ChannelInsight {
@@ -206,9 +202,7 @@ export function buildChannelOriginView(
   channels: TrackingChannelRow[],
   totalNetRevenue: number,
 ): ChannelOriginView {
-  const ranked = [...channels].sort(
-    (a, b) => b.netRevenue - a.netRevenue || b.previousNetRevenue - a.previousNetRevenue,
-  );
+  const ranked = [...channels].sort(compareNetRevenueDesc);
   const barsSource = groupChannelBars(ranked);
   const championRow = ranked.find((row) => row.netRevenue > 0) ?? null;
   const minPreviousForRate = Math.max(totalNetRevenue * 0.02, 1);

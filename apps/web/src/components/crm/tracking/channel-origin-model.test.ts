@@ -32,7 +32,7 @@ describe("channel origin view", () => {
       row("META_ADS", 300, 200),
       row("WHATSAPP", 180, 100),
       row("GOOGLE_ADS", 120, 90),
-      row("ORGANIC_SOCIAL", 80, 70),
+      row("INSTAGRAM", 80, 70),
       row("REFERRAL", 70, 40),
       row("EMAIL", 50, 45),
       row("DIRECT", 40, 30),
@@ -68,6 +68,43 @@ describe("channel origin view", () => {
     expect(view.bars.find((row) => row.channel === "UNIDENTIFIED")?.color).toBe(
       CHANNEL_COLORS.UNIDENTIFIED,
     );
+  });
+
+  it("orders channels by current net revenue without mutating the source", () => {
+    const channels = [
+      row("META_ADS", 230, 200, 560),
+      row("WHATSAPP", 250, 80, 560),
+      row("GOOGLE_ADS", 80, 70, 560),
+    ];
+    const original = channels.map((item) => item.channel);
+    const view = buildChannelOriginView(channels, 560);
+    expect(channels.map((item) => item.channel)).toEqual(original);
+    expect(view.bars.map((item) => item.channel)).toEqual(["WHATSAPP", "META_ADS", "GOOGLE_ADS"]);
+    expect(view.champion?.channel).toBe("WHATSAPP");
+    expect(view.treemap.map((cell) => cell.channel)).toEqual(["WHATSAPP", "META_ADS", "GOOGLE_ADS"]);
+  });
+
+  it("promotes the revenue leader and keeps growth on its own rule", () => {
+    const view = buildChannelOriginView(
+      [
+        row("INSTAGRAM", 260, 40, 690),
+        row("WHATSAPP", 200, 50, 690),
+        row("META_ADS", 230, 220, 690),
+      ],
+      690,
+    );
+    expect(view.bars.map((item) => item.channel)).toEqual(["INSTAGRAM", "META_ADS", "WHATSAPP"]);
+    expect(view.champion?.channel).toBe("INSTAGRAM");
+    expect(view.fastestGrowth?.channel).toBe("INSTAGRAM");
+  });
+
+  it("sorts unidentified with the other channels by net revenue", () => {
+    const grouped = groupChannelBars([
+      row("META_ADS", 100),
+      row("EMAIL", 20),
+      row("UNIDENTIFIED", 80),
+    ]);
+    expect(grouped.map((item) => item.channel)).toEqual(["META_ADS", "UNIDENTIFIED", "EMAIL"]);
   });
 
   it("layouts a binary treemap with areas proportional to revenue", () => {

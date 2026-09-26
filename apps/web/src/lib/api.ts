@@ -72,7 +72,7 @@ import { normalizeReactivationResponse } from "./reactivation-utils";
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   (process.env.NODE_ENV === "development" ? "http://localhost:3000/api" : "");
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 45_000;
 
 if (!API_URL) throw new Error("NEXT_PUBLIC_API_URL nÃ£o foi definida.");
 
@@ -184,8 +184,16 @@ async function request<T>(
       cache: "no-store",
       signal: controller.signal,
     });
-  } catch {
-    throw new ApiError("Não foi possível conectar à API do Xingyu CRM.", 0);
+  } catch (error) {
+    const aborted =
+      (error instanceof DOMException && error.name === "AbortError") ||
+      (error instanceof Error && error.name === "AbortError");
+    throw new ApiError(
+      aborted
+        ? "A API do Xingyu CRM demorou para responder. Tente novamente."
+        : "Não foi possível conectar à API do Xingyu CRM.",
+      0,
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -214,7 +222,9 @@ async function request<T>(
           : String((body as { message: unknown }).message)
         : null;
     const message =
-      response.status === 503
+      response.status === 502
+        ? "Não foi possível conectar à API do Xingyu CRM."
+        : response.status === 503
         ? "O banco de dados local nÃ£o estÃ¡ disponÃ­vel. Inicie o ambiente com pnpm dev:local."
         : response.status >= 500
           ? "O Xingyu CRM encontrou um erro ao processar a solicitação."

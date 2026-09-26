@@ -396,7 +396,7 @@ export function PipelinesListPage({ space = "COMMERCIAL", basePath = "/pipelines
   const list = useQuery({
     queryKey: queryKeys.pipelines.list(params),
     queryFn: () => pipelinesApi.list(params),
-    retry: false,
+    retry: 1,
   });
 
   React.useEffect(() => {

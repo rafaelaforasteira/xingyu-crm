@@ -34,13 +34,21 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
     ? await request.arrayBuffer()
     : undefined;
 
-  const upstreamResponse = await fetch(target, {
-    method: request.method,
-    headers: requestHeaders,
-    body,
-    redirect: "manual",
-    cache: "no-store",
-  });
+  let upstreamResponse: Response;
+  try {
+    upstreamResponse = await fetch(target, {
+      method: request.method,
+      headers: requestHeaders,
+      body,
+      redirect: "manual",
+      cache: "no-store",
+    });
+  } catch {
+    return NextResponse.json(
+      { message: "Não foi possível conectar à API do Xingyu CRM." },
+      { status: 502 },
+    );
+  }
 
   const responseHeaders = new Headers(upstreamResponse.headers);
 

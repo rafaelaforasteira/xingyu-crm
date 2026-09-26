@@ -14,6 +14,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { money, percentage } from "./tracking-format";
 import { AnimatedMetric } from "./tracking-motion";
+import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
 import { ChannelBrandMark } from "./channel-origin-brand";
 import type { ChannelBarPoint } from "./channel-origin-model";
 import styles from "./channel-origin-section.module.css";
@@ -54,14 +55,42 @@ export function ChannelInsightScope({
   children,
   className,
   revision,
+  order,
 }: {
   revision: number;
+  order: string;
   children: ReactNode;
   className?: string;
 }) {
   const [active, setActive] = useState<ActiveInsight | null>(null);
   const tooltipId = useId();
   const root = useRef<HTMLDivElement>(null);
+  const previousBoxes = useRef<Map<string, DOMRect> | null>(null);
+  const reduced = useReducedMotion();
+  useLayoutEffect(() => {
+    const node = root.current;
+    if (!node) return;
+    const cards = [...node.querySelectorAll<HTMLElement>("[data-channel-insight-trigger]")];
+    const next = new Map<string, DOMRect>();
+    for (const card of cards) {
+      const id = card.getAttribute("data-channel-insight-trigger");
+      if (!id) continue;
+      const box = card.getBoundingClientRect();
+      const before = previousBoxes.current?.get(id);
+      if (before && !reduced) {
+        const dx = before.left - box.left;
+        const dy = before.top - box.top;
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+          card.animate(
+            [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
+            { duration: 340, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+          );
+        }
+      }
+      next.set(id, box);
+    }
+    previousBoxes.current = next;
+  }, [order, reduced]);
   useEffect(() => setActive(null), [revision]);
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
@@ -99,7 +128,15 @@ export function ChannelInsightScope({
   );
 }
 
-export function ChannelCard({ row, index }: { row: ChannelBarPoint; index: number }) {
+export function ChannelCard({
+  row,
+  index,
+  animate,
+}: {
+  row: ChannelBarPoint;
+  index: number;
+  animate: boolean;
+}) {
   const context = useContext(InsightContext);
   if (!context) throw new Error("ChannelCard requires ChannelInsightScope");
   const open = context.active?.channel === row.channel;
@@ -114,7 +151,7 @@ export function ChannelCard({ row, index }: { row: ChannelBarPoint; index: numbe
       aria-expanded={open}
       aria-describedby={open ? context.tooltipId : undefined}
       className={styles.channelCard}
-      style={{ "--delay": `${index * 45}ms`, "--accent": row.color } as CSSProperties}
+      style={{ "--delay": `${index * 40}ms`, "--accent": row.color } as CSSProperties}
       onPointerEnter={(event) => {
         if (event.pointerType !== "touch") show(event.currentTarget);
       }}
@@ -131,7 +168,7 @@ export function ChannelCard({ row, index }: { row: ChannelBarPoint; index: numbe
       <span className={styles.channelTop}>
         <span className={styles.channelIdentity}>
           <span className={styles.channelMark}>
-            <ChannelBrandMark channel={row.channel} size={16} />
+            <ChannelBrandMark channel={row.channel} size={20} />
           </span>
           <span className={styles.channelName}>{row.label}</span>
         </span>
@@ -142,9 +179,11 @@ export function ChannelCard({ row, index }: { row: ChannelBarPoint; index: numbe
       </span>
       <span className={styles.channelMetrics}>
         <span className={styles.channelValue}>
-          <AnimatedMetric value={row.netRevenue} format={money} duration={500} />
+          <AnimatedMetric value={row.netRevenue} format={money} duration={520} active={animate} />
         </span>
-        <span className={styles.channelShare}>{percentage(row.revenueShare)}</span>
+        <span className={styles.channelShare}>
+          <AnimatedMetric value={row.revenueShare} format={percentage} duration={420} active={animate} />
+        </span>
       </span>
       <span className={styles.channelBar} aria-hidden="true">
         <span className={styles.channelBarFill} style={{ width: row.currentWidth + "%" }} />

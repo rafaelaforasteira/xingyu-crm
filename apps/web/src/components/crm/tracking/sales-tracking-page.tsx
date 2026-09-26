@@ -10,8 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  CustomerOrigin,
-  PurchaseStageChart,
+  CustomerMix,
   RepurchaseAnalysis,
   SalesHero,
   ValueAndReactivation,
@@ -133,10 +132,7 @@ export function SalesTrackingPage() {
               <TrackingMotion revision={Date.parse(data.updatedAt)}>
                 <SalesHero data={data} />
                 <ChannelOriginSection data={data} />
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <CustomerOrigin data={data} />
-                  <PurchaseStageChart data={data} />
-                </div>
+                <CustomerMix data={data} />
                 <RepurchaseAnalysis data={data} />
                 <ValueAndReactivation data={data} />
               </TrackingMotion>

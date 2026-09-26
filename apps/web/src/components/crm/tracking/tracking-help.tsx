@@ -104,10 +104,23 @@ export function ConceptHelp({
     </>
   );
 }
-export function ChartTooltip({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+export function ChartTooltip({
+  title,
+  rows,
+  accent,
+}: {
+  title: string;
+  rows: Array<[string, string]>;
+  accent?: string;
+}) {
   return (
     <div className="min-w-48 rounded-xl border border-border bg-card p-3 text-xs shadow-soft">
-      <p className="mb-2 font-semibold">{title}</p>
+      <p className="mb-2 flex items-center gap-2 font-semibold">
+        {accent ? (
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} aria-hidden />
+        ) : null}
+        {title}
+      </p>
       <dl className="space-y-1.5">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-5">

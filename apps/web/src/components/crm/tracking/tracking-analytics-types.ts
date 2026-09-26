@@ -1,9 +1,9 @@
 /** FAROL normalized input. Dates are inclusive business dates in America/Sao_Paulo. */
 export type TrackingChannel =
   | "META_ADS"
+  | "INSTAGRAM"
   | "GOOGLE_ADS"
   | "WHATSAPP"
-  | "ORGANIC_SOCIAL"
   | "DIRECT"
   | "REFERRAL"
   | "EMAIL"

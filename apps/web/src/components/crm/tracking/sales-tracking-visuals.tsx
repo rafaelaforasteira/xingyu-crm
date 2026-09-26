@@ -1,12 +1,14 @@
 "use client";
-import type { ReactNode } from "react";
-import { AnimatedMetric, AnimatedProgress, useTrackingMotion } from "./tracking-motion";
+import type { CSSProperties, ReactNode } from "react";
+import { UserPlus, Users } from "lucide-react";
+import { AnimatedMetric, useInViewOnce, useTrackingMotion } from "./tracking-motion";
 import {
   Bar,
   BarChart,
   Cell,
   CartesianGrid,
   ResponsiveContainer,
+  LabelList,
   Tooltip,
   XAxis,
   YAxis,
@@ -21,7 +23,40 @@ import type { PurchaseStageDistribution, SalesTrackingData } from "./sales-track
 import styles from "./tracking-overview.module.css";
 export { SalesHero } from "./sales-overview";
 
-export function CustomerOrigin({ data }: { data: SalesTrackingData }) {
+const SURFACE =
+  "min-w-0 rounded-2xl border-0 bg-[color-mix(in_srgb,hsl(var(--muted))_25%,hsl(var(--card)))] shadow-none";
+const PROFILE_SURFACE =
+  "rounded-xl bg-[color-mix(in_srgb,hsl(var(--muted))_46%,hsl(var(--card)))]";
+const STAGE_FILLS = [
+  "hsl(var(--primary))",
+  "hsl(152 55% 48%)",
+  "hsl(152 58% 40%)",
+  "hsl(154 62% 34%)",
+  "hsl(var(--success))",
+  "hsl(158 64% 22%)",
+];
+
+export function CustomerMix({ data }: { data: SalesTrackingData }) {
+  const reveal = useInViewOnce<HTMLDivElement>(0.25);
+  return (
+    <div
+      ref={reveal.ref}
+      data-revealed={reveal.seen ? "true" : "false"}
+      className={styles.mix + " grid items-stretch gap-4 xl:grid-cols-2"}
+    >
+      <CustomerOrigin data={data} animate={reveal.seen} />
+      <PurchaseStageChart data={data} animate={reveal.seen} />
+    </div>
+  );
+}
+
+export function CustomerOrigin({
+  data,
+  animate = true,
+}: {
+  data: SalesTrackingData;
+  animate?: boolean;
+}) {
   const { summary } = data;
   const rows = [
     {
@@ -31,8 +66,8 @@ export function CustomerOrigin({ data }: { data: SalesTrackingData }) {
       revenue: summary.newRevenue,
       share: summary.newRevenuePercentage,
       accent: "text-primary",
-      surface: "bg-primary/[0.055]",
-      bar: "bg-primary/65",
+      bar: "hsl(var(--primary))",
+      icon: UserPlus,
     },
     {
       label: "Base existente",
@@ -41,78 +76,102 @@ export function CustomerOrigin({ data }: { data: SalesTrackingData }) {
       revenue: summary.existingRevenue,
       share: summary.existingRevenuePercentage,
       accent: "text-success",
-      surface: "bg-success/[0.055]",
-      bar: "bg-success/65",
+      bar: "hsl(var(--success))",
+      icon: Users,
     },
   ];
   return (
-    <Card className="min-w-0 rounded-2xl shadow-soft">
-      <CardHeader>
+    <Card className={SURFACE + " flex h-full flex-col " + styles.mixCard}>
+      <CardHeader className="space-y-1 px-4 pb-0 pt-4">
         <CardTitle>Novos clientes × base existente</CardTitle>
         <p className="text-xs text-muted-foreground">
           Quem comprou neste período e quanto cada perfil gerou.
         </p>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {rows.map((row) => (
-          <div key={row.label} className={"rounded-xl p-4 " + row.surface}>
-            <div className="flex items-center gap-1 text-sm font-medium">
-              {row.label}
-              <ConceptHelp label={row.label} text={row.help} />
-            </div>
-            <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <strong className={"text-2xl font-semibold tabular-nums " + row.accent}>
-                  <AnimatedMetric value={row.count} format={integer} duration={550} />
+      <CardContent className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3">
+        {rows.map((row) => {
+          const buyerShare = summary.buyersCount ? (row.count / summary.buyersCount) * 100 : null;
+          const Icon = row.icon;
+          return (
+            <div key={row.label} className={PROFILE_SURFACE + " px-3 py-2.5"}>
+              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Icon className={"h-3.5 w-3.5 shrink-0 " + row.accent} aria-hidden />
+                {row.label}
+                <ConceptHelp label={row.label} text={row.help} />
+              </div>
+              <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5">
+                <div className="min-w-0">
+                  <strong className={"text-xl font-semibold tabular-nums " + row.accent}>
+                    <AnimatedMetric value={row.count} format={integer} duration={520} active={animate} />
+                  </strong>
+                  <span className="ml-1 text-xs text-muted-foreground">compradores</span>
+                </div>
+                <strong className="text-right font-semibold tabular-nums text-foreground">
+                  <AnimatedMetric value={row.revenue} format={money} duration={520} active={animate} />
                 </strong>
-                <span className="ml-1 text-xs text-muted-foreground">compradores</span>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {percentage(summary.buyersCount ? (row.count / summary.buyersCount) * 100 : null)}{" "}
+                <p className="text-xs text-muted-foreground">
+                  <AnimatedMetric value={buyerShare} format={percentage} duration={420} active={animate} />{" "}
                   dos compradores
                 </p>
-              </div>
-              <div className="text-right">
-                <strong className="font-semibold tabular-nums">
-                  <AnimatedMetric value={row.revenue} format={money} duration={550} />
-                </strong>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  <AnimatedMetric value={row.share} format={percentage} duration={550} /> da receita
+                <p className="text-right text-xs text-muted-foreground">
+                  <AnimatedMetric value={row.share} format={percentage} duration={420} active={animate} /> da receita
                 </p>
               </div>
+              <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full motion-reduce:transition-none"
+                  style={{
+                    width: animate ? Math.max(0, Math.min(100, row.share ?? 0)) + "%" : "0%",
+                    background: row.bar,
+                    transition: "width 320ms ease-out",
+                  }}
+                />
+              </div>
             </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-card/80">
-              <AnimatedProgress value={row.share} className={row.bar} />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
     </Card>
   );
 }
-export function PurchaseStageChart({ data }: { data: SalesTrackingData }) {
+export function PurchaseStageChart({
+  data,
+  animate = true,
+}: {
+  data: SalesTrackingData;
+  animate?: boolean;
+}) {
   const reduced = useReducedMotion();
-  const { revision, initial } = useTrackingMotion();
+  const { initial } = useTrackingMotion();
   return (
-    <Card className="min-w-0 rounded-2xl shadow-soft">
-      <CardHeader>
-        <CardTitle>Distribuição por número da compra</CardTitle>
+    <Card
+      className={SURFACE + " flex h-full flex-col " + styles.mixCard}
+      style={{ "--delay": "40ms" } as CSSProperties}
+    >
+      <CardHeader className="space-y-1 px-4 pb-0 pt-4">
+        <CardTitle className="flex items-center gap-1">
+          Distribuição por número da compra
+          <ConceptHelp
+            label="Distribuição por número da compra"
+            text="Cada barra representa pedidos classificados pela posição daquela compra no histórico do cliente. Um mesmo comprador pode gerar mais de um pedido dentro do período analisado."
+          />
+        </CardTitle>
         <p className="text-xs text-muted-foreground">
           Pedidos pela posição no histórico de compras válidas.
         </p>
       </CardHeader>
-      <CardContent>
-        <div className="h-64" aria-label="Distribuição de pedidos por número da compra">
+      <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
+        <div className="min-h-[220px] flex-1" aria-label="Distribuição de pedidos por número da compra">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               accessibilityLayer
               data={data.purchaseStages}
-              margin={{ top: 16, right: 8, left: -15, bottom: 0 }}
+              margin={{ top: 22, right: 8, left: -18, bottom: 0 }}
             >
               <CartesianGrid
                 vertical={false}
-                stroke="hsl(var(--border))"
+                stroke="hsl(var(--muted-foreground) / 0.16)"
                 strokeDasharray="3 4"
-                opacity={0.45}
               />
               <XAxis
                 dataKey="stage"
@@ -127,47 +186,48 @@ export function PurchaseStageChart({ data }: { data: SalesTrackingData }) {
                 tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               />
               <Tooltip
-                cursor={{ fill: "hsl(var(--primary) / .035)" }}
+                cursor={{ fill: "hsl(var(--muted-foreground) / 0.08)" }}
                 content={({ active, payload }) => {
                   const row = payload?.[0]?.payload as PurchaseStageDistribution | undefined;
+                  const index = row ? data.purchaseStages.findIndex((stage) => stage.stage === row.stage) : -1;
                   return active && row ? (
                     <ChartTooltip
                       title={row.stage + " compra"}
+                      accent={STAGE_FILLS[index] ?? STAGE_FILLS[0]}
                       rows={[
                         ["Pedidos", integer(row.orders)],
-                        ["Participação nos pedidos", percentage(row.percentage)],
+                        ["Dos pedidos do período", percentage(row.percentage)],
                         ["Receita líquida", money(row.revenue)],
-                        ["Participação na receita", percentage(row.revenueShare)],
-                        ["Ticket médio", money(row.averageTicket)],
                       ]}
                     />
                   ) : null;
                 }}
               />
               <Bar
-                key={revision}
+                key={animate ? "purchase-draw" : "purchase-hold"}
                 dataKey="orders"
-                radius={[7, 7, 0, 0]}
-                maxBarSize={48}
-                isAnimationActive={!reduced}
-                animationDuration={initial ? 550 : 350}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={46}
+                isAnimationActive={animate && !reduced}
+                animationDuration={initial ? 420 : 320}
+                animationEasing="ease-out"
               >
+                <LabelList
+                  dataKey="orders"
+                  position="top"
+                  offset={6}
+                  formatter={(value: number) => integer(value)}
+                  style={{ fontSize: 11, fontWeight: 600, fill: "hsl(var(--foreground))" }}
+                />
                 {data.purchaseStages.map((stage, index) => (
-                  <Cell
-                    key={stage.stage}
-                    fill={
-                      index === 0
-                        ? "hsl(var(--primary))"
-                        : "hsl(var(--success) / " + (0.4 + index * 0.09) + ")"
-                    }
-                  />
+                  <Cell key={stage.stage} fill={STAGE_FILLS[index] ?? STAGE_FILLS[STAGE_FILLS.length - 1]} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Uma pessoa pode gerar uma primeira compra e uma recompra no mesmo período.
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+          Um mesmo comprador pode gerar uma primeira compra e uma recompra no período.
         </p>
       </CardContent>
     </Card>
