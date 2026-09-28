@@ -1,7 +1,8 @@
 "use client";
-import type { CSSProperties, ReactNode } from "react";
-import { UserPlus, Users } from "lucide-react";
-import { AnimatedMetric, useInViewOnce, useTrackingMotion } from "./tracking-motion";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { UserPlus, Users, type LucideIcon } from "lucide-react";
+import { AnimatedMetric, AnimatedProgress, useInViewOnce, useTrackingMotion } from "./tracking-motion";
 import {
   Bar,
   BarChart,
@@ -25,8 +26,6 @@ export { SalesHero } from "./sales-overview";
 
 const SURFACE =
   "min-w-0 rounded-2xl border-0 bg-[color-mix(in_srgb,hsl(var(--muted))_25%,hsl(var(--card)))] shadow-none";
-const PROFILE_SURFACE =
-  "rounded-xl bg-[color-mix(in_srgb,hsl(var(--muted))_46%,hsl(var(--card)))]";
 const STAGE_FILLS = [
   "hsl(var(--primary))",
   "hsl(152 55% 48%)",
@@ -50,6 +49,45 @@ export function CustomerMix({ data }: { data: SalesTrackingData }) {
   );
 }
 
+/** Receita do grupo dividida pelos compradores do grupo. Pronto para um KPI futuro. */
+export function averageRevenuePerBuyer(revenue: number, buyers: number) {
+  if (!Number.isFinite(revenue) || !Number.isFinite(buyers) || buyers <= 0) return null;
+  return revenue / buyers;
+}
+
+function compactProfileMoney(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const absolute = Math.abs(value);
+  if (absolute < 1000) return money(value);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    notation: "compact",
+    maximumFractionDigits: absolute >= 1_000_000 ? 1 : 0,
+    minimumFractionDigits: 0,
+  }).format(value);
+}
+
+type ProfileId = "new" | "existing";
+
+const PROFILE_ACCENT: Record<ProfileId, string> = {
+  new: "hsl(var(--primary))",
+  existing: "hsl(187 45% 34%)",
+};
+
+type CustomerProfile = {
+  id: ProfileId;
+  label: string;
+  help: string;
+  count: number;
+  buyersTotal: number;
+  buyerShare: number | null;
+  revenue: number;
+  revenueShare: number | null;
+  averageRevenue: number | null;
+  icon: LucideIcon;
+};
+
 export function CustomerOrigin({
   data,
   animate = true,
@@ -58,80 +96,312 @@ export function CustomerOrigin({
   animate?: boolean;
 }) {
   const { summary } = data;
-  const rows = [
+  const buyerShare = (count: number) =>
+    summary.buyersCount > 0 ? (count / summary.buyersCount) * 100 : null;
+  const profiles: CustomerProfile[] = [
     {
+      id: "new",
       label: "Novos clientes",
       help: METRIC_DEFINITIONS.newCustomer,
       count: summary.newCustomers,
+      buyersTotal: summary.buyersCount,
+      buyerShare: buyerShare(summary.newCustomers),
       revenue: summary.newRevenue,
-      share: summary.newRevenuePercentage,
-      accent: "text-primary",
-      bar: "hsl(var(--primary))",
+      revenueShare: summary.newRevenuePercentage,
+      averageRevenue: averageRevenuePerBuyer(summary.newRevenue, summary.newCustomers),
       icon: UserPlus,
     },
     {
+      id: "existing",
       label: "Base existente",
       help: METRIC_DEFINITIONS.existingCustomer,
       count: summary.existingCustomers,
+      buyersTotal: summary.buyersCount,
+      buyerShare: buyerShare(summary.existingCustomers),
       revenue: summary.existingRevenue,
-      share: summary.existingRevenuePercentage,
-      accent: "text-success",
-      bar: "hsl(var(--success))",
+      revenueShare: summary.existingRevenuePercentage,
+      averageRevenue: averageRevenuePerBuyer(summary.existingRevenue, summary.existingCustomers),
       icon: Users,
     },
   ];
   return (
     <Card className={SURFACE + " flex h-full flex-col " + styles.mixCard}>
-      <CardHeader className="space-y-1 px-4 pb-0 pt-4">
+      <CardHeader className="gap-1.5 px-5 pb-0 pt-5">
         <CardTitle>Novos clientes × base existente</CardTitle>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs leading-relaxed text-muted-foreground">
           Quem comprou neste período e quanto cada perfil gerou.
         </p>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-2 px-4 pb-4 pt-3">
-        {rows.map((row) => {
-          const buyerShare = summary.buyersCount ? (row.count / summary.buyersCount) * 100 : null;
-          const Icon = row.icon;
-          return (
-            <div key={row.label} className={PROFILE_SURFACE + " px-3 py-2.5"}>
-              <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <Icon className={"h-3.5 w-3.5 shrink-0 " + row.accent} aria-hidden />
-                {row.label}
-                <ConceptHelp label={row.label} text={row.help} />
-              </div>
-              <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5">
-                <div className="min-w-0">
-                  <strong className={"text-xl font-semibold tabular-nums " + row.accent}>
-                    <AnimatedMetric value={row.count} format={integer} duration={520} active={animate} />
-                  </strong>
-                  <span className="ml-1 text-xs text-muted-foreground">compradores</span>
-                </div>
-                <strong className="text-right font-semibold tabular-nums text-foreground">
-                  <AnimatedMetric value={row.revenue} format={money} duration={520} active={animate} />
-                </strong>
-                <p className="text-xs text-muted-foreground">
-                  <AnimatedMetric value={buyerShare} format={percentage} duration={420} active={animate} />{" "}
-                  dos compradores
-                </p>
-                <p className="text-right text-xs text-muted-foreground">
-                  <AnimatedMetric value={row.share} format={percentage} duration={420} active={animate} /> da receita
-                </p>
-              </div>
-              <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full motion-reduce:transition-none"
-                  style={{
-                    width: animate ? Math.max(0, Math.min(100, row.share ?? 0)) + "%" : "0%",
-                    background: row.bar,
-                    transition: "width 320ms ease-out",
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
+      <CardContent className={"flex flex-1 flex-col px-5 pb-5 pt-5 " + (styles.profileFrame ?? "")}>
+        <div className={styles.profileBoard}>
+          {profiles.map((profile) => (
+            <ProfileColumn key={profile.id} profile={profile} animate={animate} />
+          ))}
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+function ProfileColumn({ profile, animate }: { profile: CustomerProfile; animate: boolean }) {
+  return (
+    <div className={styles.profileColumn}>
+      <ProfileCard profile={profile} animate={animate} />
+      <ProfileDetail
+        profile={profile}
+        animate={animate}
+        title="Composição dos compradores"
+        value={profile.buyerShare}
+        hint="dos compradores do período"
+        tipTitle="Composição dos compradores"
+        tipRows={[
+          ["Compradores", integer(profile.count)],
+          ["Total do período", integer(profile.buyersTotal)],
+          ["Participação", percentage(profile.buyerShare) + " dos compradores"],
+        ]}
+      />
+      <ProfileDetail
+        profile={profile}
+        animate={animate}
+        title="Composição da receita líquida"
+        value={profile.revenueShare}
+        hint="da receita líquida do período"
+        tipTitle="Composição da receita líquida"
+        tipRows={[
+          ["Receita líquida", money(profile.revenue)],
+          ["Participação", percentage(profile.revenueShare) + " da receita líquida"],
+        ]}
+      />
+    </div>
+  );
+}
+
+function ProfileCard({ profile, animate }: { profile: CustomerProfile; animate: boolean }) {
+  const Icon = profile.icon;
+  return (
+    <article
+      className={styles.profileCard}
+      data-profile={profile.id}
+      data-average-revenue={profile.averageRevenue ?? undefined}
+    >
+      <div className={styles.profileIdentity}>
+        <span className={styles.profileMark} data-profile={profile.id}>
+          <Icon size={15} aria-hidden />
+        </span>
+        <p className={styles.profileName}>{profile.label}</p>
+        <ConceptHelp label={profile.label} text={profile.help} />
+      </div>
+      <div className={styles.profileMetrics}>
+        <p className={styles.profileBuyers} data-profile={profile.id}>
+          <AnimatedMetric value={profile.count} format={integer} duration={520} active={animate} />
+        </p>
+        <RevenueValue profile={profile} animate={animate} />
+        <p className={styles.profileCaption}>Compradores</p>
+        <p className={styles.profileCaption}>Receita líquida</p>
+        <ShareValue
+          profile={profile}
+          animate={animate}
+          className={styles.profileShare ?? ""}
+          value={profile.buyerShare}
+          tipTitle="Composição dos compradores"
+          tipRows={[
+            ["Compradores", integer(profile.count)],
+            ["Total do período", integer(profile.buyersTotal)],
+            ["Participação", percentage(profile.buyerShare) + " dos compradores"],
+          ]}
+        />
+        <ShareValue
+          profile={profile}
+          animate={animate}
+          className={styles.profileShare ?? ""}
+          value={profile.revenueShare}
+          tipTitle="Composição da receita líquida"
+          tipRows={[
+            ["Receita líquida", money(profile.revenue)],
+            ["Participação", percentage(profile.revenueShare) + " da receita líquida"],
+          ]}
+        />
+        <p className={styles.profileCaption}>dos compradores</p>
+        <p className={styles.profileCaption}>da receita líquida</p>
+      </div>
+    </article>
+  );
+}
+
+function ProfileDetail({
+  profile,
+  animate,
+  title,
+  value,
+  hint,
+  tipTitle,
+  tipRows,
+}: {
+  profile: CustomerProfile;
+  animate: boolean;
+  title: string;
+  value: number | null;
+  hint: string;
+  tipTitle: string;
+  tipRows: Array<[string, string]>;
+}) {
+  return (
+    <article className={styles.profileDetail} data-profile={profile.id}>
+      <div className={styles.profileDetailLabel}>
+        <span className={styles.profileDot} data-profile={profile.id} aria-hidden />
+        <span>{title}</span>
+      </div>
+      <div className={styles.profileDetailAside}>
+        <ShareValue
+          profile={profile}
+          animate={animate}
+          className={styles.profileDetailValue ?? ""}
+          value={value}
+          tipTitle={tipTitle}
+          tipRows={tipRows}
+        />
+        <p className={styles.profileDetailHint}>{hint}</p>
+      </div>
+    </article>
+  );
+}
+
+function RevenueValue({ profile, animate }: { profile: CustomerProfile; animate: boolean }) {
+  const full = money(profile.revenue);
+  return (
+    <HoverTip
+      title="Receita líquida gerada"
+      accent={PROFILE_ACCENT[profile.id]}
+      rows={[
+        ["Valor completo", full],
+        ["Perfil", profile.label],
+        ["Participação", percentage(profile.revenueShare) + " da receita líquida"],
+      ]}
+      className={styles.profileMoney ?? ""}
+      label={"Receita líquida gerada: " + full + ". Perfil: " + profile.label}
+    >
+      <AnimatedMetric value={profile.revenue} format={compactProfileMoney} duration={520} active={animate} />
+    </HoverTip>
+  );
+}
+
+function ShareValue({
+  profile,
+  animate,
+  className,
+  value,
+  tipTitle,
+  tipRows,
+}: {
+  profile: CustomerProfile;
+  animate: boolean;
+  className: string;
+  value: number | null;
+  tipTitle: string;
+  tipRows: Array<[string, string]>;
+}) {
+  return (
+    <HoverTip
+      title={tipTitle}
+      accent={PROFILE_ACCENT[profile.id]}
+      rows={tipRows}
+      className={className}
+      profile={profile.id}
+      label={tipRows.map(([name, item]) => name + ": " + item).join(". ")}
+    >
+      <AnimatedMetric value={value} format={percentage} duration={420} active={animate} />
+    </HoverTip>
+  );
+}
+
+let closeProfileTip: (() => void) | null = null;
+
+function HoverTip({
+  title,
+  rows,
+  accent,
+  label,
+  className,
+  profile,
+  style,
+  children,
+}: {
+  title: string;
+  rows: Array<[string, string]>;
+  accent: string;
+  label: string;
+  className: string;
+  profile?: ProfileId;
+  style?: CSSProperties;
+  children?: ReactNode;
+}) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const tip = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [box, setBox] = useState<{ left: number; top: number } | null>(null);
+  const show = () => {
+    closeProfileTip?.();
+    closeProfileTip = () => setOpen(false);
+    setOpen(true);
+  };
+  const hide = () => setOpen(false);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = trigger.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = tip.current?.offsetWidth || 220;
+      const height = tip.current?.offsetHeight || 108;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      const above = rect.top - height - 8;
+      setBox({ left, top: above >= 8 ? above : rect.bottom + 8 });
+    };
+    place();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        className={className}
+        data-profile={profile}
+        style={style}
+        aria-label={label}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+      >
+        {children}
+      </button>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={tip}
+              className="pointer-events-none fixed z-40"
+              style={{
+                left: box?.left ?? -9999,
+                top: box?.top ?? 0,
+                visibility: box ? "visible" : "hidden",
+              }}
+            >
+              <ChartTooltip accent={accent} title={title} rows={rows} />
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 export function PurchaseStageChart({

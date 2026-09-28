@@ -49,7 +49,7 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
   return (
     <Card className="overflow-hidden rounded-2xl border-primary/15 shadow-soft">
       <CardContent className="space-y-5 p-3 sm:p-5">
-        <div className="mx-auto grid w-full items-stretch gap-4 xl:w-[90%] xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1fr)]">
+        <div className="grid w-full max-w-none items-stretch gap-4 xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1fr)]">
           <section
             className="flex min-h-full min-w-0 items-center justify-center rounded-2xl bg-muted/40 p-4 sm:p-5"
             aria-label="Fluxo financeiro"

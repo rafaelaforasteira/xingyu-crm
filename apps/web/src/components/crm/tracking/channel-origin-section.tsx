@@ -5,7 +5,6 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip } from "recha
 import type { PieSectorDataItem } from "recharts/types/polar/Pie";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
-import { FunnelTooltipScope, FunnelTooltipTrigger } from "./financial-funnel-tooltip";
 import { ChartTooltip, ConceptHelp } from "./tracking-help";
 import { money, percentage } from "./tracking-format";
 import { AnimatedMetric, useInViewOnce, useTrackingMotion } from "./tracking-motion";
@@ -15,12 +14,18 @@ import {
   CHANNEL_COLORS,
   COVERAGE_COLORS,
   buildChannelOriginView,
-  layoutTreemap,
   type ChannelInsight,
-  type ChannelTreemapCell,
 } from "./channel-origin-model";
+import { journeyAnalyticsModel } from "./journey-analytics";
+import { PurchaseJourneyCard } from "./purchase-journey-card";
 import { ChannelBrandMark } from "./channel-origin-brand";
-import { ChannelCard, ChannelInsightScope, signedMoney, signedPercent } from "./channel-origin-popover";
+import {
+  ChannelCard,
+  ChannelInsightScope,
+  deltaSentiment,
+  signedMoney,
+  signedPercent,
+} from "./channel-origin-popover";
 import styles from "./channel-origin-section.module.css";
 
 export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
@@ -88,35 +93,91 @@ export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
         />
 
         <aside className={styles.insights} aria-label="Insights estratégicos">
-          <InsightCard title="Canal campeão">
-            {view.champion ? (
-              <ChampionBody item={view.champion} animate={reveal.seen} />
-            ) : (
-              <p className={styles.coverageHint}>Sem canal em destaque neste recorte.</p>
-            )}
-          </InsightCard>
-          <InsightCard title="Maior crescimento">
-            {view.fastestGrowth ? (
-              <GrowthBody item={view.fastestGrowth} animate={reveal.seen} />
-            ) : (
-              <p className={styles.coverageHint}>Sem comparativo anterior para crescimento.</p>
-            )}
-          </InsightCard>
-          <InsightCard title="Concentração" subtitle="Top canais por participação na receita">
-            <ConcentrationTreemap items={view.treemap} revision={revision} />
-            <p className={styles.concentrationSummary}>
-              Top 3 canais representam{" "}
-              <strong>
+          {view.champion ? (
+            <QuickInsightCard
+              label="Canal campeão"
+              help={METRIC_DEFINITIONS.championChannel}
+              channel={view.champion.channel}
+              name={view.champion.label}
+              money={
                 <AnimatedMetric
-                  value={view.top3Share}
-                  format={percentage}
+                  value={view.champion.netRevenue}
+                  format={compactInsightMoney}
                   duration={500}
                   active={reveal.seen}
                 />
-              </strong>{" "}
-              da receita líquida
-            </p>
-          </InsightCard>
+              }
+              moneyLabel="Receita gerada"
+              percent={
+                <AnimatedMetric
+                  value={view.champion.share}
+                  format={percentage}
+                  duration={420}
+                  active={reveal.seen}
+                />
+              }
+              percentLabel="da receita líquida"
+              moneyTipTitle="Receita gerada"
+              moneyTipRows={[
+                ["Valor completo", money(view.champion.netRevenue)],
+                ["Canal", view.champion.label],
+              ]}
+              percentTipTitle="Canal campeão"
+              percentTipRows={[
+                ["Canal", view.champion.label],
+                ["Receita gerada", money(view.champion.netRevenue)],
+                ["Participação", percentage(view.champion.share) + " da receita líquida"],
+              ]}
+            />
+          ) : (
+            <InsightCard title="Canal campeão" help={METRIC_DEFINITIONS.championChannel}>
+              <p className={styles.coverageHint}>Sem canal em destaque neste recorte.</p>
+            </InsightCard>
+          )}
+          {view.fastestGrowth ? (
+            <QuickInsightCard
+              label="Maior crescimento"
+              help={METRIC_DEFINITIONS.fastestGrowth}
+              channel={view.fastestGrowth.channel}
+              name={view.fastestGrowth.label}
+              money={
+                <AnimatedMetric
+                  value={view.fastestGrowth.delta}
+                  format={compactSignedMoney}
+                  duration={500}
+                  active={reveal.seen}
+                />
+              }
+              moneyLabel="Variação no período"
+              moneyTone={deltaSentiment(view.fastestGrowth.delta)}
+              percent={
+                <AnimatedMetric
+                  value={view.fastestGrowth.growthRate}
+                  format={signedPercent}
+                  duration={420}
+                  active={reveal.seen}
+                />
+              }
+              percentLabel="Crescimento no período"
+              percentTone={deltaSentiment(view.fastestGrowth.growthRate)}
+              moneyTipTitle="Variação no período"
+              moneyTipRows={[
+                ["Valor completo", signedMoney(view.fastestGrowth.delta)],
+                ["Canal", view.fastestGrowth.label],
+              ]}
+              percentTipTitle="Maior crescimento"
+              percentTipRows={[
+                ["Canal", view.fastestGrowth.label],
+                ["Variação no período", signedMoney(view.fastestGrowth.delta)],
+                ["Crescimento", signedPercent(view.fastestGrowth.growthRate)],
+              ]}
+            />
+          ) : (
+            <InsightCard title="Maior crescimento" help={METRIC_DEFINITIONS.fastestGrowth}>
+              <p className={styles.coverageHint}>Sem comparativo anterior para crescimento.</p>
+            </InsightCard>
+          )}
+          <PurchaseJourneyCard journey={journeyAnalyticsModel(data)} animate={reveal.seen} />
         </aside>
       </CardContent>
     </Card>
@@ -337,137 +398,221 @@ function CoverageSliceTooltip({
 
 function InsightCard({
   title,
+  help,
   subtitle,
   children,
 }: {
   title: string;
+  help: string;
   subtitle?: string;
   children: ReactNode;
 }) {
   return (
     <div className={styles.insightCard}>
-      <p className={styles.insightLabel}>{title}</p>
+      <InsightHeading title={title} help={help} />
       {subtitle ? <p className={styles.insightSubtitle}>{subtitle}</p> : null}
       {children}
     </div>
   );
 }
 
-function ChampionBody({ item, animate }: { item: ChannelInsight; animate: boolean }) {
+function InsightHeading({ title, help }: { title: string; help: string }) {
   return (
-    <div className={styles.insightRow}>
-      <span className={styles.insightMark} style={{ "--accent": itemColor(item) } as CSSProperties}>
-        <ChannelBrandMark channel={item.channel} size={22} />
-      </span>
-      <div className={styles.insightCopy}>
-        <p className={styles.insightTitle}>{item.label}</p>
-        <p className={styles.insightValue}>
-          <AnimatedMetric value={item.netRevenue} format={money} duration={500} active={animate} />
-        </p>
-        <p className={styles.insightMeta}>
-          <AnimatedMetric value={item.share} format={percentage} duration={420} active={animate} /> da receita líquida
-        </p>
-      </div>
+    <div className={styles.coverageHead}>
+      <h3 className={styles.coverageTitle}>{title}</h3>
+      <ConceptHelp label={title} text={help} />
     </div>
   );
 }
 
-function GrowthBody({ item, animate }: { item: ChannelInsight; animate: boolean }) {
-  return (
-    <div className={styles.insightRow}>
-      <span className={styles.insightMark} style={{ "--accent": itemColor(item) } as CSSProperties}>
-        <ChannelBrandMark channel={item.channel} size={22} />
-      </span>
-      <div className={styles.insightCopy}>
-        <p className={styles.insightTitle}>{item.label}</p>
-        <p className={styles.growthValue}>
-          <AnimatedMetric value={item.growthRate} format={signedPercent} duration={420} active={animate} />
-        </p>
-        <p className={styles.insightMeta + " " + styles.growthDelta}>{signedMoney(item.delta)}</p>
-      </div>
-    </div>
-  );
+type InsightTone = "neutral" | "positive" | "negative";
+
+let closeActiveInsightTip: (() => void) | null = null;
+
+function compactInsightMoney(value: number | null) {
+  return formatCompactMoney(value, false);
 }
 
-function itemColor(item: ChannelInsight) {
-  return CHANNEL_COLORS[item.channel];
+function compactSignedMoney(value: number | null) {
+  return formatCompactMoney(value, true);
 }
 
-function cellLabel(name: string, width: number, height: number) {
-  if (height < 28) return "";
-  const short = name.split(" / ")[0] ?? name;
-  const fits = (text: string) => text.length * 6.2 + 20 <= width;
-  if (fits(name)) return name;
-  if (short !== name && fits(short)) return short;
+function formatCompactMoney(value: number | null, signed: boolean) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const absolute = Math.abs(value);
+  const compact = absolute >= 1000;
+  const text = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    notation: compact ? "compact" : "standard",
+    maximumFractionDigits: compact ? (absolute >= 1_000_000 ? 1 : 0) : 2,
+    minimumFractionDigits: compact ? 0 : 2,
+  }).format(absolute);
+  if (!signed || value === 0) return text;
+  return (value > 0 ? "+" : "-") + text;
+}
+
+function toneClass(tone: InsightTone) {
+  if (tone === "positive") return styles.quickPositive;
+  if (tone === "negative") return styles.quickNegative;
   return "";
 }
 
-function ConcentrationTreemap({
-  items,
-  revision,
+function QuickInsightCard({
+  label,
+  help,
+  channel,
+  name,
+  money: moneyValue,
+  moneyLabel,
+  percent,
+  percentLabel,
+  moneyTone = "neutral",
+  percentTone = "neutral",
+  moneyTipTitle,
+  moneyTipRows,
+  percentTipTitle,
+  percentTipRows,
 }: {
-  items: ChannelTreemapCell[];
-  revision: number;
+  label: string;
+  help: string;
+  channel: ChannelInsight["channel"];
+  name: string;
+  money: ReactNode;
+  moneyLabel: string;
+  percent: ReactNode;
+  percentLabel: string;
+  moneyTone?: InsightTone;
+  percentTone?: InsightTone;
+  moneyTipTitle: string;
+  moneyTipRows: Array<[string, string]>;
+  percentTipTitle: string;
+  percentTipRows: Array<[string, string]>;
 }) {
-  const frame = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ width: 0, height: 0 });
-  useLayoutEffect(() => {
-    const node = frame.current;
-    if (!node) return;
-    const update = () => {
-      const next = node.getBoundingClientRect();
-      setBox({ width: next.width, height: next.height });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [revision, items.length]);
-  if (!items.length) {
-    return <p className={styles.coverageHint}>Sem canais para calcular concentração.</p>;
-  }
-  const cells = layoutTreemap(items, box.width, box.height, 0);
+  const accent = CHANNEL_COLORS[channel];
   return (
-    <FunnelTooltipScope revision={revision} className={styles.treemap}>
-      <div ref={frame} className={styles.treemapCanvas} aria-hidden={cells.length === 0}>
-        {cells.map((cell) => (
-          <FunnelTooltipTrigger
-            key={cell.channel}
-            label={cell.name}
-            className={styles.treemapCell}
-            style={{
-              left: cell.x,
-              top: cell.y,
-              width: cell.width + 1,
-              height: cell.height + 1,
-              background: cell.fill,
-              color:
-                cell.channel === "GOOGLE_ADS"
-                  ? "hsl(var(--warning-foreground))"
-                  : "hsl(var(--primary-foreground))",
-            }}
-            text={
-              <>
-                <strong className="mb-2 block font-semibold text-primary">{cell.name}</strong>
-                <span className="flex justify-between gap-5 py-0.5">
-                  <span className="text-muted-foreground">Receita líquida</span>
-                  <strong className="tabular-nums">{money(cell.size)}</strong>
-                </span>
-                <span className="flex justify-between gap-5 py-0.5">
-                  <span className="text-muted-foreground">Participação</span>
-                  <strong className="tabular-nums">{percentage(cell.share)}</strong>
-                </span>
-              </>
-            }
-          >
-            {cellLabel(cell.name, cell.width, cell.height) ? (
-              <span className={styles.treemapLabel}>
-                {cellLabel(cell.name, cell.width, cell.height)}
-              </span>
-            ) : null}
-          </FunnelTooltipTrigger>
-        ))}
+    <div className={styles.insightCard + " " + styles.quickInsight}>
+      <InsightHeading title={label} help={help} />
+      <div className={styles.quickGrid}>
+        <div className={styles.quickIdentity}>
+          <span className={styles.quickMark} style={{ "--accent": accent } as CSSProperties}>
+            <ChannelBrandMark channel={channel} size={18} />
+          </span>
+          <p className={styles.quickName} title={name}>
+            {name}
+          </p>
+        </div>
+        <AbbreviatedValue
+          placement={styles.quickMoney ?? ""}
+          title={moneyTipTitle}
+          rows={moneyTipRows}
+          accent={accent}
+          tone={moneyTone}
+          description={moneyTipRows.map(([rowLabel, rowValue]) => rowLabel + ": " + rowValue).join(". ")}
+        >
+          {moneyValue}
+        </AbbreviatedValue>
+        <AbbreviatedValue
+          placement={styles.quickPercent ?? ""}
+          title={percentTipTitle}
+          rows={percentTipRows}
+          accent={accent}
+          tone={percentTone}
+          description={percentTipRows.map(([rowLabel, rowValue]) => rowLabel + ": " + rowValue).join(". ")}
+        >
+          {percent}
+        </AbbreviatedValue>
+        <p className={styles.quickCaption + " " + styles.quickMoneyCaption}>{moneyLabel}</p>
+        <p className={styles.quickCaption + " " + styles.quickPercentCaption}>{percentLabel}</p>
       </div>
-    </FunnelTooltipScope>
+    </div>
   );
 }
+
+function AbbreviatedValue({
+  placement,
+  title,
+  rows,
+  accent,
+  tone,
+  description,
+  children,
+}: {
+  placement: string;
+  title: string;
+  rows: Array<[string, string]>;
+  accent: string;
+  tone: InsightTone;
+  description: string;
+  children: ReactNode;
+}) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const tip = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [box, setBox] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = trigger.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = tip.current?.offsetWidth || 220;
+      const height = tip.current?.offsetHeight || 118;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      const above = rect.top - height - 8;
+      setBox({ left, top: above >= 8 ? above : rect.bottom + 8 });
+    };
+    place();
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("keydown", close);
+    };
+  }, [open]);
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        className={placement + " " + (styles.quickFigure ?? "") + " " + toneClass(tone)}
+        aria-label={description}
+        onMouseEnter={() => {
+          closeActiveInsightTip?.();
+          closeActiveInsightTip = () => setOpen(false);
+          setOpen(true);
+        }}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => {
+          closeActiveInsightTip?.();
+          closeActiveInsightTip = () => setOpen(false);
+          setOpen(true);
+        }}
+        onBlur={() => setOpen(false)}
+      >
+        {children}
+      </button>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={tip}
+              className="pointer-events-none fixed z-40"
+              style={{
+                left: box?.left ?? -9999,
+                top: box?.top ?? 0,
+                visibility: box ? "visible" : "hidden",
+              }}
+            >
+              <ChartTooltip accent={accent} title={title} rows={rows} />
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+

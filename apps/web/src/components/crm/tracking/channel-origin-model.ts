@@ -11,78 +11,6 @@ export const COVERAGE_COLORS = {
   unidentified: "hsl(0 62% 46%)",
 };
 
-export type TreemapRect = ChannelTreemapCell & {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-/** Binary treemap: area of each cell is proportional to channel net revenue. */
-export function layoutTreemap(
-  items: ChannelTreemapCell[],
-  width: number,
-  height: number,
-  gap = 0,
-): TreemapRect[] {
-  const nodes = items.filter((item) => item.size > 0).sort((a, b) => b.size - a.size);
-  const total = nodes.reduce((sum, item) => sum + item.size, 0);
-  if (!total || width <= 0 || height <= 0) return [];
-
-  const place = (
-    item: ChannelTreemapCell,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-  ): TreemapRect => ({
-    ...item,
-    x: x + gap / 2,
-    y: y + gap / 2,
-    width: Math.max(0, w - gap),
-    height: Math.max(0, h - gap),
-  });
-
-  const split = (
-    list: ChannelTreemapCell[],
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-  ): TreemapRect[] => {
-    if (!list.length) return [];
-    const first = list[0];
-    if (list.length === 1 && first) return [place(first, x, y, w, h)];
-    const sum = list.reduce((acc, item) => acc + item.size, 0);
-    let acc = 0;
-    let cut = 1;
-    for (let index = 0; index < list.length - 1; index += 1) {
-      acc += list[index]!.size;
-      cut = index + 1;
-      if (acc >= sum / 2) break;
-    }
-    const left = list.slice(0, cut);
-    const right = list.slice(cut);
-    const fraction = left.reduce((value, item) => value + item.size, 0) / sum;
-    if (w >= h) {
-      const splitWidth = w * fraction;
-      return [...split(left, x, y, splitWidth, h), ...split(right, x + splitWidth, y, w - splitWidth, h)];
-    }
-    const splitHeight = h * fraction;
-    return [...split(left, x, y, w, splitHeight), ...split(right, x, y + splitHeight, w, h - splitHeight)];
-  };
-
-  return split(nodes, 0, 0, width, height);
-}
-
-export type ChannelTreemapCell = {
-  name: string;
-  size: number;
-  fill: string;
-  share: number | null;
-  channel: TrackingChannel;
-};
-
 export type ChannelBarPoint = {
   channel: TrackingChannel;
   label: string;
@@ -109,10 +37,8 @@ export type ChannelInsight = {
 
 export type ChannelOriginView = {
   bars: ChannelBarPoint[];
-  treemap: ChannelTreemapCell[];
   champion: ChannelInsight | null;
   fastestGrowth: ChannelInsight | null;
-  top3Share: number | null;
 };
 
 export function channelDelta(current: number, previous: number) {
@@ -230,10 +156,6 @@ export function buildChannelOriginView(
           channelDelta(a.netRevenue, a.previousNetRevenue),
       )[0] ??
     null;
-  const top3Share = safeRate(
-    ranked.slice(0, 3).reduce((sum, row) => sum + row.netRevenue, 0),
-    totalNetRevenue,
-  );
   const scale = Math.max(
     ...barsSource.map((row) => Math.max(row.netRevenue, row.previousNetRevenue)),
     1,
@@ -256,17 +178,7 @@ export function buildChannelOriginView(
         previousWidth: (row.previousNetRevenue / scale) * 100,
       };
     }),
-    treemap: barsSource
-      .filter((row) => row.netRevenue > 0)
-      .map((row) => ({
-        channel: row.channel,
-        name: CHANNEL_LABELS[row.channel],
-        size: row.netRevenue,
-        fill: CHANNEL_COLORS[row.channel],
-        share: row.revenueShare ?? safeRate(row.netRevenue, totalNetRevenue),
-      })),
     champion: championRow ? toInsight(championRow) : null,
     fastestGrowth: fastest ? toInsight(fastest) : null,
-    top3Share,
   };
 }

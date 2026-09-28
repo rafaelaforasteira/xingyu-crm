@@ -157,6 +157,26 @@ export type FinancialFlowData = FinancialSnapshot & {
   trends: Record<"grossSales" | "cancellations" | "refunds" | "netSales", Trend | null>;
 };
 
+export type JourneyBucketId = "1" | "2-3" | "4-5" | "6+";
+
+/** Consolidated depth of a purchase journey. Touchpoints are not the same as distinct channels. */
+export type JourneyDistributionPoint = {
+  bucket: JourneyBucketId;
+  label: string;
+  percentage: number;
+};
+
+export type JourneyAnalytics =
+  | {
+      status: "ready";
+      averageTouchpoints: number;
+      averageChannels: number;
+      averageTimeToPurchaseDays: number;
+      distribution: JourneyDistributionPoint[];
+    }
+  | { status: "insufficient" }
+  | { status: "unconfigured" };
+
 export type SalesTrackingData = {
   range: ResolvedTrackingRange;
   granularity: "day" | "week" | "month";
@@ -173,4 +193,6 @@ export type SalesTrackingData = {
   customers: TrackedCustomer[];
   updatedAt: string;
   source: "mock" | "api";
+  /** Supplied by analytics once journey tracking exists. The view never invents this. */
+  journey?: JourneyAnalytics;
 };

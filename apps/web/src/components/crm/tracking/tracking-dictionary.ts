@@ -44,8 +44,9 @@ export const METRIC_DEFINITIONS = {
   recovery:
     "Em recuperação é uma perda ainda pendente. Recuperado é informado separadamente e nunca somado novamente ao líquido.",
   newCustomer:
-    "A primeira compra válida histórica aconteceu dentro do período. Compras seguintes desse cliente já geram receita de recompra.",
-  existingCustomer: "Comprou no período e já tinha uma compra válida antes do início da análise.",
+    "Clientes cuja primeira compra válida da história aconteceu no período selecionado.",
+  existingCustomer:
+    "Clientes que já possuíam pelo menos uma compra válida antes do início do período selecionado.",
   firstPurchase: "Pedido de posição 1 no histórico de compras válidas até a data final.",
   repeatPurchase:
     "Pedido de posição maior que 1, mesmo quando o cliente foi adquirido neste período.",
@@ -64,4 +65,10 @@ export const METRIC_DEFINITIONS = {
   conversion: `Coorte adquirida no período, com ${FIRST_TO_SECOND_WINDOW_DAYS} dias completos de observação até a data final. Mede quem fez a segunda compra nessa janela; indisponível com filtros de perfil ou número.`,
   reactivation: `Cliente da base que retorna após ${REACTIVATION_DAYS} dias ou mais sem comprar. A taxa usa clientes que chegaram a essa inatividade no período, inclusive quem não voltou.`,
   coverage: "Percentual da receita líquida em que o FAROL conseguiu identificar uma origem.",
+  championChannel:
+    "Canal com a maior receita líquida no período e a participação dessa receita no total líquido.",
+  fastestGrowth:
+    "Canal com o maior crescimento de receita líquida em relação ao período anterior.",
+  purchaseJourney:
+    "Interações registradas antes de uma compra válida, com a média de canais e o tempo até a conversão.",
 } as const;
