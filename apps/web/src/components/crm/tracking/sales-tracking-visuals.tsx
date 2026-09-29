@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { UserPlus, Users, type LucideIcon } from "lucide-react";
-import { AnimatedMetric, AnimatedProgress, useInViewOnce, useTrackingMotion } from "./tracking-motion";
+import { AnimatedMetric, useInViewOnce, useTrackingMotion } from "./tracking-motion";
 import {
   Bar,
   BarChart,
@@ -20,20 +20,32 @@ import { REACTIVATION_DAYS } from "./sales-tracking-rules";
 import { ConceptHelp, ChartTooltip } from "./tracking-help";
 import { METRIC_DEFINITIONS } from "./tracking-dictionary";
 import { money, integer, percentage, days } from "./tracking-format";
-import type { PurchaseStageDistribution, SalesTrackingData } from "./sales-tracking-types";
+import type {
+  PurchaseStageDistribution,
+  RepurchaseTimeBucket,
+  SalesTrackingData,
+} from "./sales-tracking-types";
 import styles from "./tracking-overview.module.css";
 export { SalesHero } from "./sales-overview";
 
 const SURFACE =
   "min-w-0 rounded-2xl border-0 bg-[color-mix(in_srgb,hsl(var(--muted))_25%,hsl(var(--card)))] shadow-none";
-const STAGE_FILLS = [
-  "hsl(var(--primary))",
-  "hsl(152 55% 48%)",
-  "hsl(152 58% 40%)",
-  "hsl(154 62% 34%)",
-  "hsl(var(--success))",
-  "hsl(158 64% 22%)",
-];
+
+/** Intensity scale: soft blue for low volume, greens for higher volume, darkest emerald on the peak. */
+const STAGE_TONE = {
+  low: "hsl(228 52% 70%)",
+  mid: "hsl(152 44% 46%)",
+  high: "hsl(154 58% 34%)",
+  peak: "hsl(162 64% 22%)",
+} as const;
+
+export function purchaseStageFill(orders: number, peak: number) {
+  if (!Number.isFinite(orders) || orders <= 0) return STAGE_TONE.low;
+  if (peak > 0 && orders === peak) return STAGE_TONE.peak;
+  if (orders <= 40) return STAGE_TONE.low;
+  if (orders <= 80) return STAGE_TONE.mid;
+  return STAGE_TONE.high;
+}
 
 export function CustomerMix({ data }: { data: SalesTrackingData }) {
   const reveal = useInViewOnce<HTMLDivElement>(0.25);
@@ -71,8 +83,8 @@ function compactProfileMoney(value: number | null) {
 type ProfileId = "new" | "existing";
 
 const PROFILE_ACCENT: Record<ProfileId, string> = {
-  new: "hsl(var(--primary))",
-  existing: "hsl(187 45% 34%)",
+  new: "#2563eb",
+  existing: "#ea580c",
 };
 
 type CustomerProfile = {
@@ -152,7 +164,6 @@ function ProfileColumn({ profile, animate }: { profile: CustomerProfile; animate
         animate={animate}
         title="Composição dos compradores"
         value={profile.buyerShare}
-        hint="dos compradores do período"
         tipTitle="Composição dos compradores"
         tipRows={[
           ["Compradores", integer(profile.count)],
@@ -165,7 +176,6 @@ function ProfileColumn({ profile, animate }: { profile: CustomerProfile; animate
         animate={animate}
         title="Composição da receita líquida"
         value={profile.revenueShare}
-        hint="da receita líquida do período"
         tipTitle="Composição da receita líquida"
         tipRows={[
           ["Receita líquida", money(profile.revenue)],
@@ -233,7 +243,6 @@ function ProfileDetail({
   animate,
   title,
   value,
-  hint,
   tipTitle,
   tipRows,
 }: {
@@ -241,7 +250,6 @@ function ProfileDetail({
   animate: boolean;
   title: string;
   value: number | null;
-  hint: string;
   tipTitle: string;
   tipRows: Array<[string, string]>;
 }) {
@@ -251,17 +259,14 @@ function ProfileDetail({
         <span className={styles.profileDot} data-profile={profile.id} aria-hidden />
         <span>{title}</span>
       </div>
-      <div className={styles.profileDetailAside}>
-        <ShareValue
-          profile={profile}
-          animate={animate}
-          className={styles.profileDetailValue ?? ""}
-          value={value}
-          tipTitle={tipTitle}
-          tipRows={tipRows}
-        />
-        <p className={styles.profileDetailHint}>{hint}</p>
-      </div>
+      <ShareValue
+        profile={profile}
+        animate={animate}
+        className={styles.profileDetailValue ?? ""}
+        value={value}
+        tipTitle={tipTitle}
+        tipRows={tipRows}
+      />
     </article>
   );
 }
@@ -413,12 +418,14 @@ export function PurchaseStageChart({
 }) {
   const reduced = useReducedMotion();
   const { initial } = useTrackingMotion();
+  const peak = data.purchaseStages.reduce((max, stage) => Math.max(max, stage.orders), 0);
+  const fillFor = (orders: number) => purchaseStageFill(orders, peak);
   return (
     <Card
       className={SURFACE + " flex h-full flex-col " + styles.mixCard}
       style={{ "--delay": "40ms" } as CSSProperties}
     >
-      <CardHeader className="space-y-1 px-4 pb-0 pt-4">
+      <CardHeader className="space-y-1 px-5 pb-0 pt-5">
         <CardTitle className="flex items-center gap-1">
           Distribuição por número da compra
           <ConceptHelp
@@ -430,43 +437,46 @@ export function PurchaseStageChart({
           Pedidos pela posição no histórico de compras válidas.
         </p>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
-        <div className="min-h-[220px] flex-1" aria-label="Distribuição de pedidos por número da compra">
+      <CardContent className="flex min-h-0 flex-1 flex-col px-5 pb-5 pt-2">
+        <div className="min-h-[280px] flex-1" aria-label="Distribuição de pedidos por número da compra">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               accessibilityLayer
               data={data.purchaseStages}
-              margin={{ top: 22, right: 8, left: -18, bottom: 0 }}
+              barCategoryGap="18%"
+              margin={{ top: 8, right: 4, left: 0, bottom: 0 }}
             >
               <CartesianGrid
                 vertical={false}
-                stroke="hsl(var(--muted-foreground) / 0.16)"
-                strokeDasharray="3 4"
+                stroke="hsl(var(--muted-foreground) / 0.1)"
+                strokeDasharray="2 6"
               />
               <XAxis
                 dataKey="stage"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                dy={4}
               />
               <YAxis
                 allowDecimals={false}
                 axisLine={false}
                 tickLine={false}
+                width={32}
+                domain={[0, (max: number) => (max <= 0 ? 4 : Math.ceil(max * 1.16))]}
                 tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               />
               <Tooltip
-                cursor={{ fill: "hsl(var(--muted-foreground) / 0.08)" }}
+                cursor={{ fill: "hsl(var(--muted-foreground) / 0.06)" }}
                 content={({ active, payload }) => {
                   const row = payload?.[0]?.payload as PurchaseStageDistribution | undefined;
-                  const index = row ? data.purchaseStages.findIndex((stage) => stage.stage === row.stage) : -1;
                   return active && row ? (
                     <ChartTooltip
                       title={row.stage + " compra"}
-                      accent={STAGE_FILLS[index] ?? STAGE_FILLS[0]}
+                      accent={fillFor(row.orders)}
                       rows={[
                         ["Pedidos", integer(row.orders)],
-                        ["Dos pedidos do período", percentage(row.percentage)],
+                        ["Participação", percentage(row.percentage) + " do total"],
                         ["Receita líquida", money(row.revenue)],
                       ]}
                     />
@@ -476,88 +486,284 @@ export function PurchaseStageChart({
               <Bar
                 key={animate ? "purchase-draw" : "purchase-hold"}
                 dataKey="orders"
-                radius={[4, 4, 0, 0]}
-                maxBarSize={46}
+                radius={[7, 7, 0, 0]}
+                maxBarSize={72}
                 isAnimationActive={animate && !reduced}
-                animationDuration={initial ? 420 : 320}
+                animationDuration={initial ? 520 : 380}
                 animationEasing="ease-out"
               >
                 <LabelList
                   dataKey="orders"
                   position="top"
-                  offset={6}
+                  offset={8}
                   formatter={(value: number) => integer(value)}
-                  style={{ fontSize: 11, fontWeight: 600, fill: "hsl(var(--foreground))" }}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    fill: "hsl(var(--foreground))",
+                  }}
                 />
-                {data.purchaseStages.map((stage, index) => (
-                  <Cell key={stage.stage} fill={STAGE_FILLS[index] ?? STAGE_FILLS[STAGE_FILLS.length - 1]} />
+                {data.purchaseStages.map((stage) => (
+                  <Cell key={stage.stage} fill={fillFor(stage.orders)} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
           Um mesmo comprador pode gerar uma primeira compra e uma recompra no período.
         </p>
       </CardContent>
     </Card>
   );
 }
+const REPURCHASE_AXIS: Record<string, string> = {
+  "Até 30 dias": "≤30",
+  "31–60 dias": "31–60",
+  "61–90 dias": "61–90",
+  "91–180 dias": "91–180",
+  "180+ dias": "180+",
+};
+
+const REPURCHASE_COLOR: Record<string, { base: string; peak: string }> = {
+  "Até 30 dias": { base: "hsl(217 72% 68%)", peak: "#2563eb" },
+  "31–60 dias": { base: "hsl(187 36% 52%)", peak: "hsl(187 48% 38%)" },
+  "61–90 dias": { base: "hsl(174 34% 46%)", peak: "hsl(174 50% 32%)" },
+  "91–180 dias": { base: "hsl(24 72% 62%)", peak: "#ea580c" },
+  "180+ dias": { base: "hsl(8 52% 70%)", peak: "hsl(8 58% 58%)" },
+};
+
+const REPURCHASE_METHOD =
+  "Faixas calculadas com base no último intervalo de recompra no recorte. Média e mediana consideram os intervalos históricos até a data final.";
+
+const WITHIN_NINETY_DAYS = 90;
+
+function repurchaseColumn(row: RepurchaseTimeBucket, peak: number) {
+  const tone = REPURCHASE_COLOR[row.label];
+  const dominant = peak > 0 && row.percentage === peak;
+  return {
+    label: row.label,
+    axis: REPURCHASE_AXIS[row.label] ?? row.label,
+    percentage: row.percentage,
+    customers: row.customers,
+    dominant,
+    fill: dominant ? (tone?.peak ?? "#2563eb") : (tone?.base ?? "hsl(var(--muted-foreground))"),
+  };
+}
+
 export function RepurchaseAnalysis({ data }: { data: SalesTrackingData }) {
   const { summary, firstToSecondConversion: conversion } = data;
+  const reveal = useInViewOnce<HTMLDivElement>(0.2);
+  const reduced = useReducedMotion();
+  const { initial } = useTrackingMotion();
   const hasReturns = data.repurchaseBuckets.some((row) => row.customers > 0);
+  const peakShare = data.repurchaseBuckets.reduce((max, row) => Math.max(max, row.percentage), 0);
+  const columns = data.repurchaseBuckets.map((row) => repurchaseColumn(row, peakShare));
+  const dominant = hasReturns ? columns.find((column) => column.dominant) ?? null : null;
+  const withinNinety = data.repurchaseBuckets
+    .filter((row) => row.maxDays != null && row.maxDays <= WITHIN_NINETY_DAYS)
+    .reduce((sum, row) => sum + row.percentage, 0);
   return (
     <Card className="min-w-0 rounded-2xl shadow-soft">
       <CardHeader>
-        <CardTitle>Tempo até a recompra</CardTitle>
+        <CardTitle className="flex items-center gap-1">
+          Tempo até a recompra
+          <ConceptHelp label="Tempo até a recompra" text={REPURCHASE_METHOD} />
+        </CardTitle>
         <p className="text-xs text-muted-foreground">
           O ritmo de retorno dos compradores selecionados.
         </p>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.6fr]">
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            <Metric
-              label="Tempo médio"
-              value={
+        <div
+          ref={reveal.ref}
+          className={styles.repurchaseStage}
+          data-revealed={reveal.seen ? "true" : "false"}
+        >
+          <div className={styles.repurchaseLayout}>
+          <div className={styles.repurchaseSummary}>
+            <div>
+              <p className={styles.repurchasePrimaryLabel}>
+                Tempo médio
+                <ConceptHelp label="Tempo médio" text={METRIC_DEFINITIONS.repurchase} />
+              </p>
+              <p className={styles.repurchasePrimaryValue}>
                 <AnimatedMetric
                   value={summary.averageRepurchaseDays}
                   format={days}
-                  duration={550}
+                  duration={560}
+                  active={reveal.seen}
                 />
-              }
-              help={METRIC_DEFINITIONS.repurchase}
-            />
-            <Metric
-              label="Mediana"
-              value={
-                <AnimatedMetric value={summary.medianRepurchaseDays} format={days} duration={550} />
-              }
-              help={METRIC_DEFINITIONS.median}
-            />
-            <Metric
-              label="1ª → 2ª compra"
-              value={
+              </p>
+            </div>
+            <div className={styles.repurchaseSecondary}>
+              <div>
+                <p className={styles.repurchaseMinorLabel}>
+                  Mediana
+                  <ConceptHelp label="Mediana" text={METRIC_DEFINITIONS.median} />
+                </p>
+                <p className={styles.repurchaseMinorValue}>
+                  <AnimatedMetric
+                    value={summary.medianRepurchaseDays}
+                    format={days}
+                    duration={520}
+                    active={reveal.seen}
+                  />
+                </p>
+              </div>
+              <div>
+                <p className={styles.repurchaseMinorLabel}>
+                  1ª → 2ª compra
+                  <ConceptHelp label="1ª → 2ª compra" text={METRIC_DEFINITIONS.firstToSecond} />
+                </p>
+                <p className={styles.repurchaseMinorValue}>
+                  <AnimatedMetric
+                    value={summary.firstToSecondPurchaseDays}
+                    format={days}
+                    duration={520}
+                    active={reveal.seen}
+                  />
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.repurchaseChart}>
+            <h4 className={styles.repurchaseHeading}>Distribuição do retorno</h4>
+            {hasReturns ? (
+              <div className={styles.repurchasePlot} aria-label="Distribuição do tempo de recompra">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    accessibilityLayer
+                    data={columns}
+                    barCategoryGap="24%"
+                    margin={{ top: 18, right: 4, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      vertical={false}
+                      stroke="hsl(var(--muted-foreground) / 0.1)"
+                      strokeDasharray="2 6"
+                    />
+                    <XAxis
+                      dataKey="axis"
+                      axisLine={false}
+                      tickLine={false}
+                      interval={0}
+                      tick={(props: { x?: number; y?: number; payload?: { value?: string } }) => {
+                        const label = props.payload?.value ?? "";
+                        const strong = label.length > 0 && label === dominant?.axis;
+                        return (
+                          <text
+                            x={props.x}
+                            y={props.y}
+                            dy={14}
+                            textAnchor="middle"
+                            fill={
+                              strong
+                                ? "hsl(var(--foreground))"
+                                : "hsl(var(--muted-foreground))"
+                            }
+                            fontSize={11}
+                            fontWeight={strong ? 650 : 500}
+                          >
+                            {label}
+                          </text>
+                        );
+                      }}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      axisLine={false}
+                      tickLine={false}
+                      width={36}
+                      domain={[0, (max: number) => Math.max(10, Math.ceil(max * 1.28))]}
+                      tickFormatter={(value: number) => Math.round(value) + "%"}
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "hsl(var(--muted-foreground) / 0.06)" }}
+                      content={({ active, payload }) => {
+                        const row = payload?.[0]?.payload as (typeof columns)[number] | undefined;
+                        if (!active || !row) return null;
+                        const rows: Array<[string, string]> = [
+                          ["Participação", percentage(row.percentage) + " dos compradores"],
+                          ["Compradores", integer(row.customers)],
+                        ];
+                        if (row.dominant) rows.push(["Leitura", "Faixa predominante"]);
+                        return (
+                          <ChartTooltip title={row.label} accent={row.fill} rows={rows} />
+                        );
+                      }}
+                    />
+                    <Bar
+                      key={reveal.seen ? "repurchase-draw" : "repurchase-hold"}
+                      dataKey="percentage"
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={58}
+                      isAnimationActive={reveal.seen && !reduced}
+                      animationDuration={initial ? 520 : 380}
+                      animationEasing="ease-out"
+                    >
+                      <LabelList
+                        dataKey="percentage"
+                        position="top"
+                        offset={8}
+                        formatter={(value: number) => percentage(value)}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fill: "hsl(var(--foreground))",
+                        }}
+                      />
+                      {columns.map((column) => (
+                        <Cell key={column.label} fill={column.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className={styles.repurchaseEmpty}>Nenhuma recompra encontrada neste recorte.</p>
+            )}
+          </div>
+          </div>
+
+        <div className={styles.repurchaseInsights}>
+          <div className={styles.repurchaseInsight}>
+            <p className={styles.repurchaseInsightLabel}>Faixa predominante</p>
+            <p className={styles.repurchaseInsightValue}>{dominant ? dominant.label : "—"}</p>
+            <p className={styles.repurchaseInsightNote}>
+              {dominant ? (
                 <AnimatedMetric
-                  value={summary.firstToSecondPurchaseDays}
-                  format={days}
-                  duration={550}
+                  value={dominant.percentage}
+                  format={percentage}
+                  duration={480}
+                  active={reveal.seen}
                 />
-              }
-              help={METRIC_DEFINITIONS.firstToSecond}
-              accent
-            />
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground sm:col-span-3 lg:col-span-1">
-              {conversion?.rate != null ? (
-                <span>
-                  Conversão 1ª → 2ª:{" "}
-                  <strong className="text-primary">
-                    <AnimatedMetric value={conversion.rate} format={percentage} />
-                  </strong>
-                </span>
               ) : (
-                "Conversão ainda indisponível"
+                "Sem recompra neste recorte"
               )}
+            </p>
+          </div>
+          <div className={styles.repurchaseInsight}>
+            <p className={styles.repurchaseInsightLabel}>Retorno em até 90 dias</p>
+            <p className={styles.repurchaseInsightValue}>
+              {hasReturns ? (
+                <AnimatedMetric
+                  value={withinNinety}
+                  format={percentage}
+                  duration={480}
+                  active={reveal.seen}
+                />
+              ) : (
+                "—"
+              )}
+            </p>
+            <p className={styles.repurchaseInsightNote}>dos clientes que recompraram</p>
+          </div>
+          <div className={styles.repurchaseInsight}>
+            <p className={styles.repurchaseInsightLabel}>
+              Conversão 1ª → 2ª
               <ConceptHelp
                 label="Conversão 1ª → 2ª"
                 text={
@@ -566,46 +772,24 @@ export function RepurchaseAnalysis({ data }: { data: SalesTrackingData }) {
                     : "Ainda não existe uma coorte com tempo suficiente de observação neste recorte para calcular esta conversão com segurança. Use todos os perfis e números de compra para observar a coorte completa."
                 }
               />
-            </div>
-          </div>
-          <div className="flex min-w-0 flex-col justify-center">
-            {hasReturns ? (
-              <div className="space-y-4">
-                {data.repurchaseBuckets.map((row) => (
-                  <div key={row.label}>
-                    <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-1">
-                        {row.label}
-                        <ConceptHelp
-                          label={row.label}
-                          text={
-                            integer(row.customers) +
-                            " clientes · " +
-                            percentage(row.percentage) +
-                            ". Receita de recompra: " +
-                            money(row.revenue) +
-                            "."
-                          }
-                        />
-                      </div>
-                      <strong className="tabular-nums">{percentage(row.percentage)}</strong>
-                    </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-                      <AnimatedProgress value={row.percentage} className="bg-success/65" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-xl bg-muted/50 p-6 text-sm text-muted-foreground">
-                Nenhuma recompra encontrada neste recorte.
-              </p>
-            )}
-            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-              Faixas por cliente, considerando seu último intervalo de recompra no recorte. Média e
-              mediana consideram os intervalos históricos até a data final.
+            </p>
+            <p className={styles.repurchaseInsightValue}>
+              {conversion?.rate != null ? (
+                <AnimatedMetric
+                  value={conversion.rate}
+                  format={percentage}
+                  duration={480}
+                  active={reveal.seen}
+                />
+              ) : (
+                "—"
+              )}
+            </p>
+            <p className={styles.repurchaseInsightNote}>
+              {conversion?.rate != null ? "da coorte observada" : "Dados insuficientes para o período"}
             </p>
           </div>
+        </div>
         </div>
       </CardContent>
     </Card>

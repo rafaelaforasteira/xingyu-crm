@@ -175,20 +175,20 @@
   container-name: profiles;
 }
 .profileBoard {
-  --profile-new: hsl(var(--primary));
-  --profile-new-soft: hsl(var(--primary) / 0.12);
-  --profile-existing: hsl(187 45% 34%);
-  --profile-existing-soft: hsl(187 42% 34% / 0.14);
+  --profile-new: #2563eb;
+  --profile-new-soft: hsl(221 83% 53% / 0.12);
+  --profile-existing: #ea580c;
+  --profile-existing-soft: hsl(21 90% 48% / 0.12);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px;
   align-items: stretch;
 }
 .profileColumn {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .mix[data-revealed="true"] .profileColumn {
   animation: mix-card-in 300ms ease-out both;
@@ -200,20 +200,12 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px 14px 16px;
-  border: 1px solid transparent;
+  gap: 16px;
+  padding: 16px 16px 18px;
+  border: 0;
   border-radius: var(--radius);
   background: color-mix(in srgb, hsl(var(--muted)) 46%, hsl(var(--card)));
   box-shadow: none;
-}
-.profileCard[data-profile="new"]:hover,
-.profileDetail[data-profile="new"]:hover {
-  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.18);
-}
-.profileCard[data-profile="existing"]:hover,
-.profileDetail[data-profile="existing"]:hover {
-  box-shadow: inset 0 0 0 1px hsl(187 45% 34% / 0.22);
 }
 .profileIdentity {
   display: flex;
@@ -323,9 +315,7 @@
   color: var(--profile-existing);
 }
 .profileShare:hover,
-.profileShare:focus-visible,
-.profileDetailValue:hover,
-.profileDetailValue:focus-visible {
+.profileShare:focus-visible {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
@@ -346,16 +336,18 @@
 .profileDetail {
   display: flex;
   min-width: 0;
+  min-height: 42px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid transparent;
-  border-radius: 0.75rem;
-  background: hsl(var(--card) / 0.8);
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, hsl(var(--muted)) 28%, hsl(var(--card)));
+  box-shadow: none;
 }
 .profileCard + .profileDetail {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .profileDetailLabel {
   display: flex;
@@ -363,27 +355,19 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: hsl(var(--foreground));
-  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12.5px;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1;
 }
 .profileDetailLabel span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.profileDetailAside {
-  display: flex;
-  flex-shrink: 0;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  text-align: right;
-}
 .profileDot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   flex-shrink: 0;
   border-radius: 999px;
 }
@@ -394,20 +378,172 @@
   background: var(--profile-existing);
 }
 .profileDetailValue {
+  flex-shrink: 0;
   font-size: 14px;
   font-weight: 650;
-}
-.profileDetailHint {
-  margin: 0;
-  color: hsl(var(--muted-foreground));
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.25;
+  line-height: 1;
   text-align: right;
 }
 @container profiles (max-width: 520px) {
   .profileBoard {
     grid-template-columns: 1fr;
     gap: 18px;
+  }
+}
+
+.repurchaseLayout {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.34fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: stretch;
+}
+.repurchaseStage[data-revealed="false"] .repurchaseSummary,
+.repurchaseStage[data-revealed="false"] .repurchaseInsight {
+  opacity: 0;
+}
+.repurchaseStage[data-revealed="true"] .repurchaseSummary {
+  animation: section-in 320ms ease-out both;
+}
+.repurchaseStage[data-revealed="true"] .repurchaseInsight {
+  animation: section-in 320ms ease-out both;
+}
+.repurchaseStage[data-revealed="true"] .repurchaseInsight:nth-child(2) {
+  animation-delay: 70ms;
+}
+.repurchaseStage[data-revealed="true"] .repurchaseInsight:nth-child(3) {
+  animation-delay: 130ms;
+}
+.repurchaseSummary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, hsl(var(--muted)) 34%, hsl(var(--card)));
+}
+.repurchasePrimaryLabel,
+.repurchaseMinorLabel,
+.repurchaseInsightLabel {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+  line-height: 1.3;
+}
+.repurchasePrimaryLabel {
+  font-size: 12px;
+}
+.repurchasePrimaryValue {
+  margin: 8px 0 0;
+  color: hsl(var(--foreground));
+  font-size: 34px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.repurchaseSecondary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid hsl(var(--border) / 0.45);
+}
+.repurchaseMinorLabel {
+  font-size: 11px;
+}
+.repurchaseMinorValue {
+  margin: 6px 0 0;
+  color: hsl(var(--foreground));
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.repurchaseChart {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.repurchaseHeading {
+  margin: 0 0 4px;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.repurchasePlot {
+  min-height: 248px;
+  flex: 1;
+}
+.repurchaseEmpty {
+  margin: 12px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+.repurchaseInsights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 8px;
+  padding-top: 16px;
+}
+.repurchaseInsight {
+  min-width: 0;
+  padding: 2px 20px 0;
+}
+.repurchaseInsight + .repurchaseInsight {
+  border-left: 1px solid hsl(var(--border) / 0.4);
+}
+.repurchaseInsight:first-child {
+  padding-left: 0;
+}
+.repurchaseInsightLabel {
+  font-size: 11px;
+}
+.repurchaseInsightValue {
+  margin: 6px 0 0;
+  color: hsl(var(--foreground));
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.repurchaseInsightNote {
+  margin: 3px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+@media (max-width: 960px) {
+  .repurchaseLayout {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+}
+@media (max-width: 640px) {
+  .repurchaseInsights {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .repurchaseInsight {
+    padding: 0;
+  }
+  .repurchaseInsight + .repurchaseInsight {
+    border-left: 0;
+    border-top: 1px solid hsl(var(--border) / 0.4);
+    padding-top: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .repurchaseStage[data-revealed="false"] .repurchaseSummary,
+  .repurchaseStage[data-revealed="false"] .repurchaseInsight,
+  .repurchaseStage[data-revealed="true"] .repurchaseSummary,
+  .repurchaseStage[data-revealed="true"] .repurchaseInsight {
+    opacity: 1;
+    animation: none;
   }
 }
