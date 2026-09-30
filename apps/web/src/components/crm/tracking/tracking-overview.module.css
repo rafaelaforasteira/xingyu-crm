@@ -392,38 +392,109 @@
 }
 
 .repurchaseStage {
+  --accent: hsl(var(--muted-foreground));
+  --accent-strong: hsl(var(--muted-foreground));
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+.repurchaseKpi[data-tone="average"] {
+  --accent: #2563eb;
+}
+.repurchaseKpi[data-tone="median"] {
+  --accent: hsl(187 48% 38%);
+}
+.repurchaseKpi[data-tone="bridge"] {
+  --accent: hsl(var(--primary));
+}
+.repurchaseBand[data-tone="until30"] {
+  --accent: hsl(217 70% 64%);
+  --accent-strong: #2563eb;
+}
+.repurchaseBand[data-tone="mid60"] {
+  --accent: hsl(187 38% 50%);
+  --accent-strong: hsl(187 48% 38%);
+}
+.repurchaseBand[data-tone="mid90"] {
+  --accent: hsl(152 36% 48%);
+  --accent-strong: hsl(152 46% 36%);
+}
+.repurchaseBand[data-tone="late180"] {
+  --accent: hsl(24 70% 60%);
+  --accent-strong: #ea580c;
+}
+.repurchaseBand[data-tone="over180"] {
+  --accent: hsl(8 50% 68%);
+  --accent-strong: hsl(8 58% 58%);
+}
+.repurchaseBand[data-dominant="true"] {
+  --accent: var(--accent-strong);
+}
+.repurchaseCallout[data-tone="until30"],
+.repurchaseInsight[data-tone="until30"] {
+  --accent: #2563eb;
+}
+.repurchaseCallout[data-tone="mid60"],
+.repurchaseInsight[data-tone="mid60"] {
+  --accent: hsl(187 48% 38%);
+}
+.repurchaseCallout[data-tone="mid90"],
+.repurchaseInsight[data-tone="mid90"] {
+  --accent: hsl(152 46% 36%);
+}
+.repurchaseCallout[data-tone="late180"],
+.repurchaseInsight[data-tone="late180"] {
+  --accent: #ea580c;
+}
+.repurchaseCallout[data-tone="over180"],
+.repurchaseInsight[data-tone="over180"] {
+  --accent: hsl(8 58% 58%);
+}
+.repurchaseInsight[data-tone="return"] {
+  --accent: hsl(152 46% 36%);
+}
+.repurchaseInsight[data-tone="conversion"] {
+  --accent: hsl(var(--muted-foreground));
+}
+.repurchaseInsight[data-tone="ready"] {
+  --accent: hsl(var(--primary));
+}
+.repurchaseBand {
+  --band: var(--accent);
 }
 .repurchaseStage[data-revealed="false"] .repurchaseKpi,
 .repurchaseStage[data-revealed="false"] .repurchasePanel,
+.repurchaseStage[data-revealed="false"] .repurchaseCallout,
 .repurchaseStage[data-revealed="false"] .repurchaseInsight {
   opacity: 0;
 }
 .repurchaseStage[data-revealed="true"] .repurchaseKpi,
 .repurchaseStage[data-revealed="true"] .repurchasePanel,
+.repurchaseStage[data-revealed="true"] .repurchaseCallout,
 .repurchaseStage[data-revealed="true"] .repurchaseInsight {
-  animation: section-in 300ms ease-out both;
+  animation: section-in 280ms ease-out both;
 }
 .repurchaseStage[data-revealed="true"] .repurchaseKpi:nth-child(2) {
-  animation-delay: 40ms;
+  animation-delay: 50ms;
 }
 .repurchaseStage[data-revealed="true"] .repurchaseKpi:nth-child(3) {
-  animation-delay: 80ms;
+  animation-delay: 100ms;
 }
 .repurchaseStage[data-revealed="true"] .repurchasePanel {
-  animation-delay: 110ms;
+  animation-delay: 140ms;
+}
+.repurchaseStage[data-revealed="true"] .repurchaseCallout {
+  animation-delay: 180ms;
 }
 .repurchaseStage[data-revealed="true"] .repurchaseInsight:nth-child(1) {
-  animation-delay: 150ms;
+  animation-delay: 220ms;
 }
 .repurchaseStage[data-revealed="true"] .repurchaseInsight:nth-child(2) {
-  animation-delay: 190ms;
+  animation-delay: 270ms;
 }
 .repurchaseStage[data-revealed="true"] .repurchaseInsight:nth-child(3) {
-  animation-delay: 230ms;
+  animation-delay: 320ms;
 }
 .repurchaseKpis,
 .repurchaseInsights {
@@ -432,8 +503,15 @@
   gap: 12px;
   align-items: stretch;
 }
+.repurchaseMain {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(240px, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
 .repurchaseKpi,
 .repurchasePanel,
+.repurchaseCallout,
 .repurchaseInsight {
   min-width: 0;
   border-radius: var(--radius);
@@ -443,74 +521,119 @@
 .repurchaseKpi,
 .repurchaseInsight {
   display: flex;
-  min-height: 96px;
+  min-height: 104px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.repurchaseKpi {
   flex-direction: column;
   justify-content: space-between;
-  padding: 14px 16px 15px;
+}
+.repurchaseInsight {
+  align-items: center;
+}
+.repurchaseIcon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.repurchaseIcon svg {
+  width: 16px;
+  height: 16px;
 }
 .repurchaseKpiLabel,
-.repurchaseInsightLabel {
+.repurchaseInsightLabel,
+.repurchaseCalloutKicker {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   margin: 0;
   color: hsl(var(--muted-foreground));
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.3;
+}
+.repurchaseKpiLabel {
+  width: 100%;
 }
 .repurchaseKpiValue,
 .repurchaseInsightValue {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: hsl(var(--foreground));
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 650;
   letter-spacing: -0.03em;
-  line-height: 1.05;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
-.repurchasePanel {
-  padding: 16px 16px 14px;
+.repurchaseKpiValue {
+  color: var(--accent);
+}
+.repurchaseInsightValue {
+  font-size: 22px;
+}
+.repurchasePanel,
+.repurchaseCallout {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+.repurchaseCallout {
+  position: relative;
+  overflow: hidden;
 }
 .repurchaseHeading {
-  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 6px;
   color: hsl(var(--foreground));
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
 }
 .repurchaseBands {
   display: flex;
   flex-direction: column;
-  gap: 11px;
 }
 .repurchaseBand {
-  display: flex;
+  display: block;
   width: 100%;
-  flex-direction: column;
-  gap: 6px;
   margin: 0;
   padding: 0;
   border: 0;
+  border-bottom: 1px solid hsl(var(--border) / 0.65);
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: default;
 }
+.repurchaseBand:last-child {
+  border-bottom: 0;
+}
 .repurchaseBand:hover,
 .repurchaseBand:focus-visible {
   text-decoration: none;
 }
-.repurchaseBand:focus-visible {
-  outline: none;
-  border-radius: 8px;
+.repurchaseBand:hover .repurchaseFill,
+.repurchaseBand:focus-visible .repurchaseFill {
+  filter: brightness(1.08);
 }
-.repurchaseBandHead {
-  display: flex;
-  min-width: 0;
+.repurchaseBandRow {
+  display: grid;
+  grid-template-columns: minmax(148px, 220px) minmax(0, 1fr) 4.25rem;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
+  min-height: 44px;
+  padding: 8px 2px;
 }
 .repurchaseBandName {
   display: flex;
@@ -521,6 +644,14 @@
   font-size: 13px;
   font-weight: 500;
   line-height: 1.2;
+}
+.repurchaseBandName::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--band);
 }
 .repurchaseBadge {
   display: inline-flex;
@@ -535,7 +666,7 @@
   white-space: nowrap;
 }
 .repurchaseBandShare {
-  flex-shrink: 0;
+  justify-self: end;
   color: var(--band);
   font-size: 13px;
   font-weight: 650;
@@ -544,39 +675,129 @@
 }
 .repurchaseTrack {
   display: block;
-  height: 9px;
+  height: 12px;
   overflow: hidden;
   border-radius: 999px;
   background: color-mix(in srgb, hsl(var(--muted)) 78%, hsl(var(--card)));
 }
 .repurchaseFill {
   background: var(--band);
+  transition: width 420ms ease-out, filter 180ms ease-out;
+}
+.repurchaseStage[data-revealed="false"] .repurchaseFill {
+  transform: scaleX(0);
+  animation: none;
+}
+.repurchaseStage[data-revealed="true"] .repurchaseFill {
+  animation: bar-in 520ms ease-out both;
 }
 .repurchaseBands > :nth-child(2) .bar {
-  animation-delay: 40ms;
+  animation-delay: 50ms;
 }
 .repurchaseBands > :nth-child(3) .bar {
-  animation-delay: 80ms;
+  animation-delay: 100ms;
 }
 .repurchaseBands > :nth-child(4) .bar {
-  animation-delay: 120ms;
+  animation-delay: 150ms;
 }
 .repurchaseBands > :nth-child(5) .bar {
-  animation-delay: 160ms;
+  animation-delay: 200ms;
 }
 .repurchaseEmpty {
-  margin: 0;
+  margin: 8px 0 0;
   color: hsl(var(--muted-foreground));
   font-size: 13px;
+  line-height: 1.45;
 }
-.repurchaseInsightNote {
+.repurchaseCalloutKicker {
+  color: hsl(var(--foreground));
+  font-size: 13px;
+}
+.repurchaseCalloutTitle {
+  margin: 14px 0 0;
+  color: hsl(var(--foreground));
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.repurchaseCalloutBody {
+  margin: 8px 0 16px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.repurchaseCalloutAccent {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 88px;
+  margin: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 16%, transparent) 100%
+  );
+  pointer-events: none;
+}
+.repurchaseCallout .repurchaseEmpty {
+  margin-top: 14px;
+}
+.repurchaseInsightBody {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.repurchaseInsightLabel {
+  gap: 2px;
+}
+.repurchaseInsightNote,
+.repurchaseDelta {
   margin: 4px 0 0;
   color: hsl(var(--muted-foreground));
   font-size: 12px;
   font-weight: 400;
   line-height: 1.35;
 }
+.repurchaseDelta {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--foreground));
+}
+.repurchaseRingWrap {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: auto;
+}
+.repurchaseRing {
+  width: 58px;
+  height: 58px;
+}
+.repurchaseRingTrack,
+.repurchaseRingValue {
+  fill: none;
+  stroke-width: 3.2;
+}
+.repurchaseRingTrack {
+  stroke: color-mix(in srgb, hsl(var(--muted)) 80%, hsl(var(--card)));
+}
+.repurchaseRingValue {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dasharray 480ms ease-out;
+}
 @media (max-width: 860px) {
+  .repurchaseMain {
+    grid-template-columns: 1fr;
+  }
   .repurchaseKpis,
   .repurchaseInsights {
     grid-template-columns: 1fr 1fr;
@@ -595,16 +816,43 @@
   .repurchaseInsight:last-child {
     grid-column: auto;
   }
+  .repurchaseBandRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name share"
+      "track track";
+    row-gap: 8px;
+    padding: 10px 0;
+  }
+  .repurchaseBandName {
+    grid-area: name;
+  }
+  .repurchaseBandShare {
+    grid-area: share;
+  }
+  .repurchaseTrack {
+    grid-area: track;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .repurchaseStage[data-revealed="false"] .repurchaseKpi,
   .repurchaseStage[data-revealed="false"] .repurchasePanel,
+  .repurchaseStage[data-revealed="false"] .repurchaseCallout,
   .repurchaseStage[data-revealed="false"] .repurchaseInsight,
   .repurchaseStage[data-revealed="true"] .repurchaseKpi,
   .repurchaseStage[data-revealed="true"] .repurchasePanel,
+  .repurchaseStage[data-revealed="true"] .repurchaseCallout,
   .repurchaseStage[data-revealed="true"] .repurchaseInsight,
+  .repurchaseStage[data-revealed="false"] .repurchaseFill,
+  .repurchaseStage[data-revealed="true"] .repurchaseFill,
   .repurchaseBands .bar {
     opacity: 1;
     animation: none;
+    transform: none;
+    transition: none;
+  }
+  .repurchaseRingValue {
+    transform: rotate(-90deg);
+    transition: none;
   }
 }

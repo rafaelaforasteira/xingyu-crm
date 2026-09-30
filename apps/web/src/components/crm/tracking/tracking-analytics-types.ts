@@ -82,5 +82,7 @@ export interface FirstToSecondConversion {
   eligibleCustomers: number;
   convertedCustomers: number;
   observationWindowDays: number;
+  /** Percentage-point change versus a prior cohort, when that comparison exists. */
+  deltaPoints?: number | null;
 }
 export type ResolvedTrackingRange = { startDate: string; endDate: string };

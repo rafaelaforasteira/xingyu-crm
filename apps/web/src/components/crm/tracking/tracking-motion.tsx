@@ -116,10 +116,8 @@ export function AnimatedProgress({
   value: number | null;
   className?: string;
 }) {
-  const { revision } = useTrackingMotion();
   return (
     <div
-      key={revision}
       aria-hidden="true"
       className={styles.bar + " h-full rounded-full " + className}
       style={{ width: Math.max(0, Math.min(100, value ?? 0)) + "%" }}

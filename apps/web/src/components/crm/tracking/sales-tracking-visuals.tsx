@@ -1,7 +1,17 @@
 "use client";
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { UserPlus, Users, type LucideIcon } from "lucide-react";
+import {
+  ArrowRightLeft,
+  BarChart3,
+  Lightbulb,
+  PieChart,
+  Repeat,
+  Trophy,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { AnimatedMetric, AnimatedProgress, useInViewOnce, useTrackingMotion } from "./tracking-motion";
 import {
   Bar,
@@ -19,6 +29,7 @@ import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
 import { REACTIVATION_DAYS } from "./sales-tracking-rules";
 import { ConceptHelp, ChartTooltip } from "./tracking-help";
 import { METRIC_DEFINITIONS } from "./tracking-dictionary";
+import { percentagePoints } from "./financial-funnel-format";
 import { money, integer, percentage, days } from "./tracking-format";
 import type {
   PurchaseStageDistribution,
@@ -328,6 +339,8 @@ function HoverTip({
   label,
   className,
   profile,
+  tone,
+  dominant,
   style,
   children,
 }: {
@@ -337,16 +350,23 @@ function HoverTip({
   label: string;
   className: string;
   profile?: ProfileId;
+  tone?: string;
+  dominant?: boolean;
   style?: CSSProperties;
   children?: ReactNode;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const tip = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [dot, setDot] = useState(accent);
   const [box, setBox] = useState<{ left: number; top: number } | null>(null);
   const show = () => {
     closeProfileTip?.();
     closeProfileTip = () => setOpen(false);
+    const fromBand = trigger.current
+      ? getComputedStyle(trigger.current).getPropertyValue("--band").trim()
+      : "";
+    setDot(fromBand || accent);
     setOpen(true);
   };
   const hide = () => setOpen(false);
@@ -381,6 +401,8 @@ function HoverTip({
         type="button"
         className={className}
         data-profile={profile}
+        data-tone={tone}
+        data-dominant={dominant ? "true" : undefined}
         style={style}
         aria-label={label}
         onMouseEnter={show}
@@ -401,7 +423,7 @@ function HoverTip({
                 visibility: box ? "visible" : "hidden",
               }}
             >
-              <ChartTooltip accent={accent} title={title} rows={rows} />
+              <ChartTooltip accent={dot} title={title} rows={rows} />
             </div>,
             document.body,
           )
@@ -517,48 +539,105 @@ export function PurchaseStageChart({
     </Card>
   );
 }
-const REPURCHASE_COLOR: Record<string, { base: string; peak: string }> = {
-  "Até 30 dias": { base: "hsl(217 70% 64%)", peak: "#2563eb" },
-  "31–60 dias": { base: "hsl(187 38% 50%)", peak: "hsl(187 48% 38%)" },
-  "61–90 dias": { base: "hsl(152 36% 48%)", peak: "hsl(152 46% 36%)" },
-  "91–180 dias": { base: "hsl(24 70% 60%)", peak: "#ea580c" },
-  "180+ dias": { base: "hsl(8 50% 68%)", peak: "hsl(8 58% 58%)" },
-};
+const REPURCHASE_TONE = {
+  "Até 30 dias": "until30",
+  "31–60 dias": "mid60",
+  "61–90 dias": "mid90",
+  "91–180 dias": "late180",
+  "180+ dias": "over180",
+} as const;
 
 const REPURCHASE_METHOD =
   "Faixas calculadas com base no último intervalo de recompra no recorte. Média e mediana consideram os intervalos históricos até a data final.";
 
-const WITHIN_NINETY_DAYS = 90;
+const DISTRIBUTION_HELP =
+  "As faixas classificam clientes conforme o último intervalo de retorno no recorte. Média e mediana consideram os intervalos históricos até a data final.";
 
-function repurchaseBand(row: RepurchaseTimeBucket, peak: number) {
-  const tone = REPURCHASE_COLOR[row.label];
-  const dominant = peak > 0 && row.percentage === peak;
-  return {
+const WITHIN_NINETY_DAYS = 90;
+const INSUFFICIENT = "Dados insuficientes para este período.";
+
+const REPURCHASE_KPIS: Array<{
+  tone: "average" | "median" | "bridge";
+  label: string;
+  icon: LucideIcon;
+  help: string;
+  read: (summary: SalesTrackingData["summary"]) => number | null;
+}> = [
+  {
+    tone: "average",
+    label: "Tempo médio",
+    icon: BarChart3,
+    help: "Média dos intervalos válidos entre compras dos clientes considerados na análise.",
+    read: (summary) => summary.averageRepurchaseDays,
+  },
+  {
+    tone: "median",
+    label: "Mediana",
+    icon: PieChart,
+    help: "Valor central dos intervalos de recompra. Metade dos intervalos está abaixo deste valor e metade acima.",
+    read: (summary) => summary.medianRepurchaseDays,
+  },
+  {
+    tone: "bridge",
+    label: "1ª → 2ª compra",
+    icon: ArrowRightLeft,
+    help: "Tempo médio entre a primeira e a segunda compra válida dos clientes elegíveis.",
+    read: (summary) => summary.firstToSecondPurchaseDays,
+  },
+];
+
+function repurchaseConcentration(label: string) {
+  if (label.startsWith("Até ")) {
+    return `A maior concentração de recompras ocorre em ${label.charAt(0).toLowerCase()}${label.slice(1)}.`;
+  }
+  if (label.includes("+")) {
+    return `A maior concentração de recompras ocorre após ${label.replace("+", "").trim()}.`;
+  }
+  return `A maior concentração de recompras ocorre entre ${label.replace("–", " e ").replace(" dias", "")} dias.`;
+}
+
+function conversionHelp(conversion: SalesTrackingData["firstToSecondConversion"]) {
+  if (conversion == null) {
+    return "Ainda não existe uma coorte com tempo suficiente de observação neste recorte para calcular esta conversão com segurança. Use todos os perfis e números de compra para observar a coorte completa.";
+  }
+  if (conversion.rate == null) {
+    return "A coorte selecionada ainda não possui janela de observação suficiente para calcular a conversão.";
+  }
+  return METRIC_DEFINITIONS.conversion;
+}
+
+function repurchaseModel(buckets: RepurchaseTimeBucket[]) {
+  const hasReturns = buckets.some((row) => row.customers > 0);
+  const peakShare = buckets.reduce((max, row) => Math.max(max, row.percentage), 0);
+  const dominantIndex =
+    hasReturns && peakShare > 0 ? buckets.findIndex((row) => row.percentage === peakShare) : -1;
+  const bands = buckets.map((row, index) => ({
     ...row,
-    dominant,
-    fill: dominant ? (tone?.peak ?? "#2563eb") : (tone?.base ?? "hsl(var(--muted-foreground))"),
+    tone: REPURCHASE_TONE[row.label as keyof typeof REPURCHASE_TONE] ?? "neutral",
+    dominant: index === dominantIndex,
+  }));
+  const withinNinety = hasReturns
+    ? buckets
+        .filter((row) => row.maxDays != null && row.maxDays <= WITHIN_NINETY_DAYS)
+        .reduce((sum, row) => sum + Math.round(row.percentage * 10) / 10, 0)
+    : null;
+  return {
+    hasReturns,
+    bands,
+    dominant: dominantIndex >= 0 ? bands[dominantIndex]! : null,
+    withinNinety,
   };
 }
 
 export function RepurchaseAnalysis({ data }: { data: SalesTrackingData }) {
   const { summary, firstToSecondConversion: conversion } = data;
   const reveal = useInViewOnce<HTMLDivElement>(0.2);
-  const hasReturns = data.repurchaseBuckets.some((row) => row.customers > 0);
-  const peakShare = data.repurchaseBuckets.reduce((max, row) => Math.max(max, row.percentage), 0);
-  const bands = data.repurchaseBuckets.map((row) => repurchaseBand(row, peakShare));
-  const dominant = hasReturns ? bands.find((band) => band.dominant) ?? null : null;
-  const withinNinety = data.repurchaseBuckets
-    .filter((row) => row.maxDays != null && row.maxDays <= WITHIN_NINETY_DAYS)
-    .reduce((sum, row) => sum + Math.round(row.percentage * 10) / 10, 0);
-  const kpis: Array<{ label: string; value: number | null; help: string }> = [
-    { label: "Tempo médio", value: summary.averageRepurchaseDays, help: METRIC_DEFINITIONS.repurchase },
-    { label: "Mediana", value: summary.medianRepurchaseDays, help: METRIC_DEFINITIONS.median },
-    {
-      label: "1ª → 2ª compra",
-      value: summary.firstToSecondPurchaseDays,
-      help: METRIC_DEFINITIONS.firstToSecond,
-    },
-  ];
+  const { hasReturns, bands, dominant, withinNinety } = repurchaseModel(data.repurchaseBuckets);
+  const conversionRate = conversion?.rate ?? null;
+  const conversionDelta =
+    conversion?.deltaPoints != null && Number.isFinite(conversion.deltaPoints)
+      ? conversion.deltaPoints
+      : null;
   return (
     <Card className="min-w-0 rounded-2xl shadow-soft">
       <CardHeader>
@@ -577,125 +656,209 @@ export function RepurchaseAnalysis({ data }: { data: SalesTrackingData }) {
           data-revealed={reveal.seen ? "true" : "false"}
         >
           <div className={styles.repurchaseKpis}>
-            {kpis.map((kpi) => (
-              <article key={kpi.label} className={styles.repurchaseKpi}>
-                <p className={styles.repurchaseKpiLabel}>
-                  {kpi.label}
-                  <ConceptHelp label={kpi.label} text={kpi.help} />
-                </p>
-                <p className={styles.repurchaseKpiValue}>
-                  <AnimatedMetric value={kpi.value} format={days} duration={520} active={reveal.seen} />
-                </p>
-              </article>
-            ))}
+            {REPURCHASE_KPIS.map((kpi) => {
+              const Icon = kpi.icon;
+              return (
+                <article key={kpi.tone} className={styles.repurchaseKpi} data-tone={kpi.tone}>
+                  <p className={styles.repurchaseKpiLabel}>
+                    <span className={styles.repurchaseIcon} aria-hidden="true">
+                      <Icon />
+                    </span>
+                    <span>
+                      {kpi.label}
+                      <ConceptHelp label={kpi.label} text={kpi.help} />
+                    </span>
+                  </p>
+                  <p className={styles.repurchaseKpiValue}>
+                    <AnimatedMetric
+                      value={kpi.read(summary)}
+                      format={days}
+                      duration={520}
+                      active={reveal.seen}
+                    />
+                  </p>
+                </article>
+              );
+            })}
           </div>
 
-          <section className={styles.repurchasePanel} aria-label="Distribuição do tempo de recompra">
-            <h4 className={styles.repurchaseHeading}>Distribuição do tempo de recompra</h4>
-            {hasReturns ? (
-              <div className={styles.repurchaseBands}>
-                {bands.map((band) => (
-                  <HoverTip
-                    key={band.label}
-                    title={band.label}
-                    accent={band.fill}
-                    className={styles.repurchaseBand ?? ""}
-                    style={{ "--band": band.fill } as CSSProperties}
-                    label={
-                      band.label +
-                      ". " +
-                      percentage(band.percentage) +
-                      " dos compradores retornaram nesse intervalo."
-                    }
-                    rows={[
-                      [
-                        "Participação",
-                        percentage(band.percentage) + " dos compradores retornaram nesse intervalo",
-                      ],
-                      ["Compradores", integer(band.customers)],
-                      ...(band.dominant ? [["Leitura", "Maior faixa"] as [string, string]] : []),
-                    ]}
-                  >
-                    <span className={styles.repurchaseBandHead}>
-                      <span className={styles.repurchaseBandName}>
-                        {band.label}
-                        {band.dominant ? <span className={styles.repurchaseBadge}>Maior faixa</span> : null}
+          <div className={styles.repurchaseMain}>
+            <section className={styles.repurchasePanel} aria-label="Distribuição do tempo de recompra">
+              <h4 className={styles.repurchaseHeading}>
+                Distribuição do tempo de recompra
+                <ConceptHelp label="Distribuição do tempo de recompra" text={DISTRIBUTION_HELP} />
+              </h4>
+              {hasReturns ? (
+                <div className={styles.repurchaseBands}>
+                  {bands.map((band) => (
+                    <HoverTip
+                      key={band.label}
+                      title={band.label}
+                      accent="hsl(var(--muted-foreground))"
+                      tone={band.tone}
+                      dominant={band.dominant}
+                      className={styles.repurchaseBand ?? ""}
+                      label={
+                        band.label +
+                        ". " +
+                        percentage(band.percentage) +
+                        ". " +
+                        integer(band.customers) +
+                        " compradores."
+                      }
+                      rows={[
+                        ["Participação", percentage(band.percentage)],
+                        ["Compradores", integer(band.customers)],
+                        ...(band.dominant ? [["Leitura", "Maior faixa"] as [string, string]] : []),
+                      ]}
+                    >
+                      <span className={styles.repurchaseBandRow}>
+                        <span className={styles.repurchaseBandName}>
+                          {band.label}
+                          {band.dominant ? <span className={styles.repurchaseBadge}>Maior faixa</span> : null}
+                        </span>
+                        <span className={styles.repurchaseTrack}>
+                          <AnimatedProgress value={band.percentage} className={styles.repurchaseFill ?? ""} />
+                        </span>
+                        <span className={styles.repurchaseBandShare}>
+                          <AnimatedMetric
+                            value={band.percentage}
+                            format={percentage}
+                            duration={460}
+                            active={reveal.seen}
+                          />
+                        </span>
                       </span>
-                      <span className={styles.repurchaseBandShare}>
-                        <AnimatedMetric
-                          value={band.percentage}
-                          format={percentage}
-                          duration={460}
-                          active={reveal.seen}
-                        />
-                      </span>
-                    </span>
-                    <span className={styles.repurchaseTrack}>
-                      <AnimatedProgress value={band.percentage} className={styles.repurchaseFill ?? ""} />
-                    </span>
-                  </HoverTip>
-                ))}
-              </div>
-            ) : (
-              <p className={styles.repurchaseEmpty}>Nenhuma recompra encontrada neste recorte.</p>
-            )}
-          </section>
+                    </HoverTip>
+                  ))}
+                </div>
+              ) : (
+                <p className={styles.repurchaseEmpty}>{INSUFFICIENT}</p>
+              )}
+            </section>
+
+            <aside className={styles.repurchaseCallout} data-tone={dominant?.tone ?? "neutral"}>
+              <p className={styles.repurchaseCalloutKicker}>
+                <span className={styles.repurchaseIcon} aria-hidden="true">
+                  <Lightbulb />
+                </span>
+                Insights
+              </p>
+              {dominant ? (
+                <>
+                  <p className={styles.repurchaseCalloutTitle}>{repurchaseConcentration(dominant.label)}</p>
+                  <p className={styles.repurchaseCalloutBody}>
+                    Essa faixa representa{" "}
+                    <AnimatedMetric
+                      value={dominant.percentage}
+                      format={percentage}
+                      duration={480}
+                      active={reveal.seen}
+                    />{" "}
+                    dos clientes que recompraram, indicando o principal ciclo de retorno da base analisada.
+                  </p>
+                  <span className={styles.repurchaseCalloutAccent} aria-hidden="true" />
+                </>
+              ) : (
+                <p className={styles.repurchaseEmpty}>{INSUFFICIENT}</p>
+              )}
+            </aside>
+          </div>
 
           <div className={styles.repurchaseInsights}>
-            <article className={styles.repurchaseInsight}>
-              <p className={styles.repurchaseInsightLabel}>Faixa predominante</p>
-              <p className={styles.repurchaseInsightValue}>{dominant ? dominant.label : "—"}</p>
-              <p className={styles.repurchaseInsightNote}>
-                {dominant ? (
-                  <AnimatedMetric
-                    value={dominant.percentage}
-                    format={percentage}
-                    duration={480}
-                    active={reveal.seen}
-                  />
-                ) : (
-                  "Sem recompra neste recorte"
-                )}
-              </p>
+            <article
+              className={styles.repurchaseInsight}
+              data-tone={dominant?.tone ?? "neutral"}
+            >
+              <span className={styles.repurchaseIcon} aria-hidden="true">
+                <Trophy />
+              </span>
+              <div className={styles.repurchaseInsightBody}>
+                <p className={styles.repurchaseInsightLabel}>Faixa predominante</p>
+                <p className={styles.repurchaseInsightValue}>{dominant ? dominant.label : "—"}</p>
+                <p className={styles.repurchaseInsightNote}>
+                  {dominant ? (
+                    <AnimatedMetric
+                      value={dominant.percentage}
+                      format={percentage}
+                      duration={480}
+                      active={reveal.seen}
+                    />
+                  ) : (
+                    INSUFFICIENT
+                  )}
+                </p>
+              </div>
             </article>
-            <article className={styles.repurchaseInsight}>
-              <p className={styles.repurchaseInsightLabel}>Retorno em até 90 dias</p>
-              <p className={styles.repurchaseInsightValue}>
-                {hasReturns ? (
-                  <AnimatedMetric value={withinNinety} format={percentage} duration={480} active={reveal.seen} />
-                ) : (
-                  "—"
-                )}
-              </p>
-              <p className={styles.repurchaseInsightNote}>dos clientes que recompraram</p>
+            <article className={styles.repurchaseInsight} data-tone="return">
+              <span className={styles.repurchaseIcon} aria-hidden="true">
+                <Users />
+              </span>
+              <div className={styles.repurchaseInsightBody}>
+                <p className={styles.repurchaseInsightLabel}>Retorno em até 90 dias</p>
+                <p className={styles.repurchaseInsightValue}>
+                  {withinNinety != null ? (
+                    <AnimatedMetric
+                      value={withinNinety}
+                      format={percentage}
+                      duration={480}
+                      active={reveal.seen}
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </p>
+                <p className={styles.repurchaseInsightNote}>
+                  {withinNinety != null ? "dos clientes que recompraram" : INSUFFICIENT}
+                </p>
+              </div>
+              {withinNinety != null ? (
+                <span className={styles.repurchaseRingWrap} aria-hidden="true">
+                  <svg className={styles.repurchaseRing} viewBox="0 0 36 36">
+                    <circle className={styles.repurchaseRingTrack} cx="18" cy="18" r="15.2" />
+                    <circle
+                      className={styles.repurchaseRingValue}
+                      cx="18"
+                      cy="18"
+                      r="15.2"
+                      pathLength={100}
+                      style={{ strokeDasharray: reveal.seen ? `${withinNinety} 100` : "0 100" }}
+                    />
+                  </svg>
+                </span>
+              ) : null}
             </article>
-            <article className={styles.repurchaseInsight}>
-              <p className={styles.repurchaseInsightLabel}>
-                Conversão 1ª → 2ª
-                <ConceptHelp
-                  label="Conversão 1ª → 2ª"
-                  text={
-                    conversion?.rate != null
-                      ? METRIC_DEFINITIONS.conversion
-                      : "Ainda não existe uma coorte com tempo suficiente de observação neste recorte para calcular esta conversão com segurança. Use todos os perfis e números de compra para observar a coorte completa."
-                  }
-                />
-              </p>
-              <p className={styles.repurchaseInsightValue}>
-                {conversion?.rate != null ? (
-                  <AnimatedMetric
-                    value={conversion.rate}
-                    format={percentage}
-                    duration={480}
-                    active={reveal.seen}
-                  />
-                ) : (
-                  "—"
-                )}
-              </p>
-              <p className={styles.repurchaseInsightNote}>
-                {conversion?.rate != null ? "da coorte observada" : "Dados insuficientes para o período"}
-              </p>
+            <article
+              className={styles.repurchaseInsight}
+              data-tone={conversionRate != null ? "ready" : "conversion"}
+            >
+              <span className={styles.repurchaseIcon} aria-hidden="true">
+                <Repeat />
+              </span>
+              <div className={styles.repurchaseInsightBody}>
+                <p className={styles.repurchaseInsightLabel}>
+                  Conversão 1ª → 2ª
+                  <ConceptHelp label="Conversão 1ª → 2ª" text={conversionHelp(conversion)} />
+                </p>
+                <p className={styles.repurchaseInsightValue}>
+                  {conversionRate != null ? (
+                    <AnimatedMetric
+                      value={conversionRate}
+                      format={percentage}
+                      duration={480}
+                      active={reveal.seen}
+                    />
+                  ) : (
+                    "—"
+                  )}
+                </p>
+                <p className={styles.repurchaseInsightNote}>
+                  {conversionRate != null ? "da coorte observada" : "Dados insuficientes para o período"}
+                </p>
+                {conversionDelta != null ? (
+                  <p className={styles.repurchaseDelta}>{percentagePoints(conversionDelta)}</p>
+                ) : null}
+              </div>
             </article>
           </div>
         </div>
