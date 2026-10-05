@@ -823,3 +823,77 @@
     transform: none;
   }
 }
+
+/* Channel readings: a controlled column with shared card geometry. */
+.insights.insights {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.insights > h3 {
+  margin: 0 0 2px;
+}
+.quickInsight.quickInsight {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--reading-color) 7%, var(--tracking-surface));
+  border: 1px solid var(--tracking-border);
+}
+.quickInsight[data-insight="champion"] {
+  --reading-color: #f4c542;
+}
+.quickInsight[data-insight="growth"] {
+  --reading-color: #5dd62c;
+}
+.quickInsight[data-insight="lowest"] {
+  --reading-color: #e63e46;
+}
+.quickInsight.quickInsight:hover {
+  background: color-mix(in srgb, var(--reading-color) 9%, var(--tracking-surface));
+  border-color: var(--tracking-border);
+}
+.quickInsight > .coverageHead {
+  margin: 0;
+}
+.quickInsight .quickGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto auto;
+  gap: 5px 12px;
+}
+.quickInsight .quickIdentity {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin-bottom: 7px;
+}
+.quickInsight .quickMoney {
+  grid-column: 1;
+  grid-row: 2;
+}
+.quickInsight .quickPercent {
+  grid-column: 2;
+  grid-row: 2;
+}
+.quickInsight .quickMoneyCaption {
+  grid-column: 1;
+  grid-row: 3;
+}
+.quickInsight .quickPercentCaption {
+  grid-column: 2;
+  grid-row: 3;
+}
+.quickInsight .quickName {
+  white-space: normal;
+  overflow: visible;
+  font-size: 15px;
+}
+.quickInsight .quickCaption {
+  white-space: normal;
+  overflow: visible;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.quickInsight .quickFigure {
+  font-size: 16px;
+}

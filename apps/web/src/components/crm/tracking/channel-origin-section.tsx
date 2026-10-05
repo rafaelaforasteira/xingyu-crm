@@ -92,7 +92,8 @@ export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
           animate={reveal.seen}
         />
 
-        <aside className={styles.insights} aria-label="Insights estratégicos">
+        <aside className={styles.insights} aria-label="Leituras dos canais">
+          <h3 className={styles.coverageTitle}>Leituras dos canais</h3>
           {view.champion ? (
             <QuickInsightCard
               label="Canal campeão"
@@ -491,7 +492,7 @@ function QuickInsightCard({
 }) {
   const accent = CHANNEL_COLORS[channel];
   return (
-    <div className={styles.insightCard + " " + styles.quickInsight}>
+    <div className={styles.insightCard + " " + styles.quickInsight} data-insight={label === "Canal campeão" ? "champion" : label === "Maior crescimento" ? "growth" : "lowest"}>
       <InsightHeading title={label} help={help} />
       <div className={styles.quickGrid}>
         <div className={styles.quickIdentity}>
