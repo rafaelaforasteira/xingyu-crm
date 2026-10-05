@@ -93,7 +93,6 @@ export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
         />
 
         <aside className={styles.insights} aria-label="Leituras dos canais">
-          <h3 className={styles.coverageTitle}>Leituras dos canais</h3>
           {view.champion ? (
             <QuickInsightCard
               label="Canal campeão"
@@ -491,8 +490,19 @@ function QuickInsightCard({
   percentTipRows: Array<[string, string]>;
 }) {
   const accent = CHANNEL_COLORS[channel];
+  const artwork =
+    label === "Canal campeão" ? "trophy" : label === "Maior crescimento" ? "growth-v2" : "decline-v2";
+
   return (
     <div className={styles.insightCard + " " + styles.quickInsight} data-insight={label === "Canal campeão" ? "champion" : label === "Maior crescimento" ? "growth" : "lowest"}>
+      <img
+        src={"/tracking/channel-insights/" + artwork + ".png"}
+        className={styles.insightArtwork}
+        alt=""
+        aria-hidden="true"
+        width={64}
+        height={64}
+      />
       <InsightHeading title={label} help={help} />
       <div className={styles.quickGrid}>
         <div className={styles.quickIdentity}>
