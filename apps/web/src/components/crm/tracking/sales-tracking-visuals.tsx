@@ -27,7 +27,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
 import { REACTIVATION_DAYS } from "./sales-tracking-rules";
-import { ConceptHelp, ChartTooltip } from "./tracking-help";
+import { ConceptHelp, ChartTooltip, TrackingTooltipPortal, TRACKING_TOOLTIP_LAYER } from "./tracking-help";
 import { METRIC_DEFINITIONS } from "./tracking-dictionary";
 import { percentagePoints } from "./financial-funnel-format";
 import { money, integer, percentage, days } from "./tracking-format";
@@ -37,26 +37,11 @@ import type {
   SalesTrackingData,
 } from "./sales-tracking-types";
 import styles from "./tracking-overview.module.css";
+import { purchaseStageFill } from "./purchase-stage-presentation";
 export { SalesHero } from "./sales-overview";
 
 const SURFACE =
   "min-w-0 rounded-2xl border-0 bg-[color-mix(in_srgb,hsl(var(--muted))_25%,hsl(var(--card)))] shadow-none";
-
-/** Intensity scale: soft blue for low volume, greens for higher volume, darkest emerald on the peak. */
-const STAGE_TONE = {
-  low: "hsl(228 52% 70%)",
-  mid: "hsl(152 44% 46%)",
-  high: "hsl(154 58% 34%)",
-  peak: "hsl(162 64% 22%)",
-} as const;
-
-export function purchaseStageFill(orders: number, peak: number) {
-  if (!Number.isFinite(orders) || orders <= 0) return STAGE_TONE.low;
-  if (peak > 0 && orders === peak) return STAGE_TONE.peak;
-  if (orders <= 40) return STAGE_TONE.low;
-  if (orders <= 80) return STAGE_TONE.mid;
-  return STAGE_TONE.high;
-}
 
 export function CustomerMix({ data }: { data: SalesTrackingData }) {
   const reveal = useInViewOnce<HTMLDivElement>(0.25);
@@ -94,8 +79,8 @@ function compactProfileMoney(value: number | null) {
 type ProfileId = "new" | "existing";
 
 const PROFILE_ACCENT: Record<ProfileId, string> = {
-  new: "#2563eb",
-  existing: "#ea580c",
+  new: "var(--tracking-data-blue, #3478f6)",
+  existing: "var(--tracking-data-orange, #f28a20)",
 };
 
 type CustomerProfile = {
@@ -267,9 +252,11 @@ function ProfileDetail({
   return (
     <article className={styles.profileDetail} data-profile={profile.id}>
       <div className={styles.profileDetailLabel}>
-        <span className={styles.profileDot} data-profile={profile.id} aria-hidden />
         <span>{title}</span>
       </div>
+      <span className={styles.profileDetailTrack} aria-hidden="true">
+        <AnimatedProgress value={value ?? 0} className={styles.profileDetailFill} />
+      </span>
       <ShareValue
         profile={profile}
         animate={animate}
@@ -385,12 +372,13 @@ function HoverTip({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    const dismiss = () => setOpen(false);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", dismiss, true);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
@@ -416,7 +404,8 @@ function HoverTip({
         ? createPortal(
             <div
               ref={tip}
-              className="pointer-events-none fixed z-40"
+              data-module-theme="tracking"
+              className={TRACKING_TOOLTIP_LAYER}
               style={{
                 left: box?.left ?? -9999,
                 top: box?.top ?? 0,
@@ -440,11 +429,9 @@ export function PurchaseStageChart({
 }) {
   const reduced = useReducedMotion();
   const { initial } = useTrackingMotion();
-  const peak = data.purchaseStages.reduce((max, stage) => Math.max(max, stage.orders), 0);
-  const fillFor = (orders: number) => purchaseStageFill(orders, peak);
   return (
     <Card
-      className={SURFACE + " flex h-full flex-col " + styles.mixCard}
+      className={SURFACE + " flex h-full flex-col " + styles.mixCard + " " + styles.purchaseStageCard}
       style={{ "--delay": "40ms" } as CSSProperties}
     >
       <CardHeader className="space-y-1 px-5 pb-0 pt-5">
@@ -470,8 +457,8 @@ export function PurchaseStageChart({
             >
               <CartesianGrid
                 vertical={false}
-                stroke="hsl(var(--muted-foreground) / 0.1)"
-                strokeDasharray="2 6"
+                stroke="var(--tracking-chart-grid, hsl(var(--muted-foreground) / 0.1))"
+                strokeOpacity={0.45}
               />
               <XAxis
                 dataKey="stage"
@@ -489,19 +476,24 @@ export function PurchaseStageChart({
                 tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               />
               <Tooltip
-                cursor={{ fill: "hsl(var(--muted-foreground) / 0.06)" }}
+                isAnimationActive={false}
+                shared={false}
+                cursor={false}
+                wrapperStyle={{ outline: "none", pointerEvents: "none" }}
                 content={({ active, payload }) => {
                   const row = payload?.[0]?.payload as PurchaseStageDistribution | undefined;
                   return active && row ? (
-                    <ChartTooltip
-                      title={row.stage + " compra"}
-                      accent={fillFor(row.orders)}
-                      rows={[
-                        ["Pedidos", integer(row.orders)],
-                        ["Participação", percentage(row.percentage) + " do total"],
-                        ["Receita líquida", money(row.revenue)],
-                      ]}
-                    />
+                    <TrackingTooltipPortal resetKey={row.stage}>
+                      <ChartTooltip
+                        title={row.stage + " compra"}
+                        accent={purchaseStageFill(row.stage)}
+                        rows={[
+                          ["Pedidos", integer(row.orders)],
+                          ["Participação", percentage(row.percentage) + " do total"],
+                          ["Receita líquida", money(row.revenue)],
+                        ]}
+                      />
+                    </TrackingTooltipPortal>
                   ) : null;
                 }}
               />
@@ -526,13 +518,13 @@ export function PurchaseStageChart({
                   }}
                 />
                 {data.purchaseStages.map((stage) => (
-                  <Cell key={stage.stage} fill={fillFor(stage.orders)} />
+                  <Cell key={stage.stage} fill={purchaseStageFill(stage.stage)} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
           Um mesmo comprador pode gerar uma primeira compra e uma recompra no período.
         </p>
       </CardContent>

@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useId, useRef, useState, type ReactNode, type CSSProperties } from "react";
+import { useLayoutEffect, useEffect, useId, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
+
+export const TRACKING_TOOLTIP_LAYER = "pointer-events-none fixed z-[90]";
 
 /** The shared Popover has a modal backdrop, so it cannot provide hover tooltips.
  * This small local tooltip supports focus, Escape, touch and hoverable content. */
@@ -101,6 +103,61 @@ export function ConceptHelp({
           </div>,
           document.body,
         )}
+    </>
+  );
+}
+/** Moves a Recharts tooltip out of chart overflow and drops it as soon as the page scrolls or resizes. */
+export function TrackingTooltipPortal({
+  children,
+  resetKey,
+}: {
+  children: ReactNode;
+  resetKey: string;
+}) {
+  const measure = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const wrapper = measure.current?.closest(".recharts-tooltip-wrapper");
+    if (!(wrapper instanceof HTMLElement)) return;
+    let dismissed = false;
+    const place = () => {
+      if (dismissed) return;
+      const rect = wrapper.getBoundingClientRect();
+      const width = measure.current?.offsetWidth ?? rect.width;
+      const height = measure.current?.offsetHeight ?? rect.height;
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+      const top = Math.max(12, Math.min(rect.top, window.innerHeight - height - 12));
+      setBox((current) => (current && current.left === left && current.top === top ? current : { left, top }));
+    };
+    const dismiss = () => {
+      dismissed = true;
+      setBox(null);
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(wrapper);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      dismissed = true;
+      observer.disconnect();
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [resetKey]);
+  return (
+    <>
+      <div ref={measure} style={{ visibility: "hidden" }} aria-hidden="true">
+        {children}
+      </div>
+      {box
+        ? createPortal(
+            <div role="tooltip" className={TRACKING_TOOLTIP_LAYER} style={{ left: box.left, top: box.top }}>
+              {children}
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
