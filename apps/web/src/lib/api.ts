@@ -190,8 +190,8 @@ async function request<T>(
       (error instanceof Error && error.name === "AbortError");
     throw new ApiError(
       aborted
-        ? "A API do Xingyu CRM demorou para responder. Tente novamente."
-        : "Não foi possível conectar à API do Xingyu CRM.",
+        ? "A API do BRAINX demorou para responder. Tente novamente."
+        : "Não foi possível conectar à API do BRAINX.",
       0,
     );
   } finally {
@@ -223,11 +223,11 @@ async function request<T>(
         : null;
     const message =
       response.status === 502
-        ? "Não foi possível conectar à API do Xingyu CRM."
+        ? "Não foi possível conectar à API do BRAINX."
         : response.status === 503
         ? "O banco de dados local nÃ£o estÃ¡ disponÃ­vel. Inicie o ambiente com pnpm dev:local."
         : response.status >= 500
-          ? "O Xingyu CRM encontrou um erro ao processar a solicitação."
+          ? "O BRAINX encontrou um erro ao processar a solicitação."
           : (serverMessage ?? `Erro ${response.status}`);
     throw new ApiError(message, response.status, body);
   }

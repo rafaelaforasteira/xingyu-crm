@@ -18,6 +18,9 @@ import { can, canOpenPath } from "@/lib/access-policy";
 import { Button } from "@/components/ui/button";
 import { SidebarUserIdentity } from "@/components/layout/sidebar-user-identity";
 
+import { SidebarTooltip } from "./sidebar-tooltip";
+import "./sidebar-shell.css";
+
 const PIPELINES_HREF = "/pipelines";
 const PIPELINES_NAV_STALE_TIME = 3 * 60_000;
 
@@ -43,9 +46,9 @@ function SidebarNavLink({
   testId?: string;
 }) {
   return (
-    <Link
+    <SidebarTooltip label={label} enabled={collapsed}><Link
       href={href}
-      title={label}
+      aria-label={label}
       aria-current={active ? "page" : undefined}
       data-testid={testId}
       onClick={() => onNavigate(href)}
@@ -70,7 +73,7 @@ function SidebarNavLink({
           ) : null}
         </>
       ) : null}
-    </Link>
+    </Link></SidebarTooltip>
   );
 }
 
@@ -110,9 +113,9 @@ function PipelinesNavSection({
 
   if (collapsed) {
     return (
-      <Link
+      <SidebarTooltip label={item.label} enabled><Link
         href={basePath}
-        title={item.label}
+        aria-label={item.label}
         aria-current={sectionActive ? "page" : undefined}
         onClick={() => onNavigate(basePath)}
         onMouseEnter={() => onPrefetch(basePath)}
@@ -122,7 +125,7 @@ function PipelinesNavSection({
         )}
       >
         <Icon className="h-4 w-4" />
-      </Link>
+      </Link></SidebarTooltip>
     );
   }
 
@@ -269,8 +272,12 @@ export function Sidebar() {
   const router = useRouter();
   const { user } = useAuth();
   const [pendingHref, setPendingHref] = React.useState<string | null>(null);
-  const collapsed = useUiStore((s) => s.sidebarCollapsed);
+  const storedCollapsed = useUiStore((s) => s.sidebarCollapsed);
+  React.useLayoutEffect(() => {
+    try { useUiStore.getState().setSidebarCollapsed(localStorage.getItem("crm.sidebar.collapsed") === "true"); } catch { /* Preserve the default when storage is unavailable. */ }
+  }, []);
   const mobileOpen = useUiStore((s) => s.sidebarMobileOpen);
+  const collapsed = storedCollapsed && !mobileOpen;
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setMobileOpen = useUiStore((s) => s.setSidebarMobileOpen);
 
@@ -325,33 +332,33 @@ export function Sidebar() {
   const content = (
     <aside
       data-testid="beta-sidebar"
+      data-collapsed={collapsed}
       className={cn(
-        "flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
+        "crm-sidebar flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-[240ms] motion-reduce:transition-none",
         collapsed ? "w-[68px]" : "w-60",
       )}
     >
-      <div className="flex h-14 items-center justify-between gap-2 border-b border-sidebar-border px-3">
+      <div className="crm-sidebar-brand flex items-center gap-2 border-b border-sidebar-border px-3">
         <Link
           href={homeHref}
           className="flex min-w-0 items-center gap-2.5"
+          aria-label={collapsed ? "BRAINX" : undefined}
           onClick={() => handleNavigate(homeHref)}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-sm font-bold text-primary-foreground shadow-soft">
-            X
-          </div>
+          <img src="/brand/brainx-mark.png" alt="" width={32} height={32} className="h-8 w-8 shrink-0 object-contain" decoding="async" />
           {!collapsed ? (
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold tracking-tight text-white">{APP_NAME}</p>
-              <p className="truncate text-[11px] text-sidebar-muted">Gestão comercial</p>
             </div>
           ) : null}
         </Link>
         <Button
           variant="ghost"
           size="icon"
-          className="hidden h-7 w-7 shrink-0 text-sidebar-muted hover:bg-white/10 hover:text-white lg:inline-flex"
+          className="crm-sidebar-toggle hidden h-7 w-7 shrink-0 text-sidebar-muted hover:bg-white/10 hover:text-white lg:inline-flex"
           onClick={toggleSidebar}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+          aria-expanded={!collapsed}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
@@ -441,20 +448,20 @@ export function Sidebar() {
           onPrefetch={handlePrefetch}
           testId="beta-nav-settings"
         />
-        <div data-testid="sidebar-user-footer">
+        <SidebarTooltip label={user?.name ?? "Perfil"} enabled={collapsed}><div data-testid="sidebar-user-footer">
           <SidebarUserIdentity
             name={user?.name}
             avatarUrl={user?.avatarUrl}
             collapsed={collapsed}
           />
-        </div>
+        </div></SidebarTooltip>
       </div>
     </aside>
   );
 
   return (
     <>
-      <div className="sticky top-0 hidden h-dvh shrink-0 lg:block">{content}</div>
+      <div className="crm-sidebar-frame sticky top-0 hidden h-dvh shrink-0 lg:block">{content}</div>
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">
           <button

@@ -41,7 +41,7 @@ describe("beta navigation", () => {
       expect.objectContaining({ href: "/orders", label: "Pedidos" }),
     );
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
-      expect.objectContaining({ href: "/tracking/vendas", label: "Vendas" }),
+      expect.objectContaining({ href: "/tracking/vendas", label: "Visão Geral" }),
     );
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/finance", label: "Financeiro" }),

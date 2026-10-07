@@ -3,7 +3,7 @@ export const DEMO_USER_ID = "demo-admin";
 export const DEMO_USER_NAME = "Raffaela";
 export const DEMO_TEAM_ID = "team-gestao";
 
-export const APP_NAME = "Xingyu CRM";
+export const APP_NAME = "BRAINX";
 export const APP_VERSION = "0.1.0";
 
 export const DEFAULT_PAGE_SIZE = 20;

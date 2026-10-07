@@ -45,7 +45,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
     });
   } catch {
     return NextResponse.json(
-      { message: "Não foi possível conectar à API do Xingyu CRM." },
+      { message: "Não foi possível conectar à API do BRAINX." },
       { status: 502 },
     );
   }

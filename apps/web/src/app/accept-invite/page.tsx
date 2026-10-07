@@ -35,7 +35,7 @@ function AcceptInviteContent() {
     <main className="flex min-h-dvh items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Bem-vinda à Xingyu CRM</CardTitle>
+          <CardTitle>Bem-vinda ao BRAINX</CardTitle>
           <p className="text-sm text-muted-foreground">Ative sua conta e crie uma senha segura.</p>
         </CardHeader>
         <CardContent className="space-y-4">

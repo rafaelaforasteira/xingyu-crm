@@ -33,7 +33,7 @@ function isInstagramOrganic(origin: TrackingAttribution) {
   return origin.placement?.toUpperCase() === "INSTAGRAM";
 }
 export const METRIC_DEFINITIONS = {
-  grossSales: "Valor total gerado pelas vendas antes dos ajustes considerados pelo FAROL.",
+  grossSales: "Valor total gerado pelas vendas antes dos ajustes considerados pelo BRAINX.",
   netSales:
     "Vendas brutas menos cancelamentos e reembolsos conhecidos até a data final. Valores em recuperação não entram no líquido.",
   validOrder:
@@ -64,7 +64,7 @@ export const METRIC_DEFINITIONS = {
     "Intervalo entre a primeira e a segunda compra válida dos compradores do recorte que já chegaram à segunda.",
   conversion: `Coorte adquirida no período, com ${FIRST_TO_SECOND_WINDOW_DAYS} dias completos de observação até a data final. Mede quem fez a segunda compra nessa janela; indisponível com filtros de perfil ou número.`,
   reactivation: `Cliente da base que retorna após ${REACTIVATION_DAYS} dias ou mais sem comprar. A taxa usa clientes que chegaram a essa inatividade no período, inclusive quem não voltou.`,
-  coverage: "Percentual da receita líquida em que o FAROL conseguiu identificar uma origem.",
+  coverage: "Percentual da receita líquida em que o BRAINX conseguiu identificar uma origem.",
   championChannel:
     "Canal com a maior receita líquida no período e a participação dessa receita no total líquido.",
   fastestGrowth:

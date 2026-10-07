@@ -1,0 +1,25 @@
+.crm-sidebar { --shell-surface: #18181d; --shell-hover: #232329; --shell-border: #303038; --shell-text: #f5f5f7; --sidebar-background: 240 9% 10%; --sidebar-foreground: 240 11% 97%; --sidebar-muted: 240 6% 66%; --sidebar-border: 240 8% 20%; background: var(--shell-surface); color: var(--shell-text); }
+.crm-sidebar nav a:hover { background: var(--shell-hover); }
+.crm-sidebar a[aria-current="page"] { background: hsl(var(--primary) / .16); color: var(--shell-text); box-shadow: inset 2px 0 hsl(var(--primary) / .8); }
+.crm-sidebar a[aria-current="page"] > svg { color: color-mix(in srgb, hsl(var(--primary)) 70%, white); }
+.crm-sidebar :is(a,button):focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 2px; }
+.crm-sidebar-tip-trigger { display: block; }
+.crm-sidebar-tip { position: fixed; z-index: 100; pointer-events: none; transform: translateY(-50%); border: 1px solid hsl(var(--border)); border-radius: 8px; background: hsl(var(--popover)); color: hsl(var(--popover-foreground)); padding: 7px 10px; font-size: 12px; box-shadow: 0 4px 12px #0002; white-space: nowrap; }
+@media (min-width: 1024px) {
+  .crm-sidebar-frame { padding: 12px; padding-right: 16px; }
+  .crm-sidebar-frame .crm-sidebar { height: calc(100dvh - 24px); border: 1px solid var(--shell-border); border-radius: 16px; box-shadow: 0 4px 18px #00000014; }
+  .crm-sidebar-brand { position: relative; }
+  .crm-sidebar-toggle { position: absolute; right: -14px; top: 14px; border: 1px solid var(--shell-border); background: var(--shell-hover); border-radius: 9px; color: hsl(var(--primary)); }
+  .crm-sidebar[data-collapsed="true"] .crm-sidebar-brand { justify-content: center; padding: 0; }
+  .crm-sidebar[data-collapsed="true"] nav { padding-top: 12px; }
+  .crm-sidebar[data-collapsed="true"] nav > div { margin-top: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .crm-sidebar, .crm-sidebar * { transition: none !important; } }
+
+/* Compact BRAINX brand row; compact mode stacks only the mark and control. */
+.crm-sidebar-brand { display: flex; align-items: center; justify-content: space-between; min-height: 56px; gap: 8px; padding-top: 10px; padding-bottom: 10px; }
+@media (min-width: 1024px) {
+  .crm-sidebar-toggle { position: static; width: 30px; height: 30px; color: #a3a3ad; }
+  .crm-sidebar-toggle:hover { color: color-mix(in srgb, hsl(var(--primary)) 70%, white); }
+  .crm-sidebar[data-collapsed="true"] .crm-sidebar-brand { flex-direction: column; justify-content: center; gap: 6px; padding: 10px 0; }
+}
