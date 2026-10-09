@@ -3,12 +3,14 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { APP_NAME } from "@xingyu/config";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ApiError } from "@/lib/api";
 import { DEFAULT_APP_HOME } from "@/lib/feature-flags";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Image from "next/image";
+import { Globe } from "@/components/ui/globe";
+import styles from "./login.module.css";
 
 export function LoginForm() {
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -47,38 +49,30 @@ export function LoginForm() {
   }
 
   if (authLoading || isAuthenticated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Carregando…
-      </div>
-    );
+    return <div className={styles.loading}>Carregando…</div>;
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.18),transparent_45%),radial-gradient(circle_at_bottom_right,hsl(var(--accent-foreground)/0.08),transparent_40%)]"
-      />
-      <div className="relative w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-        <div className="mb-6 space-y-1 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-            {APP_NAME}
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Entrar</h1>
-          <p className="text-sm text-muted-foreground">
-            Acesse o ambiente de homologação com seu e-mail e senha.
-          </p>
+    <main className={styles.page}>
+      <div className={styles.visual} aria-hidden="true">
+        <Globe className={styles.globe} />
+      </div>
+      <section className={styles.card} aria-labelledby="login-title">
+        <div className={styles.brand}>
+          <Image src="/brand/brainx-mark.png" alt="BRAINX" width={92} height={92} priority />
+        </div>
+        <div className={styles.heading}>
+          <h1 id="login-title">Bem-vindo ao BRAINX</h1>
+          <p>Acesse sua central de rastreamento, comunicação e inteligência.</p>
         </div>
 
-        <form className="space-y-4" onSubmit={onSubmit} noValidate>
+        <form className={"space-y-4 " + styles.form} onSubmit={onSubmit} noValidate>
           <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium">
-              E-mail
-            </label>
             <Input
               id="email"
               name="email"
+              aria-label="E-mail"
+              placeholder="E-mail"
               type="email"
               autoComplete="username"
               required
@@ -90,13 +84,12 @@ export function LoginForm() {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium">
-              Senha
-            </label>
             <div className="relative">
               <Input
                 id="password"
                 name="password"
+                aria-label="Senha"
+                placeholder="Senha"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 required
@@ -108,7 +101,9 @@ export function LoginForm() {
               />
               <button
                 type="button"
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                className={
+                  "absolute inset-y-0 right-0 flex items-center px-3 " + styles.passwordToggle
+                }
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
               >
@@ -118,12 +113,17 @@ export function LoginForm() {
           </div>
 
           {error ? (
-            <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p role="alert" className={"rounded-lg px-3 py-2 text-sm " + styles.error}>
               {error}
             </p>
           ) : null}
 
-          <Button type="submit" className="w-full" size="lg" disabled={submitting}>
+          <Button
+            type="submit"
+            className={"w-full " + styles.submit}
+            size="lg"
+            disabled={submitting}
+          >
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -134,7 +134,7 @@ export function LoginForm() {
             )}
           </Button>
         </form>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
