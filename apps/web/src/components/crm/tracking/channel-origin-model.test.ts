@@ -55,6 +55,7 @@ describe("channel origin view", () => {
     const view = buildChannelOriginView(channels, 800);
     expect(view.champion?.channel).toBe("META_ADS");
     expect(view.fastestGrowth?.channel).toBe("WHATSAPP");
+    expect(view.lowestPerformance?.channel).toBe("GOOGLE_ADS");
     expect(view.bars[0]?.isChampion).toBe(true);
     expect(view.bars[0]?.color).toBe(CHANNEL_COLORS.META_ADS);
     expect(view.bars.find((row) => row.channel === "UNIDENTIFIED")?.color).toBe(
@@ -87,6 +88,29 @@ describe("channel origin view", () => {
     expect(view.bars.map((item) => item.channel)).toEqual(["INSTAGRAM", "META_ADS", "WHATSAPP"]);
     expect(view.champion?.channel).toBe("INSTAGRAM");
     expect(view.fastestGrowth?.channel).toBe("INSTAGRAM");
+  });
+
+  it("picks the lowest identified revenue and ignores unidentified", () => {
+    const view = buildChannelOriginView(
+      [
+        row("META_ADS", 400, 300, 560),
+        row("EMAIL", 40, 50, 560),
+        row("WHATSAPP", 40, 20, 560),
+        row("UNIDENTIFIED", 10, 10, 560),
+        row("DIRECT", 0, 80, 560),
+      ],
+      560,
+    );
+    expect(view.champion?.channel).toBe("META_ADS");
+    expect(view.lowestPerformance?.channel).toBe("WHATSAPP");
+    expect(view.lowestPerformance?.netRevenue).toBe(40);
+    expect(view.lowestPerformance?.share).toBe(40 / 560 * 100);
+  });
+
+  it("returns no lowest channel when only unidentified revenue exists", () => {
+    const view = buildChannelOriginView([row("UNIDENTIFIED", 80, 40, 80)], 80);
+    expect(view.champion?.channel).toBe("UNIDENTIFIED");
+    expect(view.lowestPerformance).toBeNull();
   });
 
   it("sorts unidentified with the other channels by net revenue", () => {

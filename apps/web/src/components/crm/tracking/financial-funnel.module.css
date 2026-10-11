@@ -37,7 +37,7 @@
   isolation: isolate;
   border: none;
   background: transparent;
-  border-radius: 12px;
+  border-radius: var(--tracking-radius-subcard);
 }
 .shape {
   position: absolute;
@@ -54,7 +54,7 @@
 }
 .stage:hover .shape,
 .stage:focus-visible .shape {
-  filter: brightness(1.045) saturate(1.08) drop-shadow(0 4px 6px hsl(var(--foreground) / 0.12));
+  filter: brightness(1.05);
 }
 .stage:focus-visible {
   outline: 2px solid hsl(var(--ring));
@@ -80,20 +80,23 @@
   font-variant-numeric: tabular-nums;
 }
 .gross {
-  --fill: hsl(var(--warning));
-  --ink: hsl(var(--warning-foreground));
+  --fill: var(--tracking-data-charcoal);
+  --ink: #f8f8f8;
+}
+:global(.dark) .gross {
+  --fill: #5a5f63;
 }
 .loss {
-  --fill: hsl(var(--destructive));
-  --ink: hsl(var(--destructive-foreground));
+  --fill: var(--tracking-data-red);
+  --ink: #f8f8f8;
 }
 .refund {
-  --fill: color-mix(in srgb, hsl(var(--destructive)) 92%, hsl(var(--warning)));
-  --ink: hsl(var(--destructive-foreground));
+  --fill: #e88980;
+  --ink: #101010;
 }
 .net {
-  --fill: color-mix(in srgb, hsl(var(--success)) 88%, hsl(var(--foreground)));
-  --ink: hsl(var(--success-foreground));
+  --fill: var(--tracking-accent);
+  --ink: #101010;
 }
 .loss .value,
 .refund .value {
@@ -121,22 +124,30 @@
 .rateValue {
   display: grid;
   place-items: center;
-  min-width: 72px;
-  min-height: 36px;
-  padding: 9px 14px;
-  border-radius: 10px;
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  font-size: clamp(14px, 3.4cqw, 17px);
+  min-width: 64px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid var(--tracking-border);
+  border-radius: 999px;
+  background: var(--tracking-surface);
+  color: var(--tracking-accent-strong);
+  font-size: clamp(13px, 3.1cqw, 15px);
   line-height: 1;
   font-weight: 700;
-  box-shadow: 0 3px 8px hsl(var(--primary) / 0.12);
+  box-shadow: 0 1px 2px rgba(16, 16, 16, 0.05);
   white-space: nowrap;
-  transition: box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+:global(.dark) .rateValue {
+  background: var(--tracking-surface-raised);
+  color: var(--tracking-accent);
+  box-shadow: none;
 }
 .rateTrigger:hover .rateValue,
 .rateTrigger:focus-visible .rateValue {
-  box-shadow: 0 4px 12px hsl(var(--primary) / 0.25);
+  border-color: var(--tracking-border-strong);
 }
 .updated .shape,
 .updated .rateTrigger {
@@ -184,24 +195,28 @@
 
 .funnelTooltip {
   position: fixed;
-  z-index: 40;
+  z-index: 90;
   width: 260px;
   max-width: calc(100vw - 24px);
   max-height: calc(100dvh - 24px);
   overflow: auto;
   pointer-events: none;
-  --tooltip-accent: hsl(var(--primary));
-  animation: funnel-tooltip-enter 120ms ease-out both;
+  --tooltip-accent: var(--tracking-fg);
 }
-.funnelTooltip[data-tone="gross"] {
-  --tooltip-accent: hsl(var(--warning));
+.funnelTooltip[data-tone="loss"] {
+  --tooltip-accent: var(--tracking-data-red);
 }
-.funnelTooltip[data-tone="loss"],
 .funnelTooltip[data-tone="refund"] {
-  --tooltip-accent: hsl(var(--destructive));
+  --tooltip-accent: #c4544a;
 }
 .funnelTooltip[data-tone="net"] {
-  --tooltip-accent: hsl(var(--success));
+  --tooltip-accent: var(--tracking-accent-strong);
+}
+:global(.dark) .funnelTooltip[data-tone="refund"] {
+  --tooltip-accent: #f0a097;
+}
+:global(.dark) .funnelTooltip[data-tone="net"] {
+  --tooltip-accent: var(--tracking-accent);
 }
 .tooltipMetric {
   display: block;
@@ -213,7 +228,7 @@
   color: var(--tooltip-accent);
 }
 .tooltipSwap {
-  animation: tooltip-swap 100ms ease-out both;
+  animation: none;
 }
 @keyframes funnel-tooltip-enter {
   from {

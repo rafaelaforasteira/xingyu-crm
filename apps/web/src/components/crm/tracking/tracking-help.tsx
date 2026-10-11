@@ -1,77 +1,138 @@
 "use client";
-import { useLayoutEffect, useEffect, useId, useRef, useState, type ReactNode, type CSSProperties } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type CSSProperties,
+} from "react";
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 
 export const TRACKING_TOOLTIP_LAYER = "pointer-events-none fixed z-[90]";
 
+export const TOOLTIP_OPEN_EVENT = "tracking:tooltip-open";
+
+export function announceTrackingTooltip(id: string) {
+  window.dispatchEvent(new CustomEvent(TOOLTIP_OPEN_EVENT, { detail: id }));
+}
+
+/** Coordinate independently scoped portals without coupling their content/state. */
+export function useTrackingTooltipDismissal(id: string, dismiss: () => void) {
+  const latest = useRef(dismiss);
+  latest.current = dismiss;
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== id) latest.current();
+    };
+    window.addEventListener(TOOLTIP_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(TOOLTIP_OPEN_EVENT, onOpen);
+  }, [id]);
+}
+
+let closeActiveConcept: (() => void) | null = null;
+
 /** The shared Popover has a modal backdrop, so it cannot provide hover tooltips.
- * This small local tooltip supports focus, Escape, touch and hoverable content. */
+ * Opens only from this button. Leaving the button, blurring, scrolling or resizing closes immediately. */
 export function ConceptHelp({
   label,
   text,
   children,
   className,
   style,
+  hoverOnly = false,
 }: {
   label: string;
   text: ReactNode;
   children?: ReactNode;
   className?: string;
   style?: CSSProperties;
+  hoverOnly?: boolean;
 }) {
-  const [position, setPosition] = useState<{ left: number; top: number; above: boolean } | null>(
-    null,
-  );
+  const [open, setOpen] = useState(false);
+  const [box, setBox] = useState<{ left: number; top: number } | null>(null);
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tip = useRef<HTMLDivElement>(null);
+  const setOpenRef = useRef(setOpen);
+  setOpenRef.current = setOpen;
+  const close = useRef<(() => void) | null>(null);
+  if (!close.current) {
+    close.current = () => {
+      setOpenRef.current(false);
+      if (closeActiveConcept === close.current) closeActiveConcept = null;
+    };
+  }
   const show = () => {
-    if (timer.current) clearTimeout(timer.current);
-    const rect = trigger.current?.getBoundingClientRect();
-    if (rect)
-      setPosition({
-        left: Math.max(12, Math.min(rect.left - 120, window.innerWidth - 292)),
-        top: rect.bottom + 8,
-        above: window.innerHeight - rect.bottom < 170,
+    if (closeActiveConcept && closeActiveConcept !== close.current) closeActiveConcept();
+    window.dispatchEvent(new CustomEvent(TOOLTIP_OPEN_EVENT, { detail: id }));
+    closeActiveConcept = close.current;
+    setOpen(true);
+  };
+  useLayoutEffect(() => {
+    if (!open) {
+      setBox(null);
+      return;
+    }
+    const place = () => {
+      const anchor = trigger.current?.getBoundingClientRect();
+      const card = tip.current;
+      if (!anchor || !card) return;
+      const width = card.offsetWidth || 280;
+      const height = card.offsetHeight || 72;
+      const pad = 12;
+      const gap = 8;
+      const below = anchor.bottom + gap;
+      const above = anchor.top - height - gap;
+      const top = below + height <= window.innerHeight - pad || above < pad ? below : above;
+      const left = anchor.left + anchor.width / 2 - width / 2;
+      setBox((current) => {
+        const next = {
+          left: Math.max(pad, Math.min(left, window.innerWidth - width - pad)),
+          top: Math.max(pad, Math.min(top, window.innerHeight - height - pad)),
+        };
+        return current && current.left === next.left && current.top === next.top ? current : next;
       });
-  };
-  const hide = () => {
-    timer.current = setTimeout(() => setPosition(null), 170);
-  };
-  useEffect(() => {
-    if (!position) return;
-    const close = () => setPosition(null);
+    };
+    place();
+    const dismiss = close.current;
+    if (!dismiss) return;
+    const otherTooltip = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== id) dismiss();
+    };
+    window.addEventListener(TOOLTIP_OPEN_EVENT, otherTooltip);
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") dismiss();
+    };
+    const outside = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !trigger.current?.contains(event.target)) dismiss();
     };
     window.addEventListener("keydown", escape);
-    window.addEventListener("resize", show);
-    window.addEventListener("scroll", show, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    document.addEventListener("pointerdown", outside);
     return () => {
+      window.removeEventListener(TOOLTIP_OPEN_EVENT, otherTooltip);
       window.removeEventListener("keydown", escape);
-      window.removeEventListener("resize", show);
-      window.removeEventListener("scroll", show, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+      document.removeEventListener("pointerdown", outside);
     };
-  }, [position]);
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+  }, [open, id]);
   return (
     <>
       <button
         ref={trigger}
         type="button"
-        aria-label={"Entender " + label}
-        aria-describedby={position ? id : undefined}
-        onClick={show}
+        aria-label={"Informações sobre " + label}
+        aria-describedby={open ? id : undefined}
+        onClick={hoverOnly ? undefined : show}
         onFocus={show}
-        onBlur={hide}
+        onBlur={() => close.current?.()}
         onMouseEnter={show}
-        onMouseLeave={hide}
+        onMouseLeave={() => close.current?.()}
         style={style}
         className={
           className ??
@@ -80,24 +141,22 @@ export function ConceptHelp({
       >
         {children ?? <Info className="h-3.5 w-3.5" aria-hidden />}
       </button>
-      {position &&
+      {open &&
         createPortal(
           <div
+            ref={tip}
             id={id}
             role="tooltip"
             style={{
               position: "fixed",
-              left: position.left,
-              top: position.above ? position.top - 40 : position.top,
-              transform: position.above ? "translateY(-100%)" : undefined,
+              left: box?.left ?? 0,
+              top: box?.top ?? 0,
+              visibility: box ? "visible" : "hidden",
               width: 280,
               maxWidth: "calc(100vw - 24px)",
             }}
-            className="z-[90] rounded-xl border border-border bg-card p-3 text-xs font-normal leading-relaxed text-foreground shadow-soft"
-            onMouseEnter={() => {
-              if (timer.current) clearTimeout(timer.current);
-            }}
-            onMouseLeave={hide}
+            data-module-theme="tracking"
+            className={TRACKING_TOOLTIP_LAYER + " tracking-portal rounded-xl p-3 text-xs font-normal leading-relaxed shadow-soft"}
           >
             {text}
           </div>,
@@ -106,6 +165,7 @@ export function ConceptHelp({
     </>
   );
 }
+
 /** Moves a Recharts tooltip out of chart overflow and drops it as soon as the page scrolls or resizes. */
 export function TrackingTooltipPortal({
   children,
@@ -114,6 +174,7 @@ export function TrackingTooltipPortal({
   children: ReactNode;
   resetKey: string;
 }) {
+  const portalId = useId();
   const measure = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ left: number; top: number } | null>(null);
   useLayoutEffect(() => {
@@ -133,6 +194,11 @@ export function TrackingTooltipPortal({
       dismissed = true;
       setBox(null);
     };
+    const otherTooltip = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== portalId) dismiss();
+    };
+    window.dispatchEvent(new CustomEvent(TOOLTIP_OPEN_EVENT, { detail: portalId }));
+    window.addEventListener(TOOLTIP_OPEN_EVENT, otherTooltip);
     place();
     const observer = new ResizeObserver(place);
     observer.observe(wrapper);
@@ -140,11 +206,12 @@ export function TrackingTooltipPortal({
     window.addEventListener("resize", dismiss);
     return () => {
       dismissed = true;
+      window.removeEventListener(TOOLTIP_OPEN_EVENT, otherTooltip);
       observer.disconnect();
       window.removeEventListener("scroll", dismiss, true);
       window.removeEventListener("resize", dismiss);
     };
-  }, [resetKey]);
+  }, [resetKey, portalId]);
   return (
     <>
       <div ref={measure} style={{ visibility: "hidden" }} aria-hidden="true">
@@ -171,7 +238,10 @@ export function ChartTooltip({
   accent?: string;
 }) {
   return (
-    <div className="min-w-48 rounded-xl border border-border bg-card p-3 text-xs shadow-soft">
+    <div
+      data-module-theme="tracking"
+      className="tracking-portal pointer-events-none min-w-48 rounded-xl border p-3 text-xs shadow-soft"
+    >
       <p className="mb-2 flex items-center gap-2 font-semibold">
         {accent ? (
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: accent }} aria-hidden />

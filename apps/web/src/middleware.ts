@@ -20,9 +20,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname === "/") {
-    return NextResponse.redirect(
-      new URL(hasSession ? DEFAULT_APP_HOME : "/login", request.url),
-    );
+    return NextResponse.redirect(new URL(hasSession ? DEFAULT_APP_HOME : "/login", request.url));
   }
 
   if (!hasSession) {
@@ -31,32 +29,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  const headers = new Headers(request.headers);
+  headers.set("x-crm-pathname", pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {
-  matcher: [
-    "/",
-    "/login",
-    "/operacao/:path*",
-    "/dashboard/:path*",
-    "/contacts/:path*",
-    "/companies/:path*",
-    "/clients/:path*",
-    "/pipelines/:path*",
-    "/inbox/:path*",
-    "/tasks/:path*",
-    "/orders/:path*",
-    "/products/:path*",
-    "/occurrences/:path*",
-    "/repurchase/:path*",
-    "/reactivation/:path*",
-    "/after-sales/:path*",
-    "/automations/:path*",
-    "/marketing/:path*",
-    "/reports/:path*",
-    "/settings/:path*",
-    "/notifications/:path*",
-    "/search/:path*",
-  ],
+  matcher: ["/((?!api(?:/|$)|_next(?:/|$)|brand(?:/|$)|tracking/.*\\.|.*\\.).*)"],
 };

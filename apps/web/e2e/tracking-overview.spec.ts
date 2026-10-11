@@ -5,7 +5,7 @@ test("Tracking overview: responsive layout, filters, dates and refresh", async (
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/tracking/vendas");
   await expect(
-    page.getByRole("heading", { name: "Inteligência de Vendas", exact: true }),
+    page.getByRole("button", { name: "Informações sobre Inteligência de Vendas", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Dados demonstrativos", { exact: true })).toBeVisible();
   await expect(
@@ -84,7 +84,7 @@ test("Tracking overview: responsive layout, filters, dates and refresh", async (
     .focus();
   await expect(page.getByRole("tooltip")).toContainText("pedidos");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Entender LTV médio", exact: true }).focus();
+  await page.getByRole("button", { name: "Informações sobre LTV médio", exact: true }).focus();
   await expect(page.getByRole("tooltip")).toContainText("data final");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("tooltip")).toHaveCount(0);

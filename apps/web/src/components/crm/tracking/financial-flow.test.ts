@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { financialFlow, metricTrend, previousEqualPeriod, safeRate } from "./financial-flow";
+import {
+  attributionTrends,
+  coverageDeltaPoints,
+  financialFlow,
+  metricTrend,
+  overviewTrends,
+  previousEqualPeriod,
+  safeRate,
+} from "./financial-flow";
 import { getSalesTrackingData } from "./sales-tracking-service";
 import type { FinancialSnapshot, SalesComparison } from "./sales-tracking-types";
 const snapshot: FinancialSnapshot = {
@@ -14,9 +22,13 @@ const previous: SalesComparison = {
   ...snapshot,
   startDate: "2026-07-02",
   endDate: "2026-07-31",
+  paidOrders: 10,
+  buyers: 8,
+  averageTicket: 100,
   averageLtv: 7000,
   averageRepurchaseDays: 53,
   repeatRevenue: 1000000,
+  firstPurchaseRevenue: 100,
   reactivatedCustomers: 100,
 };
 describe("financial flow", () => {
@@ -59,6 +71,94 @@ describe("financial flow", () => {
     expect(metricTrend(120, 100, true)).toMatchObject({ direction: "up", sentiment: "negative" });
     expect(metricTrend(120, 100)).toMatchObject({ direction: "up", sentiment: "positive" });
     expect(metricTrend(100, 100)).toMatchObject({ direction: "flat", sentiment: "neutral" });
+    const trends = overviewTrends(
+      {
+        netSales: 200,
+        paidOrders: 329,
+        buyers: 300,
+        averageTicket: 3113.52,
+        averageLtv: 1,
+        averageRepurchaseDays: 10,
+        repeatRevenue: 80,
+        firstPurchaseRevenue: 120,
+        reactivatedCustomers: 2,
+      },
+      {
+        ...previous,
+        netSales: 180,
+        paidOrders: 301,
+        buyers: 280,
+        averageTicket: 2800,
+      },
+    );
+    expect(trends.paidOrders?.value).toBeCloseTo(((329 - 301) / 301) * 100);
+    expect(trends.buyers?.value).toBeCloseTo(((300 - 280) / 280) * 100);
+    expect(trends.averageTicket?.direction).toBe("up");
+    expect(trends.firstPurchaseRevenue).toMatchObject({ direction: "up", sentiment: "positive" });
+    expect(trends.repeatRevenue).toMatchObject({ direction: "down", sentiment: "negative" });
+    expect(
+      overviewTrends(
+        {
+          netSales: 200,
+          paidOrders: 4,
+          buyers: 4,
+          averageTicket: null,
+          averageLtv: 1,
+          averageRepurchaseDays: 10,
+          repeatRevenue: 80,
+          firstPurchaseRevenue: 50,
+          reactivatedCustomers: 2,
+        },
+        { ...previous, paidOrders: 0, buyers: 0, averageTicket: null, firstPurchaseRevenue: 0 },
+      ).paidOrders,
+    ).toBeNull();
+    expect(
+      overviewTrends(
+        {
+          netSales: 200,
+          paidOrders: 4,
+          buyers: 4,
+          averageTicket: null,
+          averageLtv: 1,
+          averageRepurchaseDays: 10,
+          repeatRevenue: 80,
+          firstPurchaseRevenue: 50,
+          reactivatedCustomers: 2,
+        },
+        { ...previous, firstPurchaseRevenue: 0, repeatRevenue: 0 },
+      ).firstPurchaseRevenue,
+    ).toBeNull();
+  });
+  it("compares attribution revenue and treats unidentified growth as negative", () => {
+    const trends = attributionTrends(
+      { attributedRevenue: 80, unattributedRevenue: 40, attributedRevenueShare: 66.7 },
+      { attributedRevenue: 100, unattributedRevenue: 20, attributedRevenueShare: 83.3 },
+    );
+    expect(trends.attributedRevenue).toMatchObject({ direction: "down", sentiment: "negative" });
+    expect(trends.unattributedRevenue).toMatchObject({ direction: "up", sentiment: "negative" });
+    expect(
+      attributionTrends(
+        { attributedRevenue: 120, unattributedRevenue: 10, attributedRevenueShare: 92.3 },
+        { attributedRevenue: 100, unattributedRevenue: 20, attributedRevenueShare: 83.3 },
+      ),
+    ).toMatchObject({
+      attributedRevenue: { direction: "up", sentiment: "positive" },
+      unattributedRevenue: { direction: "down", sentiment: "positive" },
+    });
+    expect(
+      attributionTrends(
+        { attributedRevenue: 10, unattributedRevenue: 5, attributedRevenueShare: null },
+        { attributedRevenue: 0, unattributedRevenue: 0, attributedRevenueShare: null },
+      ),
+    ).toEqual({ attributedRevenue: null, unattributedRevenue: null, coverageDeltaPoints: null });
+    expect(trends.coverageDeltaPoints).toBeCloseTo(66.7 - 83.3);
+  });
+  it("reports attribution coverage change in percentage points", () => {
+    expect(coverageDeltaPoints(92.9, 90.5)).toBeCloseTo(2.4);
+    expect(coverageDeltaPoints(80, 91.7)).toBeCloseTo(-11.7);
+    expect(coverageDeltaPoints(50, 50)).toBe(0);
+    expect(coverageDeltaPoints(null, 40)).toBeNull();
+    expect(coverageDeltaPoints(40, null)).toBeNull();
   });
   it("compares equal inclusive calendar periods across month and leap-year boundaries", () => {
     expect(previousEqualPeriod({ startDate: "2026-08-01", endDate: "2026-08-30" })).toEqual({

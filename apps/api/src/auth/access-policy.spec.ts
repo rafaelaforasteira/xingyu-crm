@@ -6,8 +6,9 @@ describe("access policy", () => {
     expect(can(AuthRole.ADMIN, "users.manage")).toBe(true);
     expect(getScope(AuthRole.ADMIN, "orders")).toBe("ALL");
   });
-  it("maps manager to supervisor operational access", () => {
-    expect(can(AuthRole.MANAGER, "pipelines.view")).toBe(true);
+  it("restricts managers to Tracking and account access", () => {
+    expect(can(AuthRole.MANAGER, "pipelines.view")).toBe(false);
+    expect(can(AuthRole.MANAGER, "tracking.overview")).toBe(true);
     expect(can(AuthRole.MANAGER, "clients.view")).toBe(false);
     expect(getScope(AuthRole.MANAGER, "deals")).toBe("ALL");
   });
@@ -19,9 +20,9 @@ describe("access policy", () => {
     expect(accessManifest(AuthRole.CONSULTANT).permissions).toContain("profile.edit"));
   it("derives settings matrix cells from canonical permissions", () => {
     expect(accessCell(AuthRole.ADMIN, "users")).toBe("MANAGE");
-    expect(accessCell(AuthRole.MANAGER, "pipelines")).toBe("ALL");
-    expect(accessCell(AuthRole.CONSULTANT, "orders")).toBe("SELF");
+    expect(accessCell(AuthRole.MANAGER, "pipelines")).toBe("NONE");
+    expect(accessCell(AuthRole.CONSULTANT, "orders")).toBe("NONE");
     expect(accessMatrix().find((row) => row.area === "finance")?.cells.MANAGER).toBe("NONE");
-    expect(accessMatrix().find((row) => row.area === "settings")?.cells.CONSULTANT).toBe("PROFILE");
+    expect(accessMatrix().find((row) => row.area === "settings")?.cells.CONSULTANT).toBe("NONE");
   });
 });

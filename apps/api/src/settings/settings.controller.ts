@@ -52,6 +52,7 @@ export class SettingsController {
   }
 
   @Get("profile")
+  @Permissions("profile.view")
   @ApiOperation({ summary: "Perfil do usuário autenticado" })
   profile(@OrganizationId() orgId: string, @CurrentUser() user: AuthenticatedUser) { return this.settingsService.profile(orgId, user.id); }
 

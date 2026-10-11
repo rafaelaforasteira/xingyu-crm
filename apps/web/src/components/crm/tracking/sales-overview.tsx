@@ -1,8 +1,8 @@
 "use client";
 import styles from "./tracking-overview.module.css";
-import type { ReactNode } from "react";
+import { type ReactNode } from "react";
 import { AnimatedMetric, useTrackingMotion } from "./tracking-motion";
-import { ChartTooltip } from "./tracking-help";
+import { ChartTooltip, TrackingTooltipPortal } from "./tracking-help";
 import { compactMoney, integer, dateBR } from "./tracking-format";
 import {
   Area,
@@ -18,10 +18,10 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Card, CardContent } from "@/components/ui/card";
+import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
-import type { SalesTrackingData } from "./sales-tracking-types";
+import type { SalesTrackingData, Trend } from "./sales-tracking-types";
 import { SalesIntelligence } from "./sales-intelligence";
 import { FinancialFunnel } from "./financial-funnel";
 import {
@@ -35,56 +35,49 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
   const composition = [
     {
       name: "Primeira compra",
+      tone: "first",
       value: overview.firstPurchaseRevenue,
       percentage: overview.firstPurchaseRevenuePercentage,
-      color: "hsl(var(--primary))",
+      color: "var(--tracking-data-blue)",
+      trend: overview.trends.firstPurchaseRevenue,
     },
     {
       name: "Recompra",
+      tone: "repeat",
       value: overview.repeatRevenue,
       percentage: overview.repeatRevenuePercentage,
-      color: "hsl(var(--success))",
+      color: "var(--tracking-data-yellow)",
+      trend: overview.trends.repeatRevenue,
     },
   ];
   return (
-    <Card className="overflow-hidden rounded-2xl border-primary/15 shadow-soft">
-      <CardContent className="space-y-5 p-3 sm:p-5">
-        <div className="grid w-full max-w-none items-stretch gap-4 xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1fr)]">
-          <section
-            className="flex min-h-full min-w-0 items-center justify-center rounded-2xl bg-muted/40 p-4 sm:p-5"
-            aria-label="Fluxo financeiro"
-          >
-            <FinancialFunnel flow={overview.financialFlow} />
-          </section>
+    <div className="grid gap-5">
+      <div className="grid w-full max-w-none items-stretch gap-3 xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1fr)]">
+        <section className={styles.funnelCard} aria-label="Fluxo financeiro">
+          <FinancialFunnel flow={overview.financialFlow} />
+        </section>
+        <SalesIntelligence data={data} />
+      </div>
 
-          <SalesIntelligence data={data} />
-        </div>
-
-        <div className={styles.heroCharts + " grid gap-5 xl:grid-cols-[1.7fr_0.8fr]"}>
+      <div className={styles.heroCharts + " grid items-stretch gap-3 xl:grid-cols-[1.7fr_0.8fr]"}>
           <section
-            className="min-w-0 rounded-2xl bg-muted/25 p-3 sm:p-5"
+            className={styles.chartCard + " " + styles.evolution}
             aria-label="Evolução das vendas"
           >
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">Evolução das vendas</h3>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Vendas brutas e líquidas ·{" "}
-                  {data.granularity === "day"
-                    ? "visão diária"
-                    : data.granularity === "week"
-                      ? "visão semanal"
-                      : "visão mensal"}
-                  .
-                </p>
-              </div>
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                <LegendDot color="bg-warning" label="Brutas" />
-                <LegendDot color="bg-success" label="Líquidas" />
-              </div>
+            <div>
+              <h3 className="font-semibold">Evolução das vendas</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Vendas brutas e líquidas ·{" "}
+                {data.granularity === "day"
+                  ? "visão diária"
+                  : data.granularity === "week"
+                    ? "visão semanal"
+                    : "visão mensal"}
+                .
+              </p>
             </div>
             <div
-              className="mt-4 h-[310px]"
+              className={styles.chartPlot}
               aria-label="Gráfico temporal de vendas brutas e líquidas"
             >
               <ResponsiveContainer width="100%" height="100%">
@@ -94,16 +87,13 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                   margin={{ top: 20, right: 18, left: 0, bottom: 16 }}
                 >
                   <defs>
-                    <linearGradient id="grossSalesGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--warning))" stopOpacity={0.08} />
-                      <stop offset="100%" stopColor="hsl(var(--warning))" stopOpacity={0} />
-                    </linearGradient>
                     <linearGradient id="netSalesGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--success))" stopOpacity={0.12} />
-                      <stop offset="100%" stopColor="hsl(var(--success))" stopOpacity={0} />
+                      <stop offset="0%" stopColor="var(--series-net)" stopOpacity={0.16} />
+                      <stop offset="72%" stopColor="var(--series-net)" stopOpacity={0.04} />
+                      <stop offset="100%" stopColor="var(--series-net)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="3 4" opacity={0.16} />
+                  <CartesianGrid vertical={false} stroke="var(--series-grid)" strokeDasharray="2 7" />
                   <XAxis
                     dataKey="date"
                     tickFormatter={(date: string) =>
@@ -128,18 +118,20 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                   />
                   <Tooltip
                     content={<SalesTimelineTooltip />}
-                    cursor={{ stroke: "hsl(var(--primary))", strokeOpacity: 0.2 }}
+                    isAnimationActive={false}
+                    cursor={{ stroke: "var(--series-gross)", strokeOpacity: 0.45 }}
+                    wrapperStyle={{ outline: "none", zIndex: 0, pointerEvents: "none" }}
                   />
                   <Area
                     key={"gross-" + revision}
                     type="monotone"
                     dataKey="grossSales"
                     name="Vendas brutas"
-                    stroke="hsl(var(--warning))"
-                    strokeWidth={2}
-                    fill="url(#grossSalesGradient)"
+                    stroke="var(--series-gross)"
+                    strokeWidth={1.75}
+                    fill="transparent"
                     dot={false}
-                    activeDot={{ r: 4 }}
+                    activeDot={{ r: 3.5, fill: "var(--series-gross)", stroke: "var(--tracking-surface)", strokeWidth: 2 }}
                     isAnimationActive={!reduced}
                     animationDuration={initial ? 600 : 350}
                   />
@@ -148,27 +140,35 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                     type="monotone"
                     dataKey="netSales"
                     name="Vendas líquidas"
-                    stroke="hsl(var(--success))"
+                    stroke="var(--series-net)"
                     strokeWidth={2.5}
                     fill="url(#netSalesGradient)"
                     dot={false}
-                    activeDot={{ r: 4 }}
+                    activeDot={{
+                      r: 4,
+                      stroke: "var(--series-net)",
+                      strokeWidth: 2,
+                      fill: "var(--tracking-surface)",
+                    }}
                     isAnimationActive={!reduced}
                     animationDuration={350}
                   />
                 </AreaChart>
               </ResponsiveContainer>
+              <div className={styles.chartFade} aria-hidden="true" />
+            </div>
+            <div className={styles.chartLegend}>
+              <LegendDot swatch="var(--series-gross)" label="Brutas" />
+              <LegendDot swatch="var(--series-net)" label="Líquidas" />
             </div>
           </section>
 
-          <section
-            className="min-w-0 rounded-2xl bg-primary/[0.025] p-4 sm:p-5"
-            aria-label="Composição da receita líquida"
-          >
+          <section className={styles.chartCard} aria-label="Composição da receita líquida">
             <h3 className="font-semibold">Composição da receita líquida</h3>
             <p className="mt-1 text-xs text-muted-foreground">Primeira compra versus recompra.</p>
-            <div className="relative mx-auto mt-3 h-[220px] max-w-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className={styles.compositionDonut}>
+              <div className={styles.compositionDonutChart}>
+              <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie
                     key={revision}
@@ -177,9 +177,10 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                     nameKey="name"
                     innerRadius={68}
                     outerRadius={92}
-                    paddingAngle={3}
-                    cornerRadius={5}
-                    stroke="none"
+                    paddingAngle={2}
+                    cornerRadius={6}
+                    stroke="var(--tracking-surface)"
+                    strokeWidth={2}
                     isAnimationActive={!reduced}
                     animationDuration={initial ? 600 : 350}
                   >
@@ -188,23 +189,29 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                     ))}
                   </Pie>
                   <Tooltip
+                    isAnimationActive={false}
+                    wrapperStyle={{ outline: "none", zIndex: 0, pointerEvents: "none" }}
                     content={({ active, payload }) => {
                       const item = payload?.[0]?.payload as
                         (typeof composition)[number] | undefined;
                       return active && item ? (
-                        <ChartTooltip
-                          title={item.name}
-                          rows={[
-                            ["Receita líquida", money(item.value)],
-                            ["Participação", percent(item.percentage)],
-                          ]}
-                        />
+                        <TrackingTooltipPortal resetKey={item.name}>
+                          <ChartTooltip
+                            accent={item.color}
+                            title={item.name}
+                            rows={[
+                              ["Receita líquida", money(item.value)],
+                              ["Participação", percent(item.percentage)],
+                            ]}
+                          />
+                        </TrackingTooltipPortal>
                       ) : null;
                     }}
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+              </div>
+              <div className={styles.compositionDonutCenter}>
                 <strong className="text-2xl font-semibold tracking-tight tabular-nums">
                   <AnimatedMetric
                     value={overview.netSales}
@@ -214,34 +221,63 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                 <span className="text-[11px] text-muted-foreground">Receita líquida</span>
               </div>
             </div>
-            <div className="space-y-3">
+            <div className={styles.compositionList}>
               {composition.map((item) => (
-                <div
-                  key={item.name}
-                  className="flex items-center justify-between gap-3 rounded-xl bg-card/80 px-3 py-2.5 text-xs"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
-                    <span>{item.name}</span>
+                <div key={item.name} className={styles.compositionRow} data-tone={item.tone}>
+                  <div className={styles.compositionIdentity}>
+                    <div className={styles.compositionName}>
+                      <span className={styles.compositionDot} style={{ background: item.color }} />
+                      <span>{item.name}</span>
+                    </div>
+                    <CompositionTrend trend={item.trend} />
                   </div>
-                  <div className="text-right">
-                    <strong className="block tabular-nums">{percent(item.percentage)}</strong>
-                    <span className="text-muted-foreground">{money(item.value)}</span>
+                  <div className={styles.compositionFigures}>
+                    <strong className={styles.compositionShare}>{percent(item.percentage)}</strong>
+                    <span className={styles.compositionMoney}>{money(item.value)}</span>
                   </div>
                 </div>
               ))}
             </div>
           </section>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function CompositionTrend({ trend }: { trend: Trend | null }) {
+  if (!trend) {
+    return (
+      <div className={styles.compositionTrend}>
+        <span className={styles.compositionChip} data-sentiment="unavailable" aria-label="Comparação com o período anterior indisponível">
+          —
+        </span>
+        <span className={styles.compositionCaption}>vs. período anterior</span>
+      </div>
+    );
+  }
+  const Icon = trend.direction === "up" ? ArrowUp : trend.direction === "down" ? ArrowDown : Minus;
+  const amount = `${trend.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  const meaning =
+    trend.direction === "up" ? "Aumento" : trend.direction === "down" ? "Redução" : "Sem variação";
+  return (
+    <div className={styles.compositionTrend}>
+      <span
+        className={styles.compositionChip}
+        data-sentiment={trend.sentiment}
+        aria-label={`${meaning} de ${amount} em relação ao período anterior`}
+      >
+        <Icon size={11} aria-hidden="true" />
+        {amount}
+      </span>
+      <span className={styles.compositionCaption}>vs. período anterior</span>
+    </div>
+  );
+}
+
+function LegendDot({ swatch, label }: { swatch: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className={cn("h-2 w-2 rounded-full", color)} />
+      <span className={cn("h-2 w-2 rounded-full")} style={{ background: swatch }} />
       {label}
     </span>
   );
@@ -270,12 +306,16 @@ function SalesTimelineTooltip({
     .format(new Date(`${point.date}T12:00:00`))
     .replace(".", "");
   return (
-    <div className="min-w-48 rounded-xl border border-border bg-card p-3 text-xs shadow-soft">
+    <TrackingTooltipPortal resetKey={point.date + point.endDate}>
+      <div
+        data-module-theme="tracking"
+        className={styles.chartTip + " tracking-portal min-w-48 rounded-xl p-3 text-xs shadow-soft"}
+      >
       <p className="mb-2 font-semibold">
         {point.endDate !== point.date ? dateBR(point.date) + " → " + dateBR(point.endDate) : date}
       </p>
-      <TooltipRow label="Vendas brutas" value={money(point.grossSales)} color="bg-warning" />
-      <TooltipRow label="Vendas líquidas" value={money(point.netSales)} color="bg-success" />
+      <TooltipRow label="Vendas brutas" value={money(point.grossSales)} swatch="var(--tip-gross)" />
+      <TooltipRow label="Vendas líquidas" value={money(point.netSales)} swatch="var(--tracking-accent)" />
       <div className="mt-2 border-t border-border/60 pt-2">
         <TooltipRow
           label="Taxa de realização"
@@ -283,15 +323,24 @@ function SalesTimelineTooltip({
         />
         <TooltipRow label="Pedidos pagos" value={integer(point.paidOrders)} />
       </div>
-    </div>
+      </div>
+    </TrackingTooltipPortal>
   );
 }
 
-function TooltipRow({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
+function TooltipRow({
+  label,
+  value,
+  swatch,
+}: {
+  label: string;
+  value: ReactNode;
+  swatch?: string;
+}) {
   return (
     <div className="flex items-center justify-between gap-4 py-0.5">
       <span className="flex items-center gap-1.5 text-muted-foreground">
-        {color ? <span className={cn("h-2 w-2 rounded-full", color)} /> : null}
+        {swatch ? <span className="h-2 w-2 rounded-full" style={{ background: swatch }} /> : null}
         {label}
       </span>
       <strong className="tabular-nums">{value}</strong>

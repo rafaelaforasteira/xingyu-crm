@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw, UsersRound } from "lucide-react";
-import { PageHeader } from "@/components/crm/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -22,8 +21,13 @@ import { SalesTrackingFilters, DEFAULT_TRACKING_FILTERS } from "./sales-tracking
 import { getSalesTrackingData } from "./sales-tracking-service";
 import type { TrackingFilters } from "./sales-tracking-types";
 import { ChannelOriginSection } from "./channel-origin-section";
+import { TrackingExecutiveSummary } from "./tracking-executive-summary";
+import { TrackingActionInsights } from "./tracking-action-insights-panel";
+import executive from "./tracking-executive.module.css";
+import { ConceptHelp } from "./tracking-help";
 import { dateBR } from "./tracking-format";
 import styles from "./tracking-overview.module.css";
+import theme from "./tracking-theme.module.css";
 
 export function SalesTrackingPage() {
   const [appliedFilters, setAppliedFilters] =
@@ -42,6 +46,22 @@ export function SalesTrackingPage() {
   const runner = React.useRef(createTrackingRefresh());
   const [refreshing, setRefreshing] = React.useState(false);
   const fetching = query.isFetching || refreshing;
+  const periodMeta = data ? (
+    <div className={styles.periodMeta + " text-[11px] text-muted-foreground"} aria-live="polite">
+      <span>
+        {dateBR(data.range.startDate)} → {dateBR(data.range.endDate)}
+      </span>
+      {data.source === "mock" && (
+        <span data-tracking-badge="demo" className="rounded-full px-2.5 py-1 font-medium">
+          Dados demonstrativos
+        </span>
+      )}
+      {fetching && <span>Atualizando análise…</span>}
+      {query.isError && (
+        <span role="status">Últimos dados disponíveis. Não foi possível atualizar este recorte.</span>
+      )}
+    </div>
+  ) : null;
   const refresh = () =>
     runner.current({
       isFetching: query.isFetching,
@@ -51,32 +71,45 @@ export function SalesTrackingPage() {
       onError: () => toast.error("Não foi possível atualizar os dados."),
     });
   return (
-    <div className={styles.page + " space-y-4"}>
-      <p className="text-xs font-medium text-muted-foreground">
-        Tracking <span className="mx-1 text-border">/</span> Visão Geral
-      </p>
-      <PageHeader
-        title="Inteligência de Vendas"
-        description="Entenda quanto foi vendido, de onde vieram as vendas, quem comprou e como esses clientes se comportam ao longo do tempo."
-        className="flex-row items-start [&>div:last-child]:shrink-0"
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="icon"
-              variant="secondary"
-              className="h-9 w-9 shrink-0 rounded-full bg-primary/10 text-primary shadow-sm hover:bg-primary/15 active:bg-primary/20"
-              aria-label="Atualizar dados da análise"
-              title="Atualizar dados"
-              disabled={fetching}
-              onClick={refresh}
-            >
-              <RefreshCw aria-hidden className={"h-4 w-4 " + (fetching ? styles.refresh : "")} />
-            </Button>
-            <SalesTrackingFilters appliedFilters={appliedFilters} onApply={setAppliedFilters} />
-          </div>
-        }
-      />
+    <div data-module-theme="tracking" className={theme.root + " " + styles.page + " space-y-4"}>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h1 className="sr-only">Inteligência de Vendas</h1>
+          <p className="text-xs font-medium text-muted-foreground">
+            Tracking <span className="mx-1 text-border">/</span> Visão Geral
+          </p>
+          <ConceptHelp
+            label="Inteligência de Vendas"
+            text={
+              <>
+                <strong className="mb-1 block text-[13px] font-semibold leading-snug text-foreground">
+                  Inteligência de Vendas
+                </strong>
+                <span className="text-muted-foreground">
+                  Entenda quanto foi vendido, de onde vieram as vendas, quem comprou e como esses
+                  clientes se comportam ao longo do tempo.
+                </span>
+              </>
+            }
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            data-tracking-control="refresh"
+            className="h-9 w-9 shrink-0 rounded-full shadow-sm"
+            aria-label="Atualizar dados da análise"
+            title="Atualizar dados"
+            disabled={fetching}
+            onClick={refresh}
+          >
+            <RefreshCw aria-hidden className={"h-4 w-4 " + (fetching ? styles.refresh : "")} />
+          </Button>
+          <SalesTrackingFilters appliedFilters={appliedFilters} onApply={setAppliedFilters} />
+        </div>
+      </div>
 
       {query.isError && !data ? (
         <Card className="border-destructive/30">
@@ -93,52 +126,39 @@ export function SalesTrackingPage() {
       ) : null}
       {query.isLoading && !data ? <TrackingSkeleton /> : null}
       {data ? (
-        <>
-          <div
-            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
-            aria-live="polite"
-          >
-            <span>
-              {dateBR(data.range.startDate)} → {dateBR(data.range.endDate)}
-            </span>
-            {data.source === "mock" && (
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary">
-                Dados demonstrativos
-              </span>
-            )}
-            {fetching && <span>Atualizando análise…</span>}
-            {query.isError && (
-              <span role="status">
-                Últimos dados disponíveis. Não foi possível atualizar este recorte.
-              </span>
-            )}
-          </div>
-          {data.overview.grossSales === 0 ? (
+        data.overview.grossSales === 0 ? (
+          <>
+            {periodMeta}
             <EmptyState
               icon={UsersRound}
               title="Nenhuma venda encontrada neste período."
               description="Altere o período ou os filtros para visualizar outros dados."
             />
-          ) : (
-            <div
-              className={
-                fetching
-                  ? styles.sections +
-                    " space-y-4 opacity-70 transition-opacity motion-reduce:transition-none"
-                  : styles.sections + " space-y-4 transition-opacity motion-reduce:transition-none"
-              }
-              aria-busy={fetching}
-            >
-              <TrackingMotion revision={Date.parse(data.updatedAt)}>
-                <SalesHero data={data} />
-                <ChannelOriginSection data={data} />
-                <CustomerMix data={data} />
-                <RepurchaseAnalysis data={data} />
-                <ValueAndReactivation data={data} />
-              </TrackingMotion>
-            </div>
-          )}
-        </>
+          </>
+        ) : (
+          <div
+            className={
+              fetching
+                ? styles.sections + " opacity-70 transition-opacity motion-reduce:transition-none"
+                : styles.sections + " transition-opacity motion-reduce:transition-none"
+            }
+            aria-busy={fetching}
+          >
+            <TrackingMotion revision={Date.parse(data.updatedAt)}>
+              <div className={executive.stack}>
+                <TrackingExecutiveSummary data={data} meta={periodMeta} />
+              </div>
+              <SalesHero data={data} />
+              <ChannelOriginSection data={data} />
+              <CustomerMix data={data} />
+              <RepurchaseAnalysis data={data} />
+              <ValueAndReactivation data={data} />
+              <div className={executive.closing}>
+                <TrackingActionInsights data={data} />
+              </div>
+            </TrackingMotion>
+          </div>
+        )
       ) : null}
     </div>
   );
@@ -147,6 +167,15 @@ export function SalesTrackingPage() {
 function TrackingSkeleton() {
   return (
     <div className="space-y-4" aria-label="Carregando inteligência de vendas">
+      <div>
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="mt-2 h-3 w-72" />
+        <div className={"mt-3 " + executive.kpiGrid}>
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton key={index} className={executive.kpiSkeleton} />
+          ))}
+        </div>
+      </div>
       <div className="overflow-hidden rounded-2xl border border-border bg-card p-5">
         <Skeleton className="h-7 w-52" />
         <Skeleton className="mt-2 h-4 w-full max-w-xl" />
@@ -161,6 +190,15 @@ function TrackingSkeleton() {
       </div>
       <Skeleton className="h-72 rounded-2xl" />
       <Skeleton className="h-96 rounded-2xl" />
+      <div>
+        <Skeleton className="h-4 w-44" />
+        <Skeleton className="mt-2 h-3 w-64" />
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+        </div>
+      </div>
     </div>
   );
 }

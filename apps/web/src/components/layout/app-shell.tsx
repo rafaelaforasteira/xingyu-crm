@@ -33,7 +33,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+import { RequireAuth } from "@/components/auth/require-auth";
+
+function AuthorizedAppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const hideGlobalHeader = shouldHideGlobalHeader(pathname);
   const hideGlobalSidebar = Boolean(
@@ -62,5 +64,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <CommandPalette />
     </div>
+  );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <RequireAuth>
+      <AuthorizedAppShell>{children}</AuthorizedAppShell>
+    </RequireAuth>
   );
 }

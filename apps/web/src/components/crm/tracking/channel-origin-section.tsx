@@ -1,14 +1,23 @@
 "use client";
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
+import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip } from "recharts";
 import type { PieSectorDataItem } from "recharts/types/polar/Pie";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardTitle } from "@/components/ui/card";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
-import { ChartTooltip, ConceptHelp } from "./tracking-help";
+import { ChartTooltip, ConceptHelp, TRACKING_TOOLTIP_LAYER, announceTrackingTooltip, useTrackingTooltipDismissal } from "./tracking-help";
 import { money, percentage } from "./tracking-format";
 import { AnimatedMetric, useInViewOnce, useTrackingMotion } from "./tracking-motion";
-import type { SalesTrackingData } from "./sales-tracking-types";
+import type { SalesTrackingData, Trend } from "./sales-tracking-types";
 import { METRIC_DEFINITIONS } from "./tracking-dictionary";
 import {
   CHANNEL_COLORS,
@@ -52,135 +61,189 @@ export function ChannelOriginSection({ data }: { data: SalesTrackingData }) {
     },
   ].filter((slice) => slice.value > 0);
   return (
-    <Card
+    <section
+      id="tracking-sales-origin"
       ref={reveal.ref}
       data-revealed={reveal.seen ? "true" : "false"}
-      className={
-        "min-w-0 overflow-hidden rounded-2xl border-0 bg-[color-mix(in_srgb,hsl(var(--muted))_25%,hsl(var(--card)))] shadow-none " +
-        styles.section
-      }
+      className={styles.section}
+      aria-label="De onde vêm as vendas?"
     >
-      <CardHeader className="space-y-0 px-3 pb-0 pt-3 sm:px-5 sm:pt-5">
-        <CardTitle className="tracking-normal">De onde vêm as vendas?</CardTitle>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Entenda quais canais estão associados à receita líquida realizada no período.
-        </p>
-      </CardHeader>
-      <CardContent className={styles.layout + " px-3 pb-3 pt-4 sm:px-5 sm:pb-5"}>
-        <ChannelInsightScope
-          className={styles.channels}
-          revision={revision}
-          order={view.bars.map((row) => row.channel).join("|")}
-        >
-          {view.bars.length ? (
-            view.bars.map((row, index) => (
-              <ChannelCard key={row.channel} row={row} index={index} animate={reveal.seen} />
-            ))
-          ) : (
-            <p className={styles.empty}>Não há receita líquida para atribuir neste recorte.</p>
-          )}
-        </ChannelInsightScope>
+      <div className={styles.layout}>
+        <div className={styles.origin}>
+          <div className={styles.channelsCard}>
+            <header className={styles.sectionHead}>
+              <CardTitle className="tracking-normal">De onde vêm as vendas?</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Entenda quais canais estão associados à receita líquida realizada no período.
+              </p>
+            </header>
+            <ChannelInsightScope
+              className={styles.channels}
+              revision={revision}
+              order={view.bars.map((row) => row.channel).join("|")}
+            >
+              {view.bars.length ? (
+                view.bars.map((row, index) => (
+                  <ChannelCard key={row.channel} row={row} index={index} animate={reveal.seen} />
+                ))
+              ) : (
+                <p className={styles.empty}>Não há receita líquida para atribuir neste recorte.</p>
+              )}
+            </ChannelInsightScope>
+          </div>
+          <aside className={styles.insights} aria-label="Leituras dos canais">
+            {view.champion ? (
+              <QuickInsightCard
+                label="Canal campeão"
+                help={METRIC_DEFINITIONS.championChannel}
+                channel={view.champion.channel}
+                name={view.champion.label}
+                money={
+                  <AnimatedMetric
+                    value={view.champion.netRevenue}
+                    format={compactInsightMoney}
+                    duration={500}
+                    active={reveal.seen}
+                  />
+                }
+                moneyLabel="Receita gerada"
+                percent={
+                  <AnimatedMetric
+                    value={view.champion.share}
+                    format={percentage}
+                    duration={420}
+                    active={reveal.seen}
+                  />
+                }
+                percentLabel="da receita líquida"
+                moneyTipTitle="Receita gerada"
+                moneyTipRows={[
+                  ["Valor completo", money(view.champion.netRevenue)],
+                  ["Canal", view.champion.label],
+                ]}
+                percentTipTitle="Canal campeão"
+                percentTipRows={[
+                  ["Canal", view.champion.label],
+                  ["Receita gerada", money(view.champion.netRevenue)],
+                  ["Participação", percentage(view.champion.share) + " da receita líquida"],
+                ]}
+              />
+            ) : (
+              <InsightCard title="Canal campeão" help={METRIC_DEFINITIONS.championChannel}>
+                <p className={styles.coverageHint}>Sem canal em destaque neste recorte.</p>
+              </InsightCard>
+            )}
+            {view.fastestGrowth ? (
+              <QuickInsightCard
+                label="Maior crescimento"
+                help={METRIC_DEFINITIONS.fastestGrowth}
+                channel={view.fastestGrowth.channel}
+                name={view.fastestGrowth.label}
+                money={
+                  <AnimatedMetric
+                    value={view.fastestGrowth.delta}
+                    format={compactSignedMoney}
+                    duration={500}
+                    active={reveal.seen}
+                  />
+                }
+                moneyLabel="Variação"
+                moneyTone={deltaSentiment(view.fastestGrowth.delta)}
+                percent={
+                  <AnimatedMetric
+                    value={view.fastestGrowth.growthRate}
+                    format={signedPercent}
+                    duration={420}
+                    active={reveal.seen}
+                  />
+                }
+                percentLabel="Crescimento"
+                percentTone={deltaSentiment(view.fastestGrowth.growthRate)}
+                moneyTipTitle="Variação no período"
+                moneyTipRows={[
+                  ["Valor completo", signedMoney(view.fastestGrowth.delta)],
+                  ["Canal", view.fastestGrowth.label],
+                ]}
+                percentTipTitle="Maior crescimento"
+                percentTipRows={[
+                  ["Canal", view.fastestGrowth.label],
+                  ["Variação no período", signedMoney(view.fastestGrowth.delta)],
+                  ["Crescimento", signedPercent(view.fastestGrowth.growthRate)],
+                ]}
+              />
+            ) : (
+              <InsightCard title="Maior crescimento" help={METRIC_DEFINITIONS.fastestGrowth}>
+                <p className={styles.coverageHint}>Sem comparativo anterior para crescimento.</p>
+              </InsightCard>
+            )}
+            {view.lowestPerformance ? (
+              <QuickInsightCard
+                label="Canal de menor desempenho"
+                help={METRIC_DEFINITIONS.lowestChannel}
+                channel={view.lowestPerformance.channel}
+                name={view.lowestPerformance.label}
+                money={
+                  <AnimatedMetric
+                    value={view.lowestPerformance.netRevenue}
+                    format={compactInsightMoney}
+                    duration={500}
+                    active={reveal.seen}
+                  />
+                }
+                moneyLabel="Receita gerada"
+                percent={
+                  <AnimatedMetric
+                    value={view.lowestPerformance.share}
+                    format={percentage}
+                    duration={420}
+                    active={reveal.seen}
+                  />
+                }
+                percentLabel="da receita líquida"
+                moneyTipTitle="Receita gerada"
+                moneyTipRows={[
+                  ["Valor completo", money(view.lowestPerformance.netRevenue)],
+                  ["Canal", view.lowestPerformance.label],
+                ]}
+                percentTipTitle="Canal de menor desempenho"
+                percentTipRows={[
+                  ["Canal", view.lowestPerformance.label],
+                  ["Receita gerada", money(view.lowestPerformance.netRevenue)],
+                  [
+                    "Participação",
+                    percentage(view.lowestPerformance.share) + " da receita líquida",
+                  ],
+                ]}
+              />
+            ) : (
+              <InsightCard
+                title="Canal de menor desempenho"
+                help={METRIC_DEFINITIONS.lowestChannel}
+              >
+                <p className={styles.coverageHint}>Sem canal identificado neste recorte.</p>
+              </InsightCard>
+            )}
+          </aside>
+        </div>
 
-        <CoverageBlock
-          slices={coverageSlices}
-          identifiedShare={attribution.attributedRevenueShare}
-          identifiedRevenue={attribution.attributedRevenue}
-          unidentifiedShare={attribution.unattributedRevenueShare}
-          unidentifiedRevenue={attribution.unattributedRevenue}
-          reduced={reduced}
-          initial={initial}
-          animate={reveal.seen}
-        />
-
-        <aside className={styles.insights} aria-label="Leituras dos canais">
-          {view.champion ? (
-            <QuickInsightCard
-              label="Canal campeão"
-              help={METRIC_DEFINITIONS.championChannel}
-              channel={view.champion.channel}
-              name={view.champion.label}
-              money={
-                <AnimatedMetric
-                  value={view.champion.netRevenue}
-                  format={compactInsightMoney}
-                  duration={500}
-                  active={reveal.seen}
-                />
-              }
-              moneyLabel="Receita gerada"
-              percent={
-                <AnimatedMetric
-                  value={view.champion.share}
-                  format={percentage}
-                  duration={420}
-                  active={reveal.seen}
-                />
-              }
-              percentLabel="da receita líquida"
-              moneyTipTitle="Receita gerada"
-              moneyTipRows={[
-                ["Valor completo", money(view.champion.netRevenue)],
-                ["Canal", view.champion.label],
-              ]}
-              percentTipTitle="Canal campeão"
-              percentTipRows={[
-                ["Canal", view.champion.label],
-                ["Receita gerada", money(view.champion.netRevenue)],
-                ["Participação", percentage(view.champion.share) + " da receita líquida"],
-              ]}
-            />
-          ) : (
-            <InsightCard title="Canal campeão" help={METRIC_DEFINITIONS.championChannel}>
-              <p className={styles.coverageHint}>Sem canal em destaque neste recorte.</p>
-            </InsightCard>
-          )}
-          {view.fastestGrowth ? (
-            <QuickInsightCard
-              label="Maior crescimento"
-              help={METRIC_DEFINITIONS.fastestGrowth}
-              channel={view.fastestGrowth.channel}
-              name={view.fastestGrowth.label}
-              money={
-                <AnimatedMetric
-                  value={view.fastestGrowth.delta}
-                  format={compactSignedMoney}
-                  duration={500}
-                  active={reveal.seen}
-                />
-              }
-              moneyLabel="Variação no período"
-              moneyTone={deltaSentiment(view.fastestGrowth.delta)}
-              percent={
-                <AnimatedMetric
-                  value={view.fastestGrowth.growthRate}
-                  format={signedPercent}
-                  duration={420}
-                  active={reveal.seen}
-                />
-              }
-              percentLabel="Crescimento no período"
-              percentTone={deltaSentiment(view.fastestGrowth.growthRate)}
-              moneyTipTitle="Variação no período"
-              moneyTipRows={[
-                ["Valor completo", signedMoney(view.fastestGrowth.delta)],
-                ["Canal", view.fastestGrowth.label],
-              ]}
-              percentTipTitle="Maior crescimento"
-              percentTipRows={[
-                ["Canal", view.fastestGrowth.label],
-                ["Variação no período", signedMoney(view.fastestGrowth.delta)],
-                ["Crescimento", signedPercent(view.fastestGrowth.growthRate)],
-              ]}
-            />
-          ) : (
-            <InsightCard title="Maior crescimento" help={METRIC_DEFINITIONS.fastestGrowth}>
-              <p className={styles.coverageHint}>Sem comparativo anterior para crescimento.</p>
-            </InsightCard>
-          )}
+        <div className={styles.analytical}>
+          <CoverageBlock
+            slices={coverageSlices}
+            identifiedShare={attribution.attributedRevenueShare}
+            identifiedRevenue={attribution.attributedRevenue}
+            unidentifiedShare={attribution.unattributedRevenueShare}
+            unidentifiedRevenue={attribution.unattributedRevenue}
+            identifiedTrend={attribution.trends.attributedRevenue}
+            unidentifiedTrend={attribution.trends.unattributedRevenue}
+            coverageDeltaPoints={attribution.trends.coverageDeltaPoints}
+            reduced={reduced}
+            initial={initial}
+            animate={reveal.seen}
+          />
           <PurchaseJourneyCard journey={journeyAnalyticsModel(data)} animate={reveal.seen} />
-        </aside>
-      </CardContent>
-    </Card>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -197,6 +260,9 @@ function CoverageBlock({
   identifiedRevenue,
   unidentifiedShare,
   unidentifiedRevenue,
+  identifiedTrend,
+  unidentifiedTrend,
+  coverageDeltaPoints,
   reduced,
   initial,
   animate,
@@ -206,6 +272,9 @@ function CoverageBlock({
   identifiedRevenue: number | null;
   unidentifiedShare: number | null;
   unidentifiedRevenue: number | null;
+  identifiedTrend: Trend | null;
+  unidentifiedTrend: Trend | null;
+  coverageDeltaPoints: number | null;
   reduced: boolean;
   initial: boolean;
   animate: boolean;
@@ -214,14 +283,18 @@ function CoverageBlock({
   const rows = [
     {
       name: "Identificada",
+      tone: "identified",
       share: identifiedShare,
       revenue: identifiedRevenue,
+      trend: identifiedTrend,
       color: COVERAGE_COLORS.identified,
     },
     {
       name: "Não identificada",
+      tone: "unidentified",
       share: unidentifiedShare,
       revenue: unidentifiedRevenue,
+      trend: unidentifiedTrend,
       color: COVERAGE_COLORS.unidentified,
     },
   ];
@@ -229,7 +302,14 @@ function CoverageBlock({
     <section className={styles.coverage} aria-label="Cobertura de atribuição">
       <div className={styles.coverageHead}>
         <h3 className={styles.coverageTitle}>Cobertura de atribuição</h3>
-        <ConceptHelp label="Cobertura de atribuição" text={METRIC_DEFINITIONS.coverage} />
+        <ConceptHelp
+          label="Cobertura de atribuição"
+          hoverOnly
+          text={
+            METRIC_DEFINITIONS.coverage +
+            " A variação compara a participação identificada com o período anterior equivalente. p.p. significa pontos percentuais."
+          }
+        />
       </div>
       <div className={styles.donutStage}>
         <div ref={anchor} className={styles.donutWrap}>
@@ -247,11 +327,13 @@ function CoverageBlock({
                       outerRadius="92%"
                       paddingAngle={slices.length > 1 ? 3 : 0}
                       cornerRadius={5}
-                      stroke="none"
+                      stroke="var(--tracking-surface)"
                       activeShape={(props: PieSectorDataItem) => (
                         <Sector
                           {...props}
-                          outerRadius={(typeof props.outerRadius === "number" ? props.outerRadius : 0) + 4}
+                          outerRadius={
+                            (typeof props.outerRadius === "number" ? props.outerRadius : 0) + 4
+                          }
                         />
                       )}
                       isAnimationActive={animate && !reduced}
@@ -263,6 +345,7 @@ function CoverageBlock({
                       ))}
                     </Pie>
                     <Tooltip
+                      isAnimationActive={false}
                       wrapperStyle={{ display: "none" }}
                       content={({ active, payload }) => (
                         <CoverageSliceTooltip
@@ -276,39 +359,113 @@ function CoverageBlock({
                 </ResponsiveContainer>
               </div>
               <div className={styles.donutCenter}>
-                <strong className="text-3xl font-semibold tracking-tight text-foreground tabular-nums">
-                  <AnimatedMetric value={identifiedShare} format={percentage} duration={650} active={animate} />
+                <strong className={styles.donutValue}>
+                  <AnimatedMetric
+                    value={identifiedShare}
+                    format={percentage}
+                    duration={650}
+                    active={animate}
+                  />
                 </strong>
-                <span className="text-[11px] leading-none text-muted-foreground">identificada</span>
+                <span className={styles.donutCaption}>identificada</span>
               </div>
             </>
           ) : (
             <p className={styles.coverageHint}>Sem receita no recorte para medir cobertura.</p>
           )}
         </div>
+        <CoverageDelta points={coverageDeltaPoints} />
       </div>
       <div className={styles.coverageFoot}>
         {rows.map((row) => (
-          <div
-            key={row.name}
-            className="flex items-center justify-between gap-3 rounded-xl bg-card/80 px-3 py-2.5 text-xs"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
-              <span className="truncate text-foreground">{row.name}</span>
+          <div key={row.name} className={styles.coverageRow} data-tone={row.tone}>
+            <div className={styles.coverageIdentity}>
+              <div className={styles.coverageName}>
+                <span className={styles.coverageDot} style={{ background: row.color }} />
+                <span>{row.name}</span>
+              </div>
+              <CoverageTrend trend={row.trend} />
             </div>
-            <div className="text-right">
-              <strong className="block text-foreground tabular-nums">
-                <AnimatedMetric value={row.share} format={percentage} duration={500} active={animate} />
+            <div className={styles.coverageFigures}>
+              <strong className={styles.coverageShare}>
+                <AnimatedMetric
+                  value={row.share}
+                  format={percentage}
+                  duration={500}
+                  active={animate}
+                />
               </strong>
-              <span className="text-muted-foreground">
-                <AnimatedMetric value={row.revenue} format={money} duration={500} active={animate} />
+              <span className={styles.coverageMoney}>
+                <AnimatedMetric
+                  value={row.revenue}
+                  format={money}
+                  duration={500}
+                  active={animate}
+                />
               </span>
             </div>
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+function formatCoveragePoints(value: number) {
+  const amount = Math.abs(value).toLocaleString("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+
+  return amount + " p.p.";
+}
+
+function CoverageDelta({ points }: { points: number | null }) {
+  const sentiment =
+    points == null ? "unavailable" : points > 0 ? "positive" : points < 0 ? "negative" : "neutral";
+  const Direction =
+    points != null && points > 0 ? ArrowUp : points != null && points < 0 ? ArrowDown : Minus;
+  return (
+    <div className={styles.coverageDelta} aria-label="Variação da cobertura de atribuição">
+      <span className={styles.coverageDeltaValue} data-sentiment={sentiment}>
+        <Direction size={13} aria-hidden="true" />
+        {points == null ? "—" : formatCoveragePoints(Math.abs(points))}
+      </span>
+      <span className={styles.coverageDeltaCaption}>vs. período anterior</span>
+    </div>
+  );
+}
+function CoverageTrend({ trend }: { trend: Trend | null }) {
+  if (!trend) {
+    return (
+      <div className={styles.coverageTrend}>
+        <span
+          className={styles.coverageChip}
+          data-sentiment="unavailable"
+          aria-label="Comparação com o período anterior indisponível"
+        >
+          —
+        </span>
+        <span className={styles.coverageCaption}>vs. período anterior</span>
+      </div>
+    );
+  }
+  const Icon = trend.direction === "up" ? ArrowUp : trend.direction === "down" ? ArrowDown : Minus;
+  const amount = `${trend.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  const meaning =
+    trend.direction === "up" ? "Aumento" : trend.direction === "down" ? "Redução" : "Sem variação";
+  return (
+    <div className={styles.coverageTrend}>
+      <span
+        className={styles.coverageChip}
+        data-sentiment={trend.sentiment}
+        aria-label={`${meaning} de ${amount} em relação ao período anterior`}
+      >
+        <Icon size={11} aria-hidden="true" />
+        {amount}
+      </span>
+      <span className={styles.coverageCaption}>vs. período anterior</span>
+    </div>
   );
 }
 
@@ -350,7 +507,9 @@ function CoverageSliceTooltip({
         const holeRight = rect.right - rect.width * 0.28;
         const holeTop = rect.top + rect.height * 0.4;
         const holeBottom = rect.top + rect.height * 0.62;
-        return right > holeLeft && point.left < holeRight && bottom > holeTop && point.top < holeBottom;
+        return (
+          right > holeLeft && point.left < holeRight && bottom > holeTop && point.top < holeBottom
+        );
       };
       const fits = (point: { left: number; top: number }) =>
         point.left >= pad &&
@@ -365,18 +524,20 @@ function CoverageSliceTooltip({
       });
     };
     place();
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    const dismiss = () => setBox(null);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", dismiss, true);
     return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
     };
   }, [anchor, item]);
   if (!item || typeof document === "undefined") return null;
   return createPortal(
     <div
       ref={tip}
-      className="pointer-events-none fixed z-40"
+      data-module-theme="tracking"
+      className={TRACKING_TOOLTIP_LAYER}
       style={{
         left: box?.left ?? -9999,
         top: box?.top ?? 0,
@@ -420,7 +581,7 @@ function InsightHeading({ title, help }: { title: string; help: string }) {
   return (
     <div className={styles.coverageHead}>
       <h3 className={styles.coverageTitle}>{title}</h3>
-      <ConceptHelp label={title} text={help} />
+      <ConceptHelp label={title} text={help} hoverOnly />
     </div>
   );
 }
@@ -490,19 +651,13 @@ function QuickInsightCard({
   percentTipRows: Array<[string, string]>;
 }) {
   const accent = CHANNEL_COLORS[channel];
-  const artwork =
-    label === "Canal campeão" ? "trophy" : label === "Maior crescimento" ? "growth-v2" : "decline-v2";
-
   return (
-    <div className={styles.insightCard + " " + styles.quickInsight} data-insight={label === "Canal campeão" ? "champion" : label === "Maior crescimento" ? "growth" : "lowest"}>
-      <img
-        src={"/tracking/channel-insights/" + artwork + ".png"}
-        className={styles.insightArtwork}
-        alt=""
-        aria-hidden="true"
-        width={64}
-        height={64}
-      />
+    <div
+      className={styles.insightCard + " " + styles.quickInsight}
+      data-insight={
+        label === "Canal campeão" ? "champion" : label === "Maior crescimento" ? "growth" : "lowest"
+      }
+    >
       <InsightHeading title={label} help={help} />
       <div className={styles.quickGrid}>
         <div className={styles.quickIdentity}>
@@ -519,7 +674,9 @@ function QuickInsightCard({
           rows={moneyTipRows}
           accent={accent}
           tone={moneyTone}
-          description={moneyTipRows.map(([rowLabel, rowValue]) => rowLabel + ": " + rowValue).join(". ")}
+          description={moneyTipRows
+            .map(([rowLabel, rowValue]) => rowLabel + ": " + rowValue)
+            .join(". ")}
         >
           {moneyValue}
         </AbbreviatedValue>
@@ -529,7 +686,9 @@ function QuickInsightCard({
           rows={percentTipRows}
           accent={accent}
           tone={percentTone}
-          description={percentTipRows.map(([rowLabel, rowValue]) => rowLabel + ": " + rowValue).join(". ")}
+          description={percentTipRows
+            .map(([rowLabel, rowValue]) => rowLabel + ": " + rowValue)
+            .join(". ")}
         >
           {percent}
         </AbbreviatedValue>
@@ -560,6 +719,8 @@ function AbbreviatedValue({
   const trigger = useRef<HTMLButtonElement>(null);
   const tip = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const tooltipId = useId();
+  useTrackingTooltipDismissal(tooltipId, () => setOpen(false));
   const [box, setBox] = useState<{ left: number; top: number } | null>(null);
   useLayoutEffect(() => {
     if (!open) return;
@@ -570,18 +731,19 @@ function AbbreviatedValue({
       const height = tip.current?.offsetHeight || 118;
       const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
       const above = rect.top - height - 8;
-      setBox({ left, top: above >= 8 ? above : rect.bottom + 8 });
+      setBox({ left, top: Math.max(8, Math.min(above >= 8 ? above : rect.bottom + 8, window.innerHeight - height - 8)) });
     };
     place();
+    const dismiss = () => setOpen(false);
     const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") dismiss();
     };
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", dismiss, true);
     window.addEventListener("keydown", close);
     return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
       window.removeEventListener("keydown", close);
     };
   }, [open]);
@@ -592,16 +754,19 @@ function AbbreviatedValue({
         type="button"
         className={placement + " " + (styles.quickFigure ?? "") + " " + toneClass(tone)}
         aria-label={description}
+        aria-describedby={open ? tooltipId : undefined}
         onMouseEnter={() => {
           closeActiveInsightTip?.();
           closeActiveInsightTip = () => setOpen(false);
-          setOpen(true);
+          announceTrackingTooltip(tooltipId);
+    setOpen(true);
         }}
         onMouseLeave={() => setOpen(false)}
         onFocus={() => {
           closeActiveInsightTip?.();
           closeActiveInsightTip = () => setOpen(false);
-          setOpen(true);
+          announceTrackingTooltip(tooltipId);
+    setOpen(true);
         }}
         onBlur={() => setOpen(false)}
       >
@@ -611,7 +776,10 @@ function AbbreviatedValue({
         ? createPortal(
             <div
               ref={tip}
-              className="pointer-events-none fixed z-40"
+              id={tooltipId}
+              role="tooltip"
+              data-module-theme="tracking"
+              className={TRACKING_TOOLTIP_LAYER}
               style={{
                 left: box?.left ?? -9999,
                 top: box?.top ?? 0,
@@ -626,4 +794,3 @@ function AbbreviatedValue({
     </>
   );
 }
-

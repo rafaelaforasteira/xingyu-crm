@@ -1,5 +1,6 @@
 .section {
   --origin-card: color-mix(in srgb, hsl(var(--muted)) 42%, hsl(var(--card)));
+  scroll-margin-top: 88px;
 }
 .section[data-revealed="false"] {
   opacity: 0;
@@ -11,14 +12,39 @@
 .layout {
   display: grid;
   gap: 12px;
-  align-items: stretch;
-  grid-template-areas:
-    "coverage"
-    "channels"
-    "insights";
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+.origin {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.sectionHead {
+  min-width: 0;
+  margin-bottom: 16px;
+}
+.channelsCard,
+.insights,
+.coverage,
+.journeyWidget {
+  min-width: 0;
+  border: 1px solid var(--tracking-border);
+  border-radius: var(--tracking-radius-widget);
+  background: var(--tracking-surface);
+  box-shadow: 0 1px 2px rgba(16, 16, 16, 0.04);
+}
+.analytical {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.channelsCard {
+  padding: 16px;
 }
 .channels {
-  grid-area: channels;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 1fr;
@@ -26,39 +52,30 @@
   min-width: 0;
 }
 .coverage {
-  grid-area: coverage;
   display: flex;
-  min-width: 0;
-  height: 100%;
   flex-direction: column;
   justify-content: flex-start;
-  padding: 12px 13px 11px;
-  border-radius: var(--radius);
-  border: 1px solid transparent;
-  background: var(--origin-card);
-  box-shadow: none;
+  padding: 16px;
 }
 .section[data-revealed="true"] .coverage {
   animation: fade-in 300ms ease-out 40ms both;
 }
 .insights {
-  grid-area: insights;
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 0;
   gap: 10px;
-  min-width: 0;
+  padding: 16px;
 }
-.insights > :last-child {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
+.journeyWidget {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
 }
 .empty {
   grid-column: 1 / -1;
   margin: 0;
-  border-radius: var(--radius);
+  border-radius: var(--tracking-radius-widget);
   background: var(--origin-card);
   padding: 24px;
   color: hsl(var(--muted-foreground));
@@ -66,14 +83,14 @@
 }
 .channelCard {
   display: grid;
-  grid-template-rows: 30px minmax(0, 1fr) 5px;
+  grid-template-rows: 30px auto auto 5px;
   gap: 8px;
   min-width: 0;
   height: 100%;
   padding: 11px 12px 10px;
   border: 1px solid transparent;
-  border-radius: var(--radius);
-  background: var(--origin-card);
+  border-radius: var(--tracking-radius-widget);
+  background: var(--tracking-surface);
   box-shadow: none;
   text-align: left;
   cursor: default;
@@ -82,26 +99,63 @@
   font: inherit;
   transition:
     border-color 140ms ease,
-    background-color 140ms ease,
     box-shadow 140ms ease,
     transform 140ms ease;
 }
-.channelCard:hover,
-.channelCard:focus-visible,
-.channelCard[data-open="true"] {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  background: color-mix(in srgb, var(--accent) 8%, hsl(var(--card)));
-  box-shadow: 0 2px 8px hsl(var(--foreground) / 0.04);
+.channelCard[data-channel="META_ADS"],
+.channelCard[data-channel="REFERRAL"] {
+  background: color-mix(in srgb, var(--tracking-data-blue) 9%, var(--tracking-surface));
+}
+.channelCard[data-channel="WHATSAPP"] {
+  background: color-mix(in srgb, var(--tracking-data-green) 11%, var(--tracking-surface));
+}
+.channelCard[data-channel="GOOGLE_ADS"] {
+  background: color-mix(in srgb, var(--tracking-data-orange) 12%, var(--tracking-surface));
+}
+.channelCard[data-channel="INSTAGRAM"] {
+  background: color-mix(in srgb, var(--tracking-data-pink) 9%, var(--tracking-surface));
+}
+.channelCard[data-channel="EMAIL"] {
+  background: color-mix(in srgb, var(--tracking-data-yellow) 16%, var(--tracking-surface));
+}
+.channelCard[data-channel="OTHER"] {
+  background: color-mix(in srgb, var(--tracking-data-red) 7%, var(--tracking-surface));
+}
+.channelCard[data-channel="UNIDENTIFIED"] {
+  background: color-mix(in srgb, var(--tracking-data-red) 11%, var(--tracking-surface));
+}
+.channelCard[data-channel="DIRECT"] {
+  background: color-mix(in srgb, var(--tracking-data-charcoal) 6%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="META_ADS"],
+:global(.dark) .channelCard[data-channel="REFERRAL"] {
+  background: color-mix(in srgb, var(--tracking-data-blue) 16%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="WHATSAPP"] {
+  background: color-mix(in srgb, var(--tracking-data-green) 14%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="GOOGLE_ADS"] {
+  background: color-mix(in srgb, var(--tracking-data-orange) 14%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="INSTAGRAM"] {
+  background: color-mix(in srgb, var(--tracking-data-pink) 14%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="EMAIL"] {
+  background: color-mix(in srgb, var(--tracking-data-yellow) 12%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="OTHER"] {
+  background: color-mix(in srgb, var(--tracking-data-red) 12%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="UNIDENTIFIED"] {
+  background: color-mix(in srgb, var(--tracking-data-red) 16%, var(--tracking-surface));
+}
+:global(.dark) .channelCard[data-channel="DIRECT"] {
+  background: color-mix(in srgb, var(--tracking-data-charcoal) 18%, var(--tracking-surface));
+}
+.channelCard:hover {
+  border-color: color-mix(in srgb, var(--tracking-fg) 12%, transparent);
+  box-shadow: 0 1px 4px hsl(var(--foreground) / 0.05);
   transform: translateY(-1px);
-}
-.channelCard:hover .channelBarFill,
-.channelCard:focus-visible .channelBarFill,
-.channelCard[data-open="true"] .channelBarFill {
-  filter: saturate(1.18);
-}
-.channelCard:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 2px;
 }
 .section[data-revealed="true"] .channelCard {
   animation: card-in 300ms ease-out var(--delay) both;
@@ -118,6 +172,31 @@
   min-width: 0;
   align-items: center;
   gap: 8px;
+}
+.channelTop > .channelIdentity {
+  width: 100%;
+}
+.channelTop .channelName {
+  flex: 1;
+}
+.channelMetricRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 5px;
+}
+.channelMetricRow > .channelValue {
+  min-width: 0;
+  max-width: 100%;
+}
+.channelCard > .channelBar {
+  min-width: 0;
+  max-width: 100%;
+}
+.channelCard .channelBarFill {
+  max-width: 100%;
 }
 .channelMark,
 .insightMark,
@@ -162,6 +241,28 @@
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.2;
+}
+.channelHelp {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--tracking-fg-muted);
+}
+.channelHelp:hover,
+.channelHelp:focus-visible {
+  color: var(--tracking-accent-strong);
+}
+.channelHelp:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--tracking-accent-soft);
+}
+.channelHelp svg {
+  width: 12px;
+  height: 12px;
 }
 .channelMetrics {
   display: flex;
@@ -227,8 +328,8 @@
   white-space: nowrap;
 }
 .delta[data-sentiment="positive"] {
-  color: hsl(var(--success));
-  background: hsl(var(--success) / 0.1);
+  color: var(--tracking-accent-strong);
+  background: var(--tracking-accent-subtle);
 }
 .delta[data-sentiment="negative"] {
   color: hsl(var(--destructive));
@@ -236,7 +337,7 @@
 }
 .donutStage {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   min-height: 0;
@@ -257,15 +358,166 @@
 }
 .donutWrap {
   position: relative;
-  width: 70%;
+  width: min(200px, 100%);
   aspect-ratio: 1;
+  margin: 4px auto 0;
 }
 .coverageFoot {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: auto;
-  padding-top: 12px;
+  margin-top: 12px;
+}
+.coverageDelta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  background: none;
+}
+.coverageDeltaCaption {
+  color: var(--tracking-fg-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+.coverageDeltaValue {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--tracking-fg);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.coverageDeltaValue[data-sentiment="positive"] {
+  color: var(--tracking-accent-strong);
+}
+:global(.dark) .coverageDeltaValue[data-sentiment="positive"] {
+  color: var(--tracking-accent);
+}
+.coverageDeltaValue[data-sentiment="negative"] {
+  color: var(--tracking-data-red);
+}
+.coverageRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--tracking-radius-subcard);
+}
+.coverageRow[data-tone="identified"] {
+  background: color-mix(in srgb, var(--tracking-data-blue) 9%, var(--tracking-surface));
+}
+.coverageRow[data-tone="unidentified"] {
+  background: color-mix(in srgb, var(--tracking-data-red) 9%, var(--tracking-surface));
+}
+:global(.dark) .coverageRow[data-tone="identified"] {
+  background: color-mix(in srgb, var(--tracking-data-blue) 16%, var(--tracking-surface));
+}
+:global(.dark) .coverageRow[data-tone="unidentified"] {
+  background: color-mix(in srgb, var(--tracking-data-red) 14%, var(--tracking-surface));
+}
+.coverageIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.coverageName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tracking-fg);
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.coverageDot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+}
+.coverageTrend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.coverageChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--tracking-surface-soft);
+  color: var(--tracking-fg-muted);
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.coverageChip[data-sentiment="positive"] {
+  color: var(--tracking-accent-strong);
+  background: var(--tracking-accent-subtle);
+}
+:global(.dark) .coverageChip[data-sentiment="positive"] {
+  color: var(--tracking-accent);
+  background: var(--tracking-accent-soft);
+}
+.coverageChip[data-sentiment="negative"] {
+  color: var(--tracking-data-red);
+  background: color-mix(in srgb, var(--tracking-data-red) 12%, var(--tracking-surface));
+}
+.coverageChip[data-sentiment="neutral"],
+.coverageChip[data-sentiment="unavailable"] {
+  color: var(--tracking-fg-muted);
+  background: color-mix(in srgb, var(--tracking-fg) 6%, var(--tracking-surface));
+}
+.coverageCaption {
+  color: var(--tracking-fg-muted);
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+.coverageFigures {
+  flex: none;
+  text-align: right;
+}
+.coverageShare {
+  display: block;
+  color: var(--tracking-fg);
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.coverageMoney {
+  color: var(--tracking-fg-muted);
+  font-size: 11px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.donutValue {
+  color: var(--tracking-fg);
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.donutCaption {
+  color: var(--tracking-fg-muted);
+  font-size: 11px;
+  line-height: 1.2;
 }
 .donutChart {
   position: absolute;
@@ -274,6 +526,7 @@
 .donutCenter {
   pointer-events: none;
   position: absolute;
+  z-index: 1;
   inset: 0;
   display: flex;
   flex-direction: column;
@@ -294,7 +547,7 @@
   flex-direction: column;
   padding: 8px 13px 7px;
   border: 1px solid transparent;
-  border-radius: var(--radius);
+  border-radius: var(--tracking-radius-widget);
   background: var(--origin-card);
   box-shadow: none;
   cursor: default;
@@ -407,7 +660,7 @@
   font-variant-numeric: tabular-nums;
 }
 .quickPositive {
-  color: hsl(var(--success));
+  color: var(--tracking-accent-strong);
 }
 .quickNegative {
   color: hsl(var(--destructive));
@@ -463,9 +716,8 @@
 .section[data-revealed="true"] .coverageFoot {
   animation: fade-in 280ms ease-out 160ms both;
 }
-.journeyCard {
-  height: 100%;
-  padding: 12px 13px 16px;
+.section[data-revealed="true"] .journeyWidget {
+  animation: fade-in 300ms ease-out 80ms both;
 }
 .journey {
   container-type: inline-size;
@@ -623,23 +875,16 @@
 }
 .insightPopover {
   position: fixed;
-  z-index: 50;
+  z-index: 90;
   width: 280px;
   max-width: calc(100vw - 24px);
-  padding: 14px 15px 13px;
-  border: 1px solid color-mix(in srgb, var(--accent) 18%, hsl(var(--border)));
-  border-radius: 0.75rem;
-  background: hsl(var(--card));
-  color: hsl(var(--foreground));
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.06);
+  padding: 12px;
   pointer-events: none;
-  animation: insight-popover-in 130ms ease-out both;
 }
 .insightPopoverBody {
   display: flex;
   flex-direction: column;
   gap: 0;
-  animation: insight-popover-swap 90ms ease-out both;
 }
 .insightPopoverHead {
   display: flex;
@@ -707,45 +952,57 @@
   border-top: 1px solid hsl(var(--border) / 0.75);
 }
 .insightPopoverFootValue[data-sentiment="positive"] {
-  color: hsl(var(--success));
+  color: var(--tracking-accent-strong);
 }
 .insightPopoverFootValue[data-sentiment="negative"] {
   color: hsl(var(--destructive));
 }
-@keyframes insight-popover-in {
-  from {
-    opacity: 0;
-    transform: translateY(2px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-@keyframes insight-popover-swap {
-  from {
-    opacity: 0.88;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@media (min-width: 768px) and (max-width: 1099px) {
-  .layout {
-    grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.86fr);
-    grid-template-areas:
-      "coverage coverage"
-      "channels insights";
+@media (min-width: 640px) {
+  .channelsCard,
+  .insights,
+  .coverage,
+  .journeyWidget {
+    padding: 20px;
   }
 }
 @media (min-width: 1100px) {
-  .layout {
-    grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr) minmax(260px, 0.95fr);
-    grid-template-areas: "channels coverage insights";
-    gap: 12px;
+  .origin {
+    grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.82fr);
+    align-items: start;
   }
-  .donutWrap {
-    width: 70%;
+}
+@media (min-width: 1280px) {
+  .layout {
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 0.8fr);
+    grid-template-rows: auto auto;
+    gap: 12px;
+    align-items: start;
+  }
+  .origin {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: stretch;
+    align-items: stretch;
+  }
+  .analytical {
+    display: contents;
+  }
+  .coverage {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: stretch;
+    justify-content: space-between;
+  }
+  .coverageDelta {
+    margin-top: 0;
+  }
+  .journeyWidget {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .insights {
+    justify-content: space-between;
+    gap: 12px;
   }
 }
 @media (max-width: 560px) {
@@ -807,6 +1064,7 @@
   }
   .section[data-revealed="true"] .channelCard,
   .section[data-revealed="true"] .coverage,
+  .section[data-revealed="true"] .journeyWidget,
   .section[data-revealed="true"] .insightCard,
   .section[data-revealed="true"] .channelBarFill,
   .section[data-revealed="true"] .delta,
@@ -835,39 +1093,30 @@
 .quickInsight.quickInsight {
   position: relative;
   display: grid;
-  grid-template-rows: 44px 1fr;
+  grid-template-rows: 36px auto;
+  align-content: center;
   gap: 10px;
   padding: 14px;
   background: color-mix(in srgb, var(--reading-color) 7%, var(--tracking-surface));
-  border: 1px solid color-mix(in srgb, var(--reading-color) 24%, var(--tracking-border));
+  border: 1px solid var(--tracking-border);
 }
 .quickInsight[data-insight="champion"] {
-  --reading-color: #f4c542;
+  --reading-color: var(--tracking-data-yellow);
 }
 .quickInsight[data-insight="growth"] {
-  --reading-color: #5dd62c;
+  --reading-color: var(--tracking-data-green);
 }
 .quickInsight[data-insight="lowest"] {
-  --reading-color: #e63e46;
+  --reading-color: var(--tracking-data-red);
 }
 .quickInsight.quickInsight:hover {
   background: color-mix(in srgb, var(--reading-color) 9%, var(--tracking-surface));
-  border-color: color-mix(in srgb, var(--reading-color) 30%, var(--tracking-border));
+  border-color: color-mix(in srgb, var(--reading-color) 14%, var(--tracking-border));
 }
 .quickInsight > .coverageHead {
   margin: 0;
-  padding-right: 44px;
+
   align-items: flex-start;
-}
-.insightArtwork {
-  position: absolute;
-  top: 5px;
-  right: 3px;
-  width: 50px;
-  height: 50px;
-  object-fit: contain;
-  pointer-events: none;
-  user-select: none;
 }
 .quickInsight.quickInsight {
   overflow: visible;
@@ -880,15 +1129,6 @@
   padding-top: 20px;
   gap: 12px;
   overflow: visible;
-}
-@media (min-width: 1600px) {
-  .insightArtwork {
-    width: 56px;
-    height: 56px;
-  }
-  .quickInsight > .coverageHead {
-    padding-right: 50px;
-  }
 }
 .quickInsight .quickGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -931,3 +1171,41 @@
 .quickInsight .quickFigure {
   font-size: 16px;
 }
+
+@media (min-width: 1100px) {
+  .insights.insights {
+    align-self: stretch;
+    min-height: 0;
+  }
+}
+@media (max-width: 1099px) {
+  .insights.insights {
+    grid-template-rows: repeat(3, auto);
+  }
+}
+
+.coverage.coverage {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.coverage > .donutStage {
+  flex: 1 0 auto;
+  padding: 12px 0 0;
+}
+.coverage > .coverageFoot {
+  margin-top: 8px;
+}
+
+.coverage > .donutStage { flex-direction: column; gap: 12px; }
+/* HD containment: retain the same three areas with less nonessential spacing. */
+@media (min-width: 1280px) and (max-width: 1599px) {
+  .layout { grid-template-columns: minmax(0, 1.8fr) minmax(0, 0.75fr); }
+  .channelsCard, .insights.insights { padding: 16px; }
+  .channels { gap: 10px; }
+  .channelCard { padding: 11px 10px 10px; }
+  .channelIdentity { gap: 6px; }
+  .channelMetricRow .delta { padding: 2px 5px; }
+  .quickInsight.quickInsight { padding: 12px; }
+  .quickInsight .quickGrid { column-gap: 8px; }
+}
+.quickInsight .quickGrid > * { min-width: 0; }

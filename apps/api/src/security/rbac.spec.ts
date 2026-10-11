@@ -36,9 +36,11 @@ describe("RBAC + tenant matrix", () => {
     expect(can(AuthRole.ADMIN, "clients.view")).toBe(true);
   });
 
-  it("MANAGER (supervisor) can operate pipelines/orders but not admin modules", () => {
-    expect(can(AuthRole.MANAGER, "pipelines.view")).toBe(true);
-    expect(can(AuthRole.MANAGER, "orders.edit")).toBe(true);
+  it("MANAGER is restricted to Tracking overview and own account", () => {
+    expect(can(AuthRole.MANAGER, "pipelines.view")).toBe(false);
+    expect(can(AuthRole.MANAGER, "orders.edit")).toBe(false);
+    expect(can(AuthRole.MANAGER, "tracking.overview")).toBe(true);
+    expect(can(AuthRole.MANAGER, "profile.view")).toBe(true);
     expect(can(AuthRole.MANAGER, "users.manage")).toBe(false);
     expect(can(AuthRole.MANAGER, "organization.manage")).toBe(false);
     expect(can(AuthRole.MANAGER, "finance.sensitive")).toBe(false);
@@ -51,7 +53,9 @@ describe("RBAC + tenant matrix", () => {
     expect(can(AuthRole.CONSULTANT, "finance.view")).toBe(false);
     expect(can(AuthRole.CONSULTANT, "finance.sensitive")).toBe(false);
     expect(can(AuthRole.CONSULTANT, "organization.manage")).toBe(false);
-    expect(can(AuthRole.CONSULTANT, "orders.view")).toBe(true);
+    expect(can(AuthRole.CONSULTANT, "orders.view")).toBe(false);
+    expect(can(AuthRole.CONSULTANT, "tracking.overview")).toBe(true);
+    expect(can(AuthRole.CONSULTANT, "profile.view")).toBe(true);
   });
 
   it("PermissionsGuard forbids consultant on users.manage", () => {

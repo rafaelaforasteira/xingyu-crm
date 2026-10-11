@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { announceTrackingTooltip, useTrackingTooltipDismissal } from "./tracking-help";
 import styles from "./financial-funnel.module.css";
 
 type ActiveTooltip = { id: string; anchor: HTMLButtonElement; content: ReactNode; tone: string };
@@ -18,6 +19,7 @@ const TooltipContext = createContext<{
   active: ActiveTooltip | null;
   tooltipId: string;
   open: (item: ActiveTooltip) => void;
+  close: (id: string) => void;
 } | null>(null);
 
 /** One active item and one portal, scoped exclusively to this financial funnel. */
@@ -32,6 +34,7 @@ export function FunnelTooltipScope({
 }) {
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const tooltipId = useId();
+  useTrackingTooltipDismissal(tooltipId, () => setActiveTooltip(null));
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => setActiveTooltip(null), [revision]);
   useEffect(() => {
@@ -47,11 +50,16 @@ export function FunnelTooltipScope({
       )
         setActiveTooltip(null);
     };
+    const dismiss = () => setActiveTooltip(null);
     document.addEventListener("keydown", escape);
     document.addEventListener("pointerdown", outside);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
     return () => {
       document.removeEventListener("keydown", escape);
       document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
     };
   }, []);
   return (
@@ -59,14 +67,19 @@ export function FunnelTooltipScope({
       value={{
         active: activeTooltip,
         tooltipId,
-        open: setActiveTooltip,
+        open: (item) => { announceTrackingTooltip(tooltipId); setActiveTooltip(item); },
+        close: (id) => setActiveTooltip((current) => (current?.id === id ? null : current)),
       }}
     >
       <div
         ref={root}
         className={className}
+        data-funnel-tooltip-scope=""
         onPointerLeave={(event) => {
-          if (event.pointerType !== "touch") setActiveTooltip(null);
+          if (event.pointerType === "touch") return;
+          const next = event.relatedTarget;
+          if (next instanceof Node && event.currentTarget.contains(next)) return;
+          setActiveTooltip(null);
         }}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) setActiveTooltip(null);
@@ -108,6 +121,14 @@ export function FunnelTooltipTrigger({
       style={style}
       onPointerEnter={(event) => {
         if (event.pointerType !== "touch") show(event.currentTarget);
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "touch") return;
+        const next = event.relatedTarget;
+        const nextTrigger = next instanceof Element ? next.closest("[data-funnel-tooltip-trigger]") : null;
+        const scope = event.currentTarget.closest("[data-funnel-tooltip-scope]");
+        if (nextTrigger && scope?.contains(nextTrigger)) return;
+        context.close(id);
       }}
       onFocus={(event) => show(event.currentTarget)}
       onClick={(event) => show(event.currentTarget)}
@@ -151,12 +172,8 @@ function FinancialFunnelTooltip({ item, id }: { item: ActiveTooltip; id: string 
     const observer = new ResizeObserver(update);
     if (card.current) observer.observe(card.current);
     observer.observe(item.anchor);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
     return () => {
       observer.disconnect();
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
     };
   }, [item]);
   return createPortal(
@@ -166,7 +183,8 @@ function FinancialFunnelTooltip({ item, id }: { item: ActiveTooltip; id: string 
       role="tooltip"
       data-financial-funnel-tooltip
       data-tone={item.tone}
-      className={`${styles.funnelTooltip} rounded-2xl border border-primary/10 bg-card p-3 text-xs leading-relaxed text-foreground shadow-soft`}
+      data-module-theme="tracking"
+      className={`${styles.funnelTooltip} tracking-portal rounded-xl p-3 text-xs leading-relaxed shadow-soft`}
       style={{
         left: position?.left ?? 0,
         top: position?.top ?? 0,

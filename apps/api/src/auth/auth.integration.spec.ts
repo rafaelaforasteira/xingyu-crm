@@ -1,8 +1,4 @@
-import {
-  CanActivate,
-  INestApplication,
-  ValidationPipe,
-} from "@nestjs/common";
+import { CanActivate, INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
@@ -75,9 +71,7 @@ describe("Auth HTTP flows (integration)", () => {
     };
 
     const moduleRef = await Test.createTestingModule({
-      imports: [
-        ThrottlerModule.forRoot([{ ttl: 60_000, limit: 1000 }]),
-      ],
+      imports: [ThrottlerModule.forRoot([{ ttl: 60_000, limit: 1000 }])],
       controllers: [AuthController, ProbeController],
       providers: [
         AuthService,
@@ -168,6 +162,7 @@ describe("Auth HTTP flows (integration)", () => {
       .set("Cookie", cookies)
       .expect(200);
 
+    await request(app.getHttpServer()).get("/api/probe/private").set("Cookie", cookies).expect(200);
     expect(me.body.email).toBe("admin@xingyu.local");
     expect(me.body).not.toHaveProperty("passwordHash");
   });
@@ -184,42 +179,49 @@ describe("Auth HTTP flows (integration)", () => {
     await request(app.getHttpServer()).get("/api/probe/public").expect(200);
   });
 
-  it("role is attached to authenticated user on protected route", async () => {
-    const passwordHash = await auth.hashPassword("ChangeMeNow123!");
-    prisma.user.findFirst.mockResolvedValue({
-      id: "u1",
-      name: "Gestora",
-      email: "manager@xingyu.local",
-      authRole: AuthRole.MANAGER,
-      status: UserStatus.ACTIVE,
-      passwordHash,
-      organizationId: "org-xingyu",
-      teamId: "team-comercial",
-      team: { name: "Comercial" },
-      deletedAt: null,
-    });
-    prisma.userSession.create.mockResolvedValue({ id: "sess-2" });
-    prisma.user.update.mockResolvedValue({});
-    prisma.userSession.findUnique.mockResolvedValue({
-      id: "sess-2",
-      userId: "u1",
-      revokedAt: null,
-      expiresAt: new Date(Date.now() + 60_000),
-    });
+  it.each([AuthRole.MANAGER, AuthRole.CONSULTANT])(
+    "%s session remains usable but business API returns 403",
+    async (role) => {
+      const passwordHash = await auth.hashPassword("ChangeMeNow123!");
+      prisma.user.findFirst.mockResolvedValue({
+        id: "u1",
+        name: "Gestora",
+        email: "manager@xingyu.local",
+        authRole: role,
+        status: UserStatus.ACTIVE,
+        passwordHash,
+        organizationId: "org-xingyu",
+        teamId: "team-comercial",
+        team: { name: "Comercial" },
+        deletedAt: null,
+      });
+      prisma.userSession.create.mockResolvedValue({ id: "sess-2" });
+      prisma.user.update.mockResolvedValue({});
+      prisma.userSession.findUnique.mockResolvedValue({
+        id: "sess-2",
+        userId: "u1",
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
 
-    const login = await request(app.getHttpServer())
-      .post("/api/auth/login")
-      .send({ email: "manager@xingyu.local", password: "ChangeMeNow123!" })
-      .expect(200);
+      const login = await request(app.getHttpServer())
+        .post("/api/auth/login")
+        .send({ email: "manager@xingyu.local", password: "ChangeMeNow123!" })
+        .expect(200);
 
-    const cookies = (login.headers["set-cookie"] ?? []) as unknown as string[];
-    const probe = await request(app.getHttpServer())
-      .get("/api/probe/private")
-      .set("Cookie", cookies)
-      .expect(200);
+      const cookies = (login.headers["set-cookie"] ?? []) as unknown as string[];
+      const probe = await request(app.getHttpServer())
+        .get("/api/auth/me")
+        .set("Cookie", cookies)
+        .expect(200);
 
-    expect(probe.body.role).toBe("MANAGER");
-  });
+      expect(probe.body.role).toBe(role);
+      await request(app.getHttpServer())
+        .get("/api/probe/private")
+        .set("Cookie", cookies)
+        .expect(403);
+    },
+  );
 
   it("login invalid credentials do not leak existence", async () => {
     prisma.user.findFirst.mockResolvedValue(null);

@@ -31,6 +31,7 @@ describe("beta navigation", () => {
       "/orders",
       "/after-sales",
       "/tracking/vendas",
+      "/tracking/recuperacao",
       "/finance",
       "/clients",
       "/connections",

@@ -6,16 +6,13 @@ import {
   Repeat2,
   Clock3,
   UserRoundCheck,
-  ShoppingBag,
-  UsersRound,
-  Receipt,
   ArrowUp,
   ArrowDown,
   Minus,
   type LucideIcon,
 } from "lucide-react";
-import { AnimatedMetric, useTrackingMotion } from "./tracking-motion";
-import { FunnelTooltipScope, FunnelTooltipTrigger } from "./financial-funnel-tooltip";
+import { AnimatedMetric } from "./tracking-motion";
+import { ConceptHelp } from "./tracking-help";
 import { money, days, integer, percentage } from "./tracking-format";
 import { REACTIVATION_DAYS } from "./sales-tracking-rules";
 import type { IntelligenceTrend } from "./sales-intelligence-mock";
@@ -23,7 +20,6 @@ import { salesIntelligenceModel } from "./sales-intelligence-model";
 import styles from "./sales-intelligence.module.css";
 
 export function SalesIntelligence({ data }: { data: SalesTrackingData }) {
-  const { revision } = useTrackingMotion();
   const model = salesIntelligenceModel(data);
   const reactivation = model.reactivation;
   const cards = [
@@ -74,32 +70,13 @@ export function SalesIntelligence({ data }: { data: SalesTrackingData }) {
     },
   ];
   return (
-    <FunnelTooltipScope className={styles.panel} revision={revision}>
-      <section aria-label="Inteligência comercial">
-        <div className={styles.primaryGrid}>
-          {cards.map(({ key, ...card }, index) => (
-            <IntelligenceMetric key={key} {...card} tone={key} index={index} />
-          ))}
-        </div>
-        <div className={styles.secondaryGrid}>
-          {[
-            { icon: ShoppingBag, label: "Pedidos pagos", value: model.paidOrders, format: integer },
-            { icon: UsersRound, label: "Compradores", value: model.buyers, format: integer },
-            { icon: Receipt, label: "Ticket médio", value: model.averageTicket, format: money },
-          ].map((metric) => (
-            <div key={metric.label} className={styles.secondary}>
-              <p className={styles.secondaryLabel}>
-                <metric.icon size={15} aria-hidden="true" />
-                {metric.label}
-              </p>
-              <p className={styles.secondaryValue}>
-                <AnimatedMetric value={metric.value} format={metric.format} duration={450} />
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-    </FunnelTooltipScope>
+    <section className={styles.panel} aria-label="Inteligência comercial">
+      <div className={styles.primaryGrid}>
+        {cards.map(({ key, ...card }, index) => (
+          <IntelligenceMetric key={key} {...card} tone={key} index={index} />
+        ))}
+      </div>
+    </section>
   );
 }
 function IntelligenceMetric({
@@ -130,19 +107,23 @@ function IntelligenceMetric({
       style={{ "--delay": `${index * 50}ms` } as CSSProperties}
     >
       <div className={styles.header}>
-        <Icon className={styles.metricIcon} size={16} aria-hidden="true" />
-        <FunnelTooltipTrigger
+        <span className={styles.metricIcon}>
+          <Icon size={15} aria-hidden="true" />
+        </span>
+        <span className={styles.title}>{label}</span>
+        <ConceptHelp
           label={label}
-          className={styles.title}
+          className={
+            styles.info +
+            " inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full p-0 text-muted-foreground hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          }
           text={
             <>
-              <strong className="mb-2 block font-semibold text-primary">{label}</strong>
-              <span className="block">{help}</span>
+              <strong className="mb-1 block text-[13px] font-semibold leading-snug">{label}</strong>
+              <span className="block text-muted-foreground">{help}</span>
             </>
           }
-        >
-          {label}
-        </FunnelTooltipTrigger>
+        />
       </div>
       <div className={styles.body}>
         <p className={styles.value}>
@@ -150,24 +131,19 @@ function IntelligenceMetric({
         </p>
         <p className={styles.detail}>{detail}</p>
       </div>
-      <div
-        className={styles.trend}
-        data-sentiment={trend?.sentiment ?? "neutral"}
-        aria-label={
-          trend
-            ? `${trend.direction === "up" ? "Aumento" : trend.direction === "down" ? "Redução" : "Sem variação"} de ${trend.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}${trend.suffix === "dias" ? " dias" : trend.suffix === "p.p." ? " p.p." : "%"} em relação ao período anterior`
-            : "Sem comparativo anterior"
-        }
-      >
-        {trend ? (
-          <>
-            <TrendIcon trend={trend} />
-            {trend.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
-            {trend.suffix === "dias" ? " dias" : trend.suffix === "p.p." ? " p.p." : "%"}
-          </>
-        ) : (
-          "—"
-        )}
+      <div className={styles.trendRow}>
+        <span className={styles.trend} data-sentiment={trend?.sentiment ?? "neutral"}>
+          {trend ? (
+            <>
+              <TrendIcon trend={trend} />
+              {trend.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+              {trend.suffix === "dias" ? " dias" : trend.suffix === "p.p." ? " p.p." : "%"}
+            </>
+          ) : (
+            "—"
+          )}
+        </span>
+        <span className={styles.trendCaption}>vs. período anterior</span>
       </div>
     </div>
   );

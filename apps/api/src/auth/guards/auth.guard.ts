@@ -1,5 +1,6 @@
 import {
   CanActivate,
+  ForbiddenException,
   ExecutionContext,
   Injectable,
   UnauthorizedException,
@@ -14,6 +15,7 @@ import { AUTH_COOKIE } from "../cookie.config";
 import { PrismaService } from "../../prisma/prisma.service";
 import type { AccessTokenPayload, AuthenticatedUser } from "../types";
 import type { DemoUser } from "../../common/decorators/demo-user.decorator";
+import { canAccessCrmApi } from "@xingyu/config";
 
 type AuthRequest = Request & {
   user?: AuthenticatedUser;
@@ -121,6 +123,9 @@ export class AuthGuard implements CanActivate {
       sessionId: session.id,
     };
 
+    if (!canAccessCrmApi(authenticated.role, request.method, request.path)) {
+      throw new ForbiddenException("Este módulo está disponível apenas para administradores.");
+    }
     request.user = authenticated;
     request.organizationId = user.organizationId;
     request.demoUser = {

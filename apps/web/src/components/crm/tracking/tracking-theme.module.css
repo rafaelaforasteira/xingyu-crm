@@ -1,0 +1,36 @@
+/*
+  HD-first. This root is the Tracking content container: viewport minus the sidebar.
+  Default density below is the HD/laptop scale and is the finished state.
+  Spacious wide-desktop values apply only when this container is at least 1320px
+  (about a 1600px viewport with the sidebar expanded).
+  Validate new Tracking UI here before treating a wide monitor as done.
+*/
+.root {
+  container-type: inline-size;
+  container-name: tracking;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: -1rem;
+  padding: 1rem;
+  overflow-x: clip;
+  background-color: var(--tracking-bg);
+  background-image: none;
+  color: var(--tracking-fg);
+}
+
+:global(.dark) .root {
+  background-image: none;
+}
+
+@media (min-width: 640px) {
+  .root {
+    margin: -1.5rem;
+    padding: 1.5rem;
+  }
+}
+/* HD viewports stay on the compact page inset. Wide viewports restore the roomier one. */
+@media (min-width: 640px) and (max-width: 1599px) {
+  .root {
+    padding: 1rem;
+  }
+}

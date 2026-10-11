@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Filter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label, Select } from "@/components/ui/form-controls";
+import { TrackingSelect } from "./tracking-select";
 import { Popover } from "@/components/ui/popover";
 import { TrackingPeriodSelector } from "./tracking-period-selector";
 import type { TrackingFilters } from "./sales-tracking-types";
@@ -49,12 +49,15 @@ export function SalesTrackingFilters({
       contentWidth={360}
       align="end"
       aria-label="Filtros de vendas"
-      contentClassName={`shadow-soft ${styles.panel}`}
+      contentClassName={`tracking-portal shadow-soft ${styles.panel}`}
       trigger={
         <Button
           type="button"
           size="icon"
-          className="relative h-9 w-9 shrink-0 rounded-full active:bg-primary/80"
+          variant="secondary"
+          data-tracking-control="filter"
+          data-active={count > 0 ? "true" : "false"}
+          className="relative h-9 w-9 shrink-0 rounded-full"
           aria-label="Filtrar dados de vendas"
           title="Filtrar dados"
           aria-haspopup="dialog"
@@ -89,54 +92,47 @@ export function SalesTrackingFilters({
           <X className="h-4 w-4" aria-hidden />
         </Button>
       </div>
-      <div className="min-h-0 space-y-4 overflow-y-auto p-4">
+      <div className={"min-h-0 space-y-4 overflow-y-auto p-4 " + styles.scrollArea}>
         <TrackingPeriodSelector
           value={draftFilters.period}
           onChange={(period) => setDraftFilters((current) => ({ ...current, period }))}
         />
-        <div className="space-y-2">
-          <Label htmlFor="tracking-customer-type" className="text-xs">
-            Tipo de cliente
-          </Label>
-          <Select
-            id="tracking-customer-type"
-            value={draftFilters.customerType}
-            onChange={(event) =>
-              setDraftFilters((current) => ({
-                ...current,
-                customerType: event.target.value as TrackingFilters["customerType"],
-              }))
-            }
-          >
-            <option value="ALL">Todos</option>
-            <option value="NEW">Novos</option>
-            <option value="EXISTING">Base existente</option>
-            <option value="REACTIVATED">Reativados</option>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tracking-purchase-stage" className="text-xs">
-            Número da compra
-          </Label>
-          <Select
-            id="tracking-purchase-stage"
-            value={draftFilters.purchaseStage}
-            onChange={(event) =>
-              setDraftFilters((current) => ({
-                ...current,
-                purchaseStage: event.target.value as TrackingFilters["purchaseStage"],
-              }))
-            }
-          >
-            <option value="ALL">Todas</option>
-            {[1, 2, 3, 4, 5].map((stage) => (
-              <option key={stage} value={stage}>
-                {stage}ª compra
-              </option>
-            ))}
-            <option value="6+">6ª compra ou mais</option>
-          </Select>
-        </div>
+        <TrackingSelect
+          id="tracking-customer-type"
+          label="Tipo de cliente"
+          value={draftFilters.customerType}
+          options={[
+            { value: "ALL", label: "Todos" },
+            { value: "NEW", label: "Novos" },
+            { value: "EXISTING", label: "Base existente" },
+            { value: "REACTIVATED", label: "Reativados" },
+          ]}
+          onChange={(customerType) =>
+            setDraftFilters((current) => ({
+              ...current,
+              customerType: customerType as TrackingFilters["customerType"],
+            }))
+          }
+        />
+        <TrackingSelect
+          id="tracking-purchase-stage"
+          label="Número da compra"
+          value={draftFilters.purchaseStage}
+          options={[
+            { value: "ALL", label: "Todas" },
+            ...[1, 2, 3, 4, 5].map((stage) => ({
+              value: String(stage),
+              label: stage + "ª compra",
+            })),
+            { value: "6+", label: "6ª compra ou mais" },
+          ]}
+          onChange={(purchaseStage) =>
+            setDraftFilters((current) => ({
+              ...current,
+              purchaseStage: purchaseStage as TrackingFilters["purchaseStage"],
+            }))
+          }
+        />
       </div>
       <div className="flex shrink-0 gap-2 border-t border-border/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Button

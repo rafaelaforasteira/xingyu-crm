@@ -76,12 +76,23 @@ export function financialFlow(
 export function overviewTrends(
   current: Pick<
     SalesOverview,
-    "netSales" | "averageLtv" | "averageRepurchaseDays" | "repeatRevenue" | "reactivatedCustomers"
+    | "netSales"
+    | "paidOrders"
+    | "buyers"
+    | "averageTicket"
+    | "averageLtv"
+    | "averageRepurchaseDays"
+    | "repeatRevenue"
+    | "firstPurchaseRevenue"
+    | "reactivatedCustomers"
   >,
   previous: SalesComparison,
 ): SalesOverview["trends"] {
   return {
     netSales: metricTrend(current.netSales, previous.netSales),
+    paidOrders: metricTrend(current.paidOrders, previous.paidOrders),
+    buyers: metricTrend(current.buyers, previous.buyers),
+    averageTicket: metricTrend(current.averageTicket, previous.averageTicket),
     averageLtv: metricTrend(current.averageLtv, previous.averageLtv),
     averageRepurchaseDays: metricTrend(
       current.averageRepurchaseDays,
@@ -90,6 +101,44 @@ export function overviewTrends(
       "dias",
     ),
     repeatRevenue: metricTrend(current.repeatRevenue, previous.repeatRevenue),
+    firstPurchaseRevenue: metricTrend(current.firstPurchaseRevenue, previous.firstPurchaseRevenue),
     reactivatedCustomers: metricTrend(current.reactivatedCustomers, previous.reactivatedCustomers),
+  };
+}
+
+/** Difference of identified-revenue shares, already expressed in percentage points. */
+export function coverageDeltaPoints(
+  currentShare: number | null,
+  previousShare: number | null,
+): number | null {
+  if (currentShare == null || previousShare == null) return null;
+  if (!Number.isFinite(currentShare) || !Number.isFinite(previousShare)) return null;
+  return currentShare - previousShare;
+}
+
+/** Identified revenue rising is healthy. Unidentified revenue rising is a coverage problem. */
+export function attributionTrends(
+  current: {
+    attributedRevenue: number;
+    unattributedRevenue: number;
+    attributedRevenueShare: number | null;
+  },
+  previous: {
+    attributedRevenue: number;
+    unattributedRevenue: number;
+    attributedRevenueShare: number | null;
+  },
+) {
+  return {
+    attributedRevenue: metricTrend(current.attributedRevenue, previous.attributedRevenue),
+    unattributedRevenue: metricTrend(
+      current.unattributedRevenue,
+      previous.unattributedRevenue,
+      true,
+    ),
+    coverageDeltaPoints: coverageDeltaPoints(
+      current.attributedRevenueShare,
+      previous.attributedRevenueShare,
+    ),
   };
 }

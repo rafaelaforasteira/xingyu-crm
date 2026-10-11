@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { purchaseStageFill } from "./purchase-stage-presentation";
+import { getPurchaseDistributionColor } from "./purchase-stage-presentation";
 
-describe("purchase stage presentation", () => {
-  it("keeps the recurring category green even when another category leads", () => {
-    const stages = [{ stage: "1ª", orders: 200 }, { stage: "6ª+", orders: 12 }];
-    expect(stages.map(({ stage }) => purchaseStageFill(stage))).toEqual([
-      "var(--purchase-stage-base, var(--tracking-data-charcoal, #3b3f42))",
-      "var(--tracking-data-green, #5dd62c)",
-    ]);
+const red = "var(--tracking-data-red, #e63e46)";
+const orange = "var(--tracking-data-orange, #f28a20)";
+const yellow = "var(--tracking-data-yellow, #f4c542)";
+const blue = "var(--tracking-data-blue, #3478f6)";
+const green = "var(--tracking-data-green, #5dd62c)";
+
+describe("purchase distribution magnitude colors", () => {
+  it.each([[0, red], [29, red], [30, orange], [49, orange], [50, yellow], [79, yellow], [80, blue], [99, blue], [100, green], [115, green]])("maps the threshold boundary %s", (value, color) => {
+    expect(getPurchaseDistributionColor(value as number)).toBe(color);
   });
-
-  it("uses the same neutral identity for the first five purchases", () => {
-    for (const stage of ["1ª", "2ª", "3ª", "4ª", "5ª"]) {
-      expect(purchaseStageFill(stage)).toBe("var(--purchase-stage-base, var(--tracking-data-charcoal, #3b3f42))");
-    }
+  it("colors current volumes", () => {
+    expect([57, 49, 37, 25, 38, 123].map(getPurchaseDistributionColor)).toEqual([yellow, orange, orange, red, orange, green]);
+  });
+  it("updates every category when volumes change", () => {
+    expect([115, 83, 62, 45, 28, 74].map(getPurchaseDistributionColor)).toEqual([green, blue, yellow, orange, red, yellow]);
   });
 });

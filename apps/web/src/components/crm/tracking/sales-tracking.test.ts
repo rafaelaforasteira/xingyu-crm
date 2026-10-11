@@ -92,6 +92,17 @@ describe("Tracking overview analytics", () => {
     expect(all.summary.newRevenue).toBe(300);
     expect(all.overview.firstPurchaseRevenue).toBe(100);
     expect(all.overview.repeatRevenue).toBe(500);
+    expect(all.overview.financialFlow.previousPeriod.firstPurchaseRevenue).toBe(500);
+    expect(all.overview.trends.firstPurchaseRevenue).toMatchObject({
+      direction: "down",
+      sentiment: "negative",
+    });
+    expect(all.overview.trends.repeatRevenue).toBeNull();
+    expect(all.attribution.trends.attributedRevenue).toBeNull();
+    expect(all.attribution.trends.unattributedRevenue).toMatchObject({
+      direction: "up",
+      sentiment: "negative",
+    });
     const newOnly = analyzeTrackingOverview(dataset, { ...base, customerType: "NEW" }, range);
     expect(newOnly.overview.repeatRevenue).toBe(200);
     expect(newOnly.summary.newCustomers).toBe(1);
@@ -156,6 +167,42 @@ describe("Tracking overview analytics", () => {
     expect(data.summary.averageRepurchaseDays).toBe(20);
     expect(data.summary.firstToSecondPurchaseDays).toBe(20);
     expect(median([10, 20, 90, 800])).toBe(55);
+  });
+  it("compares identified and unidentified revenue with the previous equal period", () => {
+    const identified = (
+      id: string,
+      customerId: string,
+      date: string,
+      amount: number,
+    ): TrackingOrder => ({
+      ...order(id, customerId, date, amount),
+      attribution: { channel: "PAID_SOCIAL", platform: "META", touchModel: "RECORDED_ORIGIN" },
+    });
+    const data = analyzeTrackingOverview(
+      {
+        customers: [identity("a"), identity("b")],
+        orders: [
+          identified("1", "a", "2026-08-10", 200),
+          order("2", "a", "2026-08-12", 50),
+          identified("3", "b", "2026-07-10", 100),
+          order("4", "b", "2026-07-12", 80),
+        ],
+      },
+      base,
+      { startDate: "2026-08-01", endDate: "2026-08-31" },
+    );
+    expect(data.attribution.attributedRevenue).toBe(200);
+    expect(data.attribution.unattributedRevenue).toBe(50);
+    expect(data.attribution.trends.attributedRevenue).toMatchObject({
+      direction: "up",
+      sentiment: "positive",
+    });
+    expect(data.attribution.trends.unattributedRevenue).toMatchObject({
+      direction: "down",
+      sentiment: "positive",
+    });
+    expect(data.attribution.attributedRevenueShare).toBe(80);
+    expect(data.attribution.trends.coverageDeltaPoints).toBeCloseTo(80 - (100 / 180) * 100);
   });
   it("includes unidentifiable revenue without inventing platform/channel overlap", () => {
     const o = order("1", "a", "2026-08-01", 100);

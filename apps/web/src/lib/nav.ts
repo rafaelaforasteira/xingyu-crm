@@ -124,7 +124,10 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
   {
     id: "tracking",
     label: "Tracking",
-    items: [{ href: "/tracking/vendas", label: "Visão Geral", icon: Radar }],
+    items: [
+      { href: "/tracking/vendas", label: "Visão Geral", icon: Radar },
+      { href: "/tracking/recuperacao", label: "Recuperação", icon: Undo2 },
+    ],
   },
   {
     id: "management",
@@ -232,7 +235,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     id: "tracking",
     label: "Tracking",
-    items: [{ href: "/tracking/vendas", label: "Visão Geral", icon: Radar }],
+    items: [
+      { href: "/tracking/vendas", label: "Visão Geral", icon: Radar },
+      { href: "/tracking/recuperacao", label: "Recuperação", icon: Undo2 },
+    ],
   },
   {
     id: "management",

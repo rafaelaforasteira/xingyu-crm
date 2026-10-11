@@ -7,8 +7,8 @@ export { CHANNEL_COLORS };
 export const MAX_CHANNEL_BARS = 8;
 
 export const COVERAGE_COLORS = {
-  identified: "#2563eb",
-  unidentified: "hsl(0 62% 46%)",
+  identified: "#3478F6",
+  unidentified: "#E63E46",
 };
 
 export type ChannelBarPoint = {
@@ -39,6 +39,7 @@ export type ChannelOriginView = {
   bars: ChannelBarPoint[];
   champion: ChannelInsight | null;
   fastestGrowth: ChannelInsight | null;
+  lowestPerformance: ChannelInsight | null;
 };
 
 export function channelDelta(current: number, previous: number) {
@@ -131,6 +132,15 @@ export function buildChannelOriginView(
   const ranked = [...channels].sort(compareNetRevenueDesc);
   const barsSource = groupChannelBars(ranked);
   const championRow = ranked.find((row) => row.netRevenue > 0) ?? null;
+  const lowestRow =
+    ranked
+      .filter((row) => row.channel !== "UNIDENTIFIED" && row.netRevenue > 0)
+      .sort(
+        (a, b) =>
+          a.netRevenue - b.netRevenue ||
+          a.previousNetRevenue - b.previousNetRevenue ||
+          a.channel.localeCompare(b.channel),
+      )[0] ?? null;
   const minPreviousForRate = Math.max(totalNetRevenue * 0.02, 1);
   const growthCandidates = ranked.filter(
     (row) =>
@@ -180,5 +190,6 @@ export function buildChannelOriginView(
     }),
     champion: championRow ? toInsight(championRow) : null,
     fastestGrowth: fastest ? toInsight(fastest) : null,
+    lowestPerformance: lowestRow ? toInsight(lowestRow) : null,
   };
 }

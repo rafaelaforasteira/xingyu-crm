@@ -4,11 +4,12 @@ import type { CSSProperties } from "react";
 import { ConceptHelp } from "./tracking-help";
 import { AnimatedMetric } from "./tracking-motion";
 import { percentage } from "./tracking-format";
-import { COVERAGE_COLORS } from "./channel-origin-model";
+
 import { journeyBucketAria } from "./journey-analytics";
 import { METRIC_DEFINITIONS } from "./tracking-dictionary";
 import type { JourneyAnalytics } from "./sales-tracking-types";
 import styles from "./channel-origin-section.module.css";
+import layout from "./purchase-journey-card.module.css";
 
 const HELP = {
   touchpoints:
@@ -34,10 +35,17 @@ export function PurchaseJourneyCard({
   animate: boolean;
 }) {
   return (
-    <div className={styles.insightCard + " " + styles.journeyCard}>
+    <section
+      className={styles.journeyWidget + " " + layout.widget}
+      aria-label="Jornada até a compra"
+    >
       <div className={styles.coverageHead}>
         <h3 className={styles.coverageTitle}>Jornada até a compra</h3>
-        <ConceptHelp label="Jornada até a compra" text={METRIC_DEFINITIONS.purchaseJourney} />
+        <ConceptHelp
+          hoverOnly
+          label="Jornada até a compra"
+          text={METRIC_DEFINITIONS.purchaseJourney}
+        />
       </div>
       {journey.status === "ready" ? (
         <JourneyBody journey={journey} animate={animate} />
@@ -48,7 +56,7 @@ export function PurchaseJourneyCard({
             : "Tracking de jornada ainda não configurado."}
         </p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -59,77 +67,85 @@ function JourneyBody({
   journey: Extract<JourneyAnalytics, { status: "ready" }>;
   animate: boolean;
 }) {
+  const metrics = [
+    {
+      label: "interações por compra",
+      value: journey.averageTouchpoints,
+      format: oneDecimal,
+      help: HELP.touchpoints,
+    },
+    {
+      label: "canais por jornada",
+      value: journey.averageChannels,
+      format: oneDecimal,
+      help: HELP.channels,
+    },
+    {
+      label: "tempo até a compra",
+      value: journey.averageTimeToPurchaseDays,
+      format: timeToPurchase,
+      help: HELP.time,
+    },
+  ];
   return (
-    <div className={styles.journey}>
-      <div className={styles.journeyKpis}>
-        <p className={styles.journeyValue}>
-          <AnimatedMetric
-            value={journey.averageTouchpoints}
-            format={oneDecimal}
-            duration={650}
-            active={animate}
-          />
-        </p>
-        <p className={styles.journeyValue + " " + styles.journeyChannels}>
-          <AnimatedMetric
-            value={journey.averageChannels}
-            format={oneDecimal}
-            duration={560}
-            active={animate}
-          />
-        </p>
-        <p className={styles.journeyValue + " " + styles.journeyTime}>
-          <AnimatedMetric
-            value={journey.averageTimeToPurchaseDays}
-            format={timeToPurchase}
-            duration={560}
-            active={animate}
-          />
-        </p>
-        <p className={styles.journeySupport}>
-          interações por compra
-          <ConceptHelp
-            label="Média de interações até a compra"
-            text={HELP.touchpoints}
-            className={styles.journeyHelp}
-          />
-        </p>
-        <p className={styles.journeyStatLabel + " " + styles.journeyChannelsLabel}>
-          Canais por jornada
-          <ConceptHelp label="Canais por jornada" text={HELP.channels} className={styles.journeyHelp} />
-        </p>
-        <p className={styles.journeyStatLabel + " " + styles.journeyTimeLabel}>
-          Tempo até a compra
-          <ConceptHelp label="Tempo até a compra" text={HELP.time} className={styles.journeyHelp} />
-        </p>
+    <div className={layout.body}>
+      <div className={layout.metrics}>
+        {metrics.map((metric) => (
+          <div className={layout.metric} key={metric.label}>
+            <p className={layout.value}>
+              <AnimatedMetric
+                value={metric.value}
+                format={metric.format}
+                duration={560}
+                active={animate}
+              />
+            </p>
+            <p className={layout.label}>
+              {metric.label}
+              <ConceptHelp
+                hoverOnly
+                label={metric.label}
+                text={metric.help}
+                className={styles.journeyHelp}
+              />
+            </p>
+          </div>
+        ))}
       </div>
-      <div className={styles.journeyDistribution}>
-        <p className={styles.journeyDistributionTitle}>Interações antes da compra</p>
-        <ul className={styles.journeyBars}>
-          {journey.distribution.map((point, index) => (
-            <li key={point.bucket} className={styles.journeyRow}>
-              <span className={styles.journeyBarLabel}>{point.label}</span>
-              <span className={styles.journeyTrack}>
-                <span
-                  className={styles.journeyFill}
-                  style={
-                    {
-                      "--share": Math.max(0, Math.min(100, point.percentage)) + "%",
-                      "--stagger": index,
-                      background: COVERAGE_COLORS.identified,
-                    } as CSSProperties
-                  }
-                  aria-hidden
-                />
-              </span>
-              <span className={styles.journeyPercent} aria-label={journeyBucketAria(point)}>
-                {percentage(point.percentage)}
-              </span>
-            </li>
+      <div className={layout.chart} aria-label="Distribuição das interações até a compra">
+        <div className={layout.stack}>
+          {journey.distribution.map((point) => (
+            <ConceptHelp
+              key={point.bucket}
+              hoverOnly
+              label={journeyBucketAria(point)}
+              text={
+                <>
+                  <strong>{point.label}</strong>
+                  <br />
+                  {percentage(point.percentage)} das compras
+                </>
+              }
+              className={layout.segment}
+              style={{ flexGrow: Math.max(0, point.percentage) } as CSSProperties}
+            >
+              <span className={layout.segmentFill} data-bucket={point.bucket} aria-hidden />
+            </ConceptHelp>
           ))}
-        </ul>
+        </div>
+        <div className={layout.scale}>
+          {journey.distribution.map((point) => (
+            <span
+              className={layout.scaleLabel}
+              key={point.bucket}
+              style={{ flexGrow: Math.max(0, point.percentage) }}
+            >
+              <span className={layout.dot} data-bucket={point.bucket} aria-hidden />
+              {point.label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
-

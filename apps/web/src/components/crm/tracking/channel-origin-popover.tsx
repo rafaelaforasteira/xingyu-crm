@@ -16,7 +16,9 @@ import { money, percentage } from "./tracking-format";
 import { AnimatedMetric } from "./tracking-motion";
 import { useReducedMotion } from "@/components/crm/dashboard/analytics-charts";
 import { ChannelBrandMark } from "./channel-origin-brand";
+import { CHANNEL_HELP } from "./channel-origin-config";
 import type { ChannelBarPoint } from "./channel-origin-model";
+import { ConceptHelp, announceTrackingTooltip, useTrackingTooltipDismissal } from "./tracking-help";
 import styles from "./channel-origin-section.module.css";
 
 type ActiveInsight = { channel: string; anchor: HTMLButtonElement; row: ChannelBarPoint };
@@ -64,6 +66,7 @@ export function ChannelInsightScope({
 }) {
   const [active, setActive] = useState<ActiveInsight | null>(null);
   const tooltipId = useId();
+  useTrackingTooltipDismissal(tooltipId, () => setActive(null));
   const root = useRef<HTMLDivElement>(null);
   const previousBoxes = useRef<Map<string, DOMRect> | null>(null);
   const reduced = useReducedMotion();
@@ -102,15 +105,20 @@ export function ChannelInsightScope({
         setActive(null);
       }
     };
+    const dismiss = () => setActive(null);
     document.addEventListener("keydown", escape);
     document.addEventListener("pointerdown", outside);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
     return () => {
       document.removeEventListener("keydown", escape);
       document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
     };
   }, []);
   return (
-    <InsightContext.Provider value={{ active, tooltipId, open: setActive, close: () => setActive(null) }}>
+    <InsightContext.Provider value={{ active, tooltipId, open: (item) => { announceTrackingTooltip(tooltipId); setActive(item); }, close: () => setActive(null) }}>
       <div
         ref={root}
         className={className}
@@ -139,31 +147,12 @@ export function ChannelCard({
 }) {
   const context = useContext(InsightContext);
   if (!context) throw new Error("ChannelCard requires ChannelInsightScope");
-  const open = context.active?.channel === row.channel;
-  const show = (anchor: HTMLButtonElement) =>
-    context.open({ channel: row.channel, anchor, row });
   return (
-    <button
-      type="button"
+    <article
       data-channel-insight-trigger={row.channel}
-      data-open={open ? "true" : undefined}
-      aria-label={"Entender " + row.label}
-      aria-expanded={open}
-      aria-describedby={open ? context.tooltipId : undefined}
+      data-channel={row.channel}
       className={styles.channelCard}
       style={{ "--delay": `${index * 40}ms`, "--accent": row.color } as CSSProperties}
-      onPointerEnter={(event) => {
-        if (event.pointerType !== "touch") show(event.currentTarget);
-      }}
-      onFocus={(event) => show(event.currentTarget)}
-      onClick={(event) => {
-        const pointerType = "pointerType" in event.nativeEvent
-          ? (event.nativeEvent as PointerEvent).pointerType
-          : "";
-        if (pointerType === "mouse") return;
-        if (open) context.close();
-        else show(event.currentTarget);
-      }}
     >
       <span className={styles.channelTop}>
         <span className={styles.channelIdentity}>
@@ -171,24 +160,30 @@ export function ChannelCard({
             <ChannelBrandMark channel={row.channel} size={20} />
           </span>
           <span className={styles.channelName}>{row.label}</span>
+          <ConceptHelp
+            label={row.label}
+            text={CHANNEL_HELP[row.channel]}
+            className={styles.channelHelp}
+            hoverOnly
+          />
+        </span>
+      </span>
+      <span className={styles.channelMetricRow}>
+        <span className={styles.channelValue}>
+          <AnimatedMetric value={row.netRevenue} format={money} duration={520} active={animate} />
         </span>
         <span className={styles.delta} data-sentiment={deltaSentiment(row.growthRate)}>
           <TrendIcon value={row.growthRate} />
           {signedPercent(row.growthRate)}
         </span>
       </span>
-      <span className={styles.channelMetrics}>
-        <span className={styles.channelValue}>
-          <AnimatedMetric value={row.netRevenue} format={money} duration={520} active={animate} />
-        </span>
-        <span className={styles.channelShare}>
-          <AnimatedMetric value={row.revenueShare} format={percentage} duration={420} active={animate} />
-        </span>
+      <span className={styles.channelShare}>
+        <AnimatedMetric value={row.revenueShare} format={percentage} duration={420} active={animate} />
       </span>
       <span className={styles.channelBar} aria-hidden="true">
         <span className={styles.channelBarFill} style={{ width: row.currentWidth + "%" }} />
       </span>
-    </button>
+    </article>
   );
 }
 
@@ -206,12 +201,8 @@ function ChannelInsightPopover({ item, id }: { item: ActiveInsight; id: string }
     if (!node) return;
     observer.observe(node);
     observer.observe(item.anchor);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
     return () => {
       observer.disconnect();
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
     };
   }, [item]);
   const { row } = item;
@@ -221,7 +212,8 @@ function ChannelInsightPopover({ item, id }: { item: ActiveInsight; id: string }
       ref={card}
       id={id}
       role="tooltip"
-      className={styles.insightPopover}
+      data-module-theme="tracking"
+      className={styles.insightPopover + " tracking-portal rounded-xl shadow-soft"}
       style={{
         left: position?.left ?? 0,
         top: position?.top ?? 0,

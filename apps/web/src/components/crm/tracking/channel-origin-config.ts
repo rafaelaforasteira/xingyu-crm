@@ -50,14 +50,14 @@ export const CHANNEL_CONFIG: Record<TrackingChannel, ChannelConfig> = {
   },
   REFERRAL: {
     id: "referral",
-    label: "Indicação / Referral",
-    color: "hsl(212 42% 44%)",
+    label: "Indicação",
+    color: "var(--tracking-chart-muted)",
     fallback: Users,
   },
   EMAIL: {
     id: "email",
     label: "E-mail",
-    color: "hsl(262 38% 58%)",
+    color: "var(--tracking-fg-muted)",
     fallback: Mail,
   },
   DIRECT: {
@@ -69,7 +69,7 @@ export const CHANNEL_CONFIG: Record<TrackingChannel, ChannelConfig> = {
   OTHER: {
     id: "other",
     label: "Outros",
-    color: "hsl(255 18% 52%)",
+    color: "var(--tracking-chart-muted)",
     fallback: Layers,
   },
   UNIDENTIFIED: {
@@ -87,3 +87,15 @@ export const CHANNEL_LABELS = Object.fromEntries(
 export const CHANNEL_COLORS = Object.fromEntries(
   Object.entries(CHANNEL_CONFIG).map(([channel, config]) => [channel, config.color]),
 ) as Record<TrackingChannel, string>;
+
+export const CHANNEL_HELP: Record<TrackingChannel, string> = {
+  META_ADS: "Receita líquida atribuída a anúncios pagos da Meta no período selecionado.",
+  WHATSAPP: "Receita líquida em que o WhatsApp foi a origem registrada no período selecionado.",
+  GOOGLE_ADS: "Receita líquida atribuída a anúncios de pesquisa do Google no período selecionado.",
+  INSTAGRAM: "Receita líquida de origem orgânica do Instagram no período selecionado.",
+  REFERRAL: "Receita líquida atribuída a indicações no período selecionado.",
+  EMAIL: "Receita líquida atribuída a e-mail no período selecionado.",
+  DIRECT: "Receita líquida de acesso direto no período selecionado.",
+  OTHER: "Receita líquida de origens conhecidas fora dos canais principais, no período selecionado.",
+  UNIDENTIFIED: "Receita líquida do período selecionado sem uma origem identificada.",
+};

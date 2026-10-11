@@ -2,7 +2,7 @@
 
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Select, Label } from "@/components/ui/form-controls";
+import { TrackingSelect } from "./tracking-select";
 import { DateRangeCalendar } from "@/components/ui/date-range-calendar";
 import type { TrackingDateRange, TrackingPeriod } from "./sales-tracking-types";
 
@@ -17,25 +17,24 @@ export function TrackingPeriodSelector({
     date ? format(parseISO(date), "dd MMM yyyy", { locale: ptBR }).replace(".", "") : "Selecionar";
   return (
     <div className="space-y-2">
-      <Label htmlFor="tracking-period" className="text-xs">
-        Período
-      </Label>
-      <Select
+      <TrackingSelect
         id="tracking-period"
+        label="Período"
         value={value.mode === "preset" ? value.preset : "custom"}
-        onChange={(event) =>
+        options={[
+          { value: "30d", label: "Últimos 30 dias" },
+          { value: "90d", label: "Últimos 90 dias" },
+          { value: "12m", label: "Últimos 12 meses" },
+          { value: "custom", label: "Período personalizado" },
+        ]}
+        onChange={(preset) =>
           onChange(
-            event.target.value === "custom"
+            preset === "custom"
               ? { mode: "custom", startDate: "", endDate: "" }
-              : { mode: "preset", preset: event.target.value as TrackingPeriod },
+              : { mode: "preset", preset: preset as TrackingPeriod },
           )
         }
-      >
-        <option value="30d">Últimos 30 dias</option>
-        <option value="90d">Últimos 90 dias</option>
-        <option value="12m">Últimos 12 meses</option>
-        <option value="custom">Período personalizado</option>
-      </Select>
+      />
       {value.mode === "custom" && (
         <div className="space-y-3 rounded-xl border border-border bg-background p-2">
           <div className="grid grid-cols-2 gap-2 px-1 pt-1 text-xs" aria-live="polite">

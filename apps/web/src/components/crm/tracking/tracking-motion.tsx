@@ -104,7 +104,7 @@ export function AnimatedMetric({
   return (
     <span className="tabular-nums">
       <span className="sr-only">{final}</span>
-      <span key={revision} className={styles.metricUpdate} aria-hidden="true">{value == null || reduced ? final : format(shown)}</span>
+      <span className={styles.metricUpdate} aria-hidden="true">{value == null || reduced ? final : format(shown)}</span>
     </span>
   );
 }

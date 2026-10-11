@@ -39,6 +39,8 @@ export const METRIC_DEFINITIONS = {
   validOrder:
     "Pedido pago com saldo líquido positivo até a data final da análise. Cancelamentos integrais e reembolsos integrais não são compras válidas.",
   paidOrders: "Pedidos pagos com saldo líquido positivo no recorte selecionado.",
+  buyers:
+    "Compradores únicos com pelo menos um pedido pago de saldo líquido positivo no período selecionado.",
   cancellation: "Valor cancelado, limitado ao bruto do pedido e conhecido até a data final.",
   refund: "Valor devolvido ao cliente, sem sobrepor valores já cancelados.",
   recovery:
@@ -69,6 +71,8 @@ export const METRIC_DEFINITIONS = {
     "Canal com a maior receita líquida no período e a participação dessa receita no total líquido.",
   fastestGrowth:
     "Canal com o maior crescimento de receita líquida em relação ao período anterior.",
+  lowestChannel:
+    "Canal identificado com a menor receita líquida no período e a participação dessa receita no total líquido.",
   purchaseJourney:
     "Interações registradas antes de uma compra válida, com a média de canais e o tempo até a conversão.",
 } as const;

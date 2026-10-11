@@ -1,5 +1,11 @@
 import { addDays, differenceInCalendarDays, format, parseISO } from "date-fns";
-import { financialFlow, overviewTrends, previousEqualPeriod, safeRate } from "./financial-flow";
+import {
+  attributionTrends,
+  financialFlow,
+  overviewTrends,
+  previousEqualPeriod,
+  safeRate,
+} from "./financial-flow";
 import { REACTIVATION_DAYS, FIRST_TO_SECOND_WINDOW_DAYS } from "./sales-tracking-rules";
 import { overviewChannel } from "./tracking-dictionary";
 import { timelineGranularity } from "./tracking-dates";
@@ -430,9 +436,13 @@ export function analyzeTrackingOverview(
   const previousPeriod: SalesComparison = {
     ...previous.financial,
     ...previousRange,
+    paidOrders: previous.summary.ordersCount,
+    buyers: previous.summary.buyersCount,
+    averageTicket: previous.summary.averageTicket,
     averageLtv: previous.summary.averageLtv,
     averageRepurchaseDays: previous.summary.averageRepurchaseDays,
     repeatRevenue: previous.summary.repeatRevenue,
+    firstPurchaseRevenue: previous.firstPurchaseRevenue,
     reactivatedCustomers: previous.summary.reactivatedCustomers,
   };
   const flow = financialFlow(current.financial, previousPeriod);
@@ -465,7 +475,10 @@ export function analyzeTrackingOverview(
     summary: current.summary,
     overview: { ...overview, trends: overviewTrends(overview, previousPeriod) },
     channels: mergeChannelPeriods(current.channels, previous.channels),
-    attribution: current.attribution,
+    attribution: {
+      ...current.attribution,
+      trends: attributionTrends(current.attribution, previous.attribution),
+    },
     reactivation: current.reactivation,
     firstToSecondConversion: current.firstToSecondConversion,
     repeatCustomerRate: null,

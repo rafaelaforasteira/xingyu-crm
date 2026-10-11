@@ -198,6 +198,7 @@ describe("navigation mode", () => {
       "/orders",
       "/after-sales",
       "/tracking/vendas",
+        "/tracking/recuperacao",
       "/finance",
       "/clients",
       "/connections",

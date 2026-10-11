@@ -116,9 +116,13 @@ export type SalesOverview = {
   reactivatedCustomersPercentage: number | null;
   trends: {
     netSales: Trend | null;
+    paidOrders: Trend | null;
+    buyers: Trend | null;
+    averageTicket: Trend | null;
     averageLtv: Trend | null;
     averageRepurchaseDays: Trend | null;
     repeatRevenue: Trend | null;
+    firstPurchaseRevenue: Trend | null;
     reactivatedCustomers: Trend | null;
   };
   timeline: SalesTimelinePoint[];
@@ -137,9 +141,13 @@ export type FinancialSnapshot = {
 export type SalesComparison = FinancialSnapshot & {
   startDate: string;
   endDate: string;
+  paidOrders: number;
+  buyers: number;
+  averageTicket: number | null;
   averageLtv: number | null;
   averageRepurchaseDays: number | null;
   repeatRevenue: number;
+  firstPurchaseRevenue: number;
   reactivatedCustomers: number;
 };
 
@@ -181,7 +189,13 @@ export type SalesTrackingData = {
   range: ResolvedTrackingRange;
   granularity: "day" | "week" | "month";
   channels: TrackingChannelRow[];
-  attribution: AttributionCoverage;
+  attribution: AttributionCoverage & {
+    trends: {
+      attributedRevenue: Trend | null;
+      unattributedRevenue: Trend | null;
+      coverageDeltaPoints: number | null;
+    };
+  };
   reactivation: ReactivationAnalytics;
   firstToSecondConversion: FirstToSecondConversion | null;
   repeatCustomerRate: number | null;
