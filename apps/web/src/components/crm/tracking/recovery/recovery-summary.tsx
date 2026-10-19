@@ -1,26 +1,27 @@
 "use client";
-import type { CSSProperties } from "react";
+import type { ReactNode } from "react";
 import type { RecoveryOverviewData } from "@xingyu/types";
-import { ShoppingCart, Wallet, ShoppingBag, Percent, Clock3, Sparkles } from "lucide-react";
-import { ConceptHelp } from "../tracking-help";
-import { AnimatedMetric } from "../tracking-motion";
-import { integer } from "../tracking-format";
+import { ArrowDown, ArrowUp, Minus, ShoppingCart, Wallet, Percent, Clock3 } from "lucide-react";
+import { AIIcon } from "@/components/ui/ai-icon";
+import { ExecutiveKpi } from "../tracking-executive-summary";
 import {
   recoveryCompactMoney,
-  recoveryMoney,
   recoveryPercent,
   recoveryComparison,
 } from "./recovery-format";
 import executive from "../tracking-executive.module.css";
-import styles from "./recovery.module.css";
+import visual from "./recovery-kpi.module.css";
 
-export function RecoverySummary({ data }: { data: RecoveryOverviewData }) {
+export function RecoverySummary({ data, meta }: { data: RecoveryOverviewData; meta?: ReactNode }) {
   const a = data.summary,
     b = data.previousSummary;
+  // Assets retain their original transparency; layout and interactions are shared with Overview.
   const cards = [
     {
       label: "Valor abandonado",
-      tone: "orange",
+      accent: "ticket" as const,
+      artwork: "/tracking/recovery/kpi-abandoned-value-gold.png",
+      className: visual.gold,
       icon: ShoppingCart,
       value: a.abandonedCents,
       previous: b.abandonedCents,
@@ -29,8 +30,22 @@ export function RecoverySummary({ data }: { data: RecoveryOverviewData }) {
       positive: false,
     },
     {
+      label: "Em recuperação",
+      accent: "repeat" as const,
+      artwork: "/tracking/recovery/kpi-recovery-progress-copper.png",
+      className: visual.copper,
+      icon: Clock3,
+      value: a.openCents,
+      previous: b.openCents,
+      format: recoveryCompactMoney,
+      help: "Valor dos carrinhos ainda em aberto dentro da janela. Não representa receita garantida.",
+      positive: false,
+    },
+    {
       label: "Receita recuperada",
-      tone: "green",
+      accent: "net" as const,
+      artwork: "/tracking/recovery/kpi-recovered-revenue-emerald.png",
+      className: visual.emerald,
       icon: Wallet,
       value: a.recoveredCents,
       previous: b.recoveredCents,
@@ -39,18 +54,10 @@ export function RecoverySummary({ data }: { data: RecoveryOverviewData }) {
       positive: true,
     },
     {
-      label: "Carrinhos recuperados",
-      tone: "blue",
-      icon: ShoppingBag,
-      value: a.recoveredCases,
-      previous: b.recoveredCases,
-      format: integer,
-      help: "Checkouts com um pedido pago associado dentro da janela. Um pedido recupera no máximo um caso.",
-      positive: true,
-    },
-    {
       label: "Taxa de recuperação",
-      tone: "green",
+      accent: "net" as const,
+      artwork: "/tracking/recovery/kpi-recovery-rate-cyan.png",
+      className: visual.cyan,
       icon: Percent,
       value: a.recoveryRate,
       previous: a.openCases || b.openCases ? null : b.recoveryRate,
@@ -60,19 +67,11 @@ export function RecoverySummary({ data }: { data: RecoveryOverviewData }) {
       points: true,
     },
     {
-      label: "Em recuperação",
-      tone: "yellow",
-      icon: Clock3,
-      value: a.openCents,
-      previous: b.openCents,
-      format: recoveryCompactMoney,
-      help: "Valor dos carrinhos ainda em aberto dentro da janela. Não representa receita garantida.",
-      positive: false,
-    },
-    {
       label: "Receita estimada",
-      tone: "purple",
-      icon: Sparkles,
+      accent: "estimate" as const,
+      artwork: "/brand/brainx-mark.png",
+      className: visual.violet,
+      icon: AIIcon,
       value: a.expectedRecoverableCents,
       previous: b.expectedRecoverableCents,
       format: recoveryCompactMoney,
@@ -86,64 +85,39 @@ export function RecoverySummary({ data }: { data: RecoveryOverviewData }) {
         <h2 id="recovery-summary-title" className={executive.sectionTitle}>
           Resumo do período
         </h2>
-        <p className={executive.sectionText}>
-          Abandono, recuperação e valor ainda dentro da janela.
-        </p>
+        <div className={executive.summaryMetaRow}>
+          <p className={executive.sectionText}>
+            Abandono, recuperação e valor ainda dentro da janela.
+          </p>
+          {meta}
+        </div>
       </div>
-      <div className={styles.kpiGrid}>
+      <div className={executive.kpiGrid}>
         {cards.map((c, index) => {
-          const Icon = c.icon,
-            delta = recoveryComparison(c.value, c.previous, c.points);
-          const favorable =
-            delta != null && ((delta > 0 && c.positive) || (delta < 0 && !c.positive));
+          const delta = recoveryComparison(c.value, c.previous, c.points);
+          const favorable = delta != null && ((delta > 0 && c.positive) || (delta < 0 && !c.positive));
+          const Direction = delta == null || delta === 0 ? Minus : delta > 0 ? ArrowUp : ArrowDown;
           return (
-            <article
+            <ExecutiveKpi
               key={c.label}
-              className={executive.kpi + " " + styles.kpi}
-              data-tone={c.tone}
-              style={{ "--delay": `${index * 45}ms` } as CSSProperties}
-            >
-              <div className={executive.kpiContent}>
-                <div className={executive.kpiHead}>
-                  <span className={styles.metricIcon}>
-                    <Icon size={18} />
+              {...c}
+              index={index}
+              trend={null}
+              infoAtEnd
+              auxiliary={c.label === "Receita estimada" && c.value == null ? "Modelo em aprendizado" : undefined}
+              comparison={
+                <>
+                  <span className={executive.chip} data-sentiment={delta == null ? "unavailable" : favorable ? "positive" : "negative"}>
+                    {delta != null && <Direction size={12} aria-hidden="true" />}
+                    {delta == null ? "—" : (delta > 0 ? "+" : "") + delta.toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + (c.points ? " p.p." : "%")}
                   </span>
-                  <span className={executive.labelGroup}>
-                    <span className={executive.label}>{c.label}</span>
-                    <ConceptHelp label={c.label} text={c.help} />
-                  </span>
-                </div>
-                <p className={executive.value + " " + styles.kpiValue}>
-                  <AnimatedMetric value={c.value} format={c.format} />
-                </p>
-                <div className={styles.comparison}>
-                  <span
-                    data-meaning={delta == null ? "neutral" : favorable ? "positive" : "attention"}
-                  >
-                    {delta == null
-                      ? "—"
-                      : `${delta > 0 ? "+" : ""}${delta.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}${c.points ? " p.p." : "%"}`}
-                  </span>
-                  <small>vs. período anterior</small>
-                </div>
-                {c.label === "Receita estimada" && c.value == null && (
-                  <small className={styles.note}>Modelo em aprendizado</small>
-                )}
-                <span className="sr-only">
-                  Valor completo:{" "}
-                  {c.format === recoveryCompactMoney ? recoveryMoney(c.value) : c.format(c.value)}
-                </span>
-              </div>
-            </article>
+                  <span className={executive.compareLabel}>vs. período anterior</span>
+                </>
+              }
+            />
           );
         })}
       </div>
-      <p className={styles.note}>
-        {a.matureCases} carrinhos maduros · {a.openCases} ainda em aberto · janela de{" "}
-        {data.attributionDays} dias. Taxa considera apenas resultados observáveis.
-        {a.openCases > 0 &&
-          " Comparações de volume e receita são parciais; comparação da taxa aguarda maturidade das coortes."}
-      </p>
     </section>
   );
 }

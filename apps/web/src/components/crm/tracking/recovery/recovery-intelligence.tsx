@@ -1,127 +1,67 @@
 "use client";
 import type { RecoveryInsight, RecoveryOverviewData } from "@xingyu/types";
-import { Sparkles, Lightbulb, ShieldCheck, ArrowUpRight, BrainCircuit } from "lucide-react";
+import { Clock3, TrendingUp, ShieldAlert, ShoppingCart, Lightbulb } from "lucide-react";
+import { AIIcon } from "@/components/ui/ai-icon";
 import { ConceptHelp } from "../tracking-help";
-import { recoveryMoney, recoveryPercent } from "./recovery-format";
+import { recoveryMoney, recoveryPercent, recoveryCompactMoney } from "./recovery-format";
 import styles from "./recovery.module.css";
+import panel from "./recovery-insights.module.css";
+import executive from "../tracking-executive.module.css";
+import { selectDiscovery, type Discovery } from "./recovery-insight-selection";
 
-function Insight({ insight, lead = false }: { insight: RecoveryInsight; lead?: boolean }) {
-  const quality = insight.category === "DATA_QUALITY";
-  const tone =
-    quality || insight.severity === "ATTENTION"
-      ? "orange"
-      : insight.category === "OPPORTUNITY"
-        ? "blue"
-        : "green";
-  const Icon = quality
-    ? ShieldCheck
-    : insight.category === "OPPORTUNITY"
-      ? ArrowUpRight
-      : Lightbulb;
-  const factKey = (
-    {
-      early: "sharePercent",
-      coverage: "unknownCases",
-      open: "openCases",
-      segment: "rate",
-      trend: "deltaPoints",
-    } as Record<string, string>
-  )[insight.id];
-  const fact = insight.evidence.find((e) => e.metric === factKey)?.value;
-  const factLabel =
-    typeof fact === "number"
-      ? insight.id === "coverage"
-        ? `${fact} pedidos`
-        : insight.id === "open"
-          ? `${fact} carrinhos`
-          : insight.id === "trend"
-            ? `${fact.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} p.p.`
-            : recoveryPercent(fact)
-      : null;
-  return (
-    <article className={lead ? styles.insightLead : styles.insightReading} data-tone={tone}>
-      <div className={styles.insightTop}>
-        <Icon size={18} />
-        <span>
-          {lead
-            ? "Leitura principal"
-            : quality
-              ? "Qualidade"
-              : insight.category === "OPPORTUNITY"
-                ? "Oportunidade"
-                : insight.category === "TREND"
-                  ? "Tendência"
-                  : "Padrão"}
-        </span>
-        {!lead && factLabel && <strong className={styles.readingFact}>{factLabel}</strong>}
-        <ConceptHelp
-          label={insight.title}
-          text={
-            <>
-              <strong>Confiança: {insight.confidence}</strong>
-              <dl>
-                {insight.evidence.map((e) => (
-                  <div key={e.metric}>
-                    {e.metric}: {e.value ?? "Indisponível"}
-                  </div>
-                ))}
-              </dl>
-            </>
-          }
-        />
-      </div>
-      <h3>{insight.title}</h3>
-      {lead && factLabel && <strong className={styles.leadFact}>{factLabel}</strong>}
-      <p>{insight.summary}</p>
-      {lead && (
-        <span className={styles.editorialFoot}>
-          Análise do período · evidências disponíveis no tooltip
-        </span>
-      )}
-    </article>
-  );
+function fact(insight: RecoveryInsight | undefined, key: string): number | null {
+  const value = insight?.evidence.find((e) => e.metric === key)?.value;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+function Evidence({ insight }: { insight: RecoveryInsight }) {
+  return <><strong>{insight.title}</strong><p>{insight.summary}</p><p>Confiança: {insight.confidence}</p><p>Associação observada, sem conclusão causal. Origem de aquisição não determina o método. Oportunidades abertas não são vendas garantidas. Taxas de segmentos usam carrinhos maduros elegíveis; atribuição usa o universo de recuperações analisadas.</p><dl>{insight.evidence.map((e) => <div key={e.metric}><dt>{e.metric}</dt><dd>{e.value ?? "Indisponível"}</dd></div>)}</dl></>;
+}
+function InsightValue({ insight }: { insight: RecoveryInsight }) {
+  const key = insight.id === "early" ? "sharePercent" : insight.id === "segment" ? "rate" : insight.id === "coverage" ? "unknownCases" : insight.id === "open" ? "openCases" : "deltaPoints";
+  const value = fact(insight, key);
+  if (value == null) return <>—</>;
+  if (insight.id === "early" || insight.id === "segment") return <>{recoveryPercent(value)}</>;
+  return <>{value.toLocaleString("pt-BR", {maximumFractionDigits: 1})}<small>{insight.id === "coverage" ? "pedidos" : insight.id === "open" ? "carrinhos" : "p.p."}</small></>;
+}
+function IntelligenceDiscovery({ discovery }: { discovery?: Discovery }) {
+  const insight = discovery?.insight;
+  const Icon = insight?.id === "early" ? Clock3 : insight?.id === "coverage" ? ShieldAlert : insight?.id === "open" ? ShoppingCart : TrendingUp;
+  return <article className={panel.discovery}>
+    <div className={panel.discoveryHead}><Icon size={16} aria-hidden /><span className={executive.eyebrow}>Principal descoberta do período</span>{insight && <ConceptHelp label={insight.title} text={<Evidence insight={insight} />} />}</div>
+    <strong className={panel.value}>{discovery?.formattedValue ?? "—"}</strong>
+    <h3 className={executive.insightTitle}>{insight?.title ?? "Dados insuficientes para identificar uma descoberta relevante neste período."}</h3>
+    <p className={executive.insightText}>{insight?.summary ?? "Amostra insuficiente para padrões confiáveis neste recorte."}</p>
+  </article>;
+}
+function IntelligenceInsight({ insight, data }: { insight: RecoveryInsight; data: RecoveryOverviewData }) {
+  const quality = insight.id === "coverage", opportunity = insight.id === "open", segment = insight.id === "segment";
+  const Icon = quality ? ShieldAlert : opportunity ? ShoppingCart : segment ? TrendingUp : Lightbulb;
+  const title = quality ? "Atribuição não identificada" : opportunity ? "Oportunidades abertas" : segment ? "Maior taxa observada" : insight.title;
+  // The server-provided segment context is retained verbatim, including its sample.
+  const description = quality ? "Qualidade dos dados" : opportunity ? "Dentro da janela de recuperação" : segment ? insight.summary.split(":")[0] : insight.summary;
+  return <article className={panel.reading} data-tone={quality ? "orange" : opportunity ? "blue" : "green"}>
+    <span className={panel.contextIcon}><Icon size={17} aria-hidden /></span>
+    <div className={panel.readingCopy}><div className={panel.cardHead}><h3>{title}</h3><ConceptHelp label={title} text={<Evidence insight={insight} />} /></div><p>{description}</p></div>
+    <div className={panel.metricColumns}>
+      <div className={panel.numericCell}><strong>{segment ? recoveryPercent(fact(insight,"rate")) : quality ? recoveryPercent(data.summary.recoveredCases > 0 && data.methodBreakdown.find(m => m.method === "UNKNOWN")?.cases === fact(insight,"unknownCases") ? data.methodBreakdown.find(m => m.method === "UNKNOWN")?.caseShare ?? null : null) : opportunity ? recoveryCompactMoney(fact(insight,"openCents")) : "—"}</strong><span>{segment ? "Taxa de recuperação" : quality ? "Das recuperações" : "Valor em aberto"}</span></div>
+      <div className={panel.numericCell}><strong>{(fact(insight,segment ? "matureCases" : quality ? "unknownCases" : "openCases"))?.toLocaleString("pt-BR") ?? "—"}</strong><span>{segment ? "Carrinhos maduros" : quality ? "Pedidos" : "Carrinhos"}</span></div>
+    </div>
+  </article>;
 }
 export function RecoveryIntelligence({ data }: { data: RecoveryOverviewData }) {
   const rank = { HIGH: 3, MEDIUM: 2, LOW: 1, UNAVAILABLE: 0 };
-  const readings = [...data.intelligence].sort((a, b) => rank[b.confidence] - rank[a.confidence]);
-  return (
-    <section className={styles.intelligence} aria-labelledby="brainx-recovery-intelligence">
-      <div className={styles.sectionHead}>
-        <div>
-          <h2 id="brainx-recovery-intelligence">
-            <Sparkles size={20} /> BRAINX Intelligence
-          </h2>
-          <p>Análise do período · o que os dados revelam</p>
-        </div>
-        <span className={styles.modelBadge}>
-          {data.predictionStatus.status === "LEARNING"
-            ? "Modelo em aprendizado"
-            : data.predictionStatus.status === "EXPERIMENTAL"
-              ? "Modelo experimental"
-              : "Modelo validado"}
-        </span>
-      </div>
-      {readings.length ? (
-        <div className={styles.editorialLayout}>
-          <Insight insight={readings[0]!} lead />
-          <div className={styles.editorialReadings}>
-            {readings.slice(1).map((insight) => (
-              <Insight key={insight.id} insight={insight} />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className={styles.empty}>Amostra insuficiente para padrões confiáveis neste recorte.</p>
-      )}
-      <p className={styles.note}>
-        Insights determinísticos.{" "}
-        {data.source === "demo"
-          ? "Todos os fatos desta análise são demonstrativos."
-          : "Não representam relação causal."}{" "}
-        Ações de recuperação: disponível em breve.
-      </p>
-    </section>
-  );
+  const readings = [...data.intelligence].sort((a,b) => rank[b.confidence] - rank[a.confidence]);
+  const discovery = selectDiscovery(data);
+  const order = ["segment", "coverage", "open"];
+  const complementary = readings.filter((i) => ["segment", "coverage", "open"].includes(i.id)).sort((a,b) => {
+    const position = (id: string) => order.includes(id) ? order.indexOf(id) : order.length;
+    return position(a.id) - position(b.id);
+  });
+  return <section className={panel.panel} aria-labelledby="brainx-recovery-intelligence">
+    <header className={panel.header}><div className={panel.identity}><span className={panel.bot}><AIIcon size={20} aria-hidden /></span><div><div className={panel.cardHead}><h2 id="brainx-recovery-intelligence" className={executive.sectionTitle}>Brainx Intelligence</h2><ConceptHelp label="Brainx Intelligence" text="O Brainx Intelligence analisa os dados comerciais e identifica padrões, oportunidades e pontos de atenção, destacando as descobertas mais relevantes do período. As análises podem utilizar métodos estatísticos, regras analíticas ou modelos de Machine Learning, conforme os recursos efetivamente disponíveis. Este painel utiliza análise descritiva determinística. Evidências não implicam causalidade; oportunidades não são vendas garantidas. Ações de recuperação disponíveis em breve." /></div><p>O que os dados revelam sobre a recuperação</p></div></div><span className={panel.status}>Análise descritiva</span></header>
+    <div className={panel.composition}><IntelligenceDiscovery discovery={discovery} />{complementary.length > 0 && <div className={panel.readings}>{complementary.map((i) => <IntelligenceInsight key={i.id} insight={i} data={data} />)}</div>}</div>
+
+  </section>;
 }
 export function RecoveryPrediction({ data }: { data: RecoveryOverviewData }) {
   const m = data.predictionStatus;
@@ -135,7 +75,7 @@ export function RecoveryPrediction({ data }: { data: RecoveryOverviewData }) {
       <div className={styles.sectionHead}>
         <div>
           <h2 id="recovery-model-title">
-            <Sparkles size={20} /> Potencial de recuperação
+            <AIIcon size={20} /> Potencial de recuperação
           </h2>
           <p>BRAINX Predictive Intelligence</p>
         </div>
@@ -147,7 +87,7 @@ export function RecoveryPrediction({ data }: { data: RecoveryOverviewData }) {
       <div className={styles.predictiveLayout}>
         <div className={styles.predictiveStory}>
           <span className={styles.predictiveSymbol} aria-hidden>
-            <BrainCircuit size={34} />
+            <AIIcon size={34} />
           </span>
           <strong>
             {ready

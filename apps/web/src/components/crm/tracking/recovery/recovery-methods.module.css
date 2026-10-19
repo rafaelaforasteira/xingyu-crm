@@ -1,0 +1,26 @@
+.board { margin-top: 0; }
+.blocks { display: flex; flex-direction: column; gap: 12px; width: 100%; min-width: 0; }
+.compositionBlock > .embeddedComposition { padding-top: 0; margin-top: 0; border-top: 0; }
+.widget { min-width: 0; }
+.widget > div:first-child { margin-bottom: 14px; }
+.widget > div:first-child h2 { font-size: 15px; }
+.widget > div:first-child p { font-size: 12px; }
+.widget .barLabel { min-height: 30px; align-items: flex-start; }
+.embeddedComposition { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 4px 12px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--tracking-border); min-width: 0; }
+.embeddedComposition > h3, .embeddedComposition > p { grid-column: 1 / -1; margin: 0; }
+.embeddedComposition > h3 { font-size: 15px; }
+@container tracking (max-width: 639px) { .embeddedComposition { grid-template-columns: minmax(0, 1fr); } }
+.card[data-method], .composition { --method-color: var(--tracking-data-blue); }
+.card[data-method="CONSULTANT"], .composition[data-method="CONSULTANT"] { --method-color: var(--tracking-data-pink); }
+.card[data-method] { --profile-identity: var(--method-color); }
+.mark { color: var(--method-color); background: color-mix(in srgb, var(--method-color) 12%, var(--tracking-surface)); }
+.metrics { row-gap: 5px; }
+.secondary { color: var(--method-color); font-size: 16px; font-weight: 650; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.composition { padding: 8px 4px; background: transparent; }
+.fill { display: block; height: 100%; border-radius: inherit; background: var(--method-color); }
+.barValue { color: var(--method-color); }
+.barLabel { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--tracking-fg-muted); font-size: 11px; line-height: 1.4; margin-bottom: 6px; }
+.barLabel strong { color: var(--tracking-fg); font-weight: 600; white-space: nowrap; }
+.track { height: 6px; border-radius: 99px; background: var(--tracking-chart-track); overflow: hidden; }
+.track span { display: block; height: 100%; border-radius: inherit; background: var(--method-color); }
+@container tracking (max-width: 639px) { .board { grid-template-columns: minmax(0, 1fr); gap: 16px; } }

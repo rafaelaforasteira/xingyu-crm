@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { ConceptHelp } from "../tracking-help";
 import { CHANNEL_LABELS, CHANNEL_COLORS } from "../channel-origin-config";
 import { ChannelBrandMark } from "../channel-origin-brand";
-import { recoveryMoney, recoveryPercent, recoveryHours } from "./recovery-format";
+import { recoveryMoney, recoveryCompactMoney, recoveryPercent, recoveryHours } from "./recovery-format";
 import styles from "./recovery.module.css";
+import overview from "../tracking-overview.module.css";
+import segments from "./recovery-segment-widgets.module.css";
 
 function SegmentDetails({ row }: { row: RecoverySegment }) {
   return (
@@ -39,142 +41,26 @@ function SegmentDetails({ row }: { row: RecoverySegment }) {
   );
 }
 export function RecoverySegments({ data }: { data: RecoveryOverviewData }) {
-  const [tab, setTab] = React.useState<"customer" | "value" | "channel">("customer");
-  const rows =
-    tab === "customer"
-      ? data.customerSegments
-      : tab === "value"
-        ? data.valueSegments
-        : data.channels;
-  const ranked =
-    tab === "customer"
-      ? rows
-      : [...rows].sort((a, b) =>
-          tab === "channel"
-            ? b.recoveredCents - a.recoveredCents
-            : (b.recoveryRate ?? -1) - (a.recoveryRate ?? -1),
-        );
-  const maxRevenue = Math.max(...rows.map((r) => r.recoveredCents), 1);
-  return (
-    <section
-      className={styles.card + " " + styles.segments}
-      aria-labelledby="recovery-segments-title"
-    >
-      <div className={styles.sectionHead}>
-        <div>
-          <h2 id="recovery-segments-title">Quem recupera melhor</h2>
-          <p>Perfil, valor e origem · compare resultados de populações maduras.</p>
-        </div>
-        <ConceptHelp
-          label="Taxa por segmento"
-          text="Recuperados ÷ maduros. Intervalo de Wilson de 95%; amostra mínima de 20 maduros para evidenciar padrões. Origem de aquisição não é evidência de método. Sob filtro de resultado, taxas ficam indisponíveis."
-        />
+  const groups = [
+    {id:"customer",title:"Perfil do cliente",description:"Recuperação por perfil de compra.",rows:data.customerSegments},
+    {id:"value",title:"Faixa do carrinho",description:"Resultados por valor do carrinho.",rows:[...data.valueSegments].sort((a,b)=>(b.recoveryRate ?? -1)-(a.recoveryRate ?? -1))},
+    {id:"channel",title:"Origem / canal",description:"Receita recuperada por origem de aquisição.",rows:[...data.channels].sort((a,b)=>b.recoveredCents-a.recoveredCents)},
+  ];
+  return <div className="grid items-start gap-3 xl:grid-cols-3">{groups.map(group=><section key={group.id} className={overview.chartCard} aria-labelledby={"recovery-segment-"+group.id}>
+    <h2 id={"recovery-segment-"+group.id} className="flex items-center gap-1 font-semibold">{group.title}<ConceptHelp label={group.title} text="Recuperados ÷ maduros. Intervalo de Wilson de 95%; amostra mínima de 20 maduros para evidenciar padrões. Origem de aquisição não é evidência de método. Sob filtro de resultado, taxas ficam indisponíveis." /></h2>
+    <p className="mt-1 mb-4 text-xs text-muted-foreground">{group.description}</p>
+    <div className={segments.rows}>{group.rows.map(row=><article key={row.key} className={overview.profileCard + " " + segments.row} style={{"--profile-identity":group.id === "channel" ? CHANNEL_COLORS[row.key as keyof typeof CHANNEL_COLORS] ?? "var(--tracking-data-charcoal)" : row.key === "EXISTING" ? "var(--tracking-data-orange)" : row.key === "NEW" || group.id === "value" ? "var(--tracking-data-blue)" : "var(--tracking-data-charcoal)"} as React.CSSProperties}>
+      <div className={overview.profileIdentity}>{group.id === "channel" ? <ChannelBrandMark channel={row.key as keyof typeof CHANNEL_LABELS} size={24} /> : <span className={overview.profileMark + " " + segments.mark}>{group.id === "value" ? <Package size={15} aria-hidden /> : <Users size={15} aria-hidden />}</span>}<h3 className={overview.profileName}>{group.id === "channel" ? CHANNEL_LABELS[row.key as keyof typeof CHANNEL_LABELS] ?? row.label : row.label}</h3><SegmentDetails row={row}/></div>
+      <div className={overview.profileMetrics}>
+        <strong className={overview.profileBuyers}>{recoveryPercent(row.recoveryRate)}</strong><strong className={overview.profileMoney} title={recoveryMoney(row.recoveredCents)}>{recoveryCompactMoney(row.recoveredCents)}</strong>
+        <span className={overview.profileCaption}>Taxa madura</span><span className={overview.profileCaption}>Receita recuperada</span>
+        <strong className={segments.secondary}>{row.recoveredCases}</strong><strong className={segments.secondary}>{recoveryHours(row.meanHours)}</strong>
+        <span className={overview.profileCaption}>Recuperados</span><span className={overview.profileCaption}>Tempo médio</span>
       </div>
-      <div className={styles.toggle}>
-        {(
-          [
-            ["customer", "Perfil do cliente"],
-            ["value", "Faixa do carrinho"],
-            ["channel", "Origem / canal"],
-          ] as const
-        ).map(([id, label]) => (
-          <Button
-            key={id}
-            variant={tab === id ? "secondary" : "ghost"}
-            size="sm"
-            aria-pressed={tab === id}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
-      <div
-        className={
-          tab === "customer"
-            ? styles.segmentCards
-            : tab === "channel"
-              ? styles.channelCards
-              : styles.valueRanking
-        }
-      >
-        {ranked.map((row, i) => (
-          <article
-            key={row.key}
-            className={tab === "customer" ? styles.segmentCard : styles.segmentRanking}
-            data-tone={
-              tab === "customer"
-                ? row.key === "NEW"
-                  ? "blue"
-                  : row.key === "EXISTING"
-                    ? "orange"
-                    : "charcoal"
-                : "blue"
-            }
-            style={
-              tab === "channel"
-                ? ({
-                    "--recovery-tone": CHANNEL_COLORS[row.key as keyof typeof CHANNEL_COLORS],
-                  } as React.CSSProperties)
-                : undefined
-            }
-          >
-            <div className={styles.segmentIdentity}>
-              {tab === "channel" ? (
-                <ChannelBrandMark channel={row.key as keyof typeof CHANNEL_LABELS} size={28} />
-              ) : tab === "customer" ? (
-                <span className={styles.segmentIcon}>
-                  <Users size={20} />
-                </span>
-              ) : (
-                <span className={styles.rankNumber}>{String(i + 1).padStart(2, "0")}</span>
-              )}
-              <h3>
-                {tab === "channel"
-                  ? CHANNEL_LABELS[row.key as keyof typeof CHANNEL_LABELS]
-                  : row.label}
-              </h3>
-              <SegmentDetails row={row} />
-            </div>
-            <div className={styles.segmentMain}>
-              <span>Taxa madura</span>
-              <strong>{recoveryPercent(row.recoveryRate)}</strong>
-            </div>
-            <div className={styles.barTrack}>
-              <div
-                className={styles.bar}
-                style={{
-                  width: `${tab === "channel" ? (row.recoveredCents / maxRevenue) * 100 : (row.recoveryRate ?? 0)}%`,
-                  background: "var(--recovery-tone)",
-                }}
-              />
-            </div>
-            <dl className={styles.segmentMetrics}>
-              <div>
-                <dt>Receita recuperada</dt>
-                <dd>{recoveryMoney(row.recoveredCents)}</dd>
-              </div>
-              <div>
-                <dt>Tempo médio</dt>
-                <dd>{recoveryHours(row.meanHours)}</dd>
-              </div>
-            </dl>
-            <p className={styles.segmentSample}>
-              {row.recoveredCases} recuperados · {row.matureCases} maduros / {row.cases} abandonados
-            </p>
-            <span className={styles.sampleNote}>
-              {!row.sufficientSample
-                ? "Amostra insuficiente"
-                : row.interval
-                  ? `IC 95% ${recoveryPercent(row.interval[0])}–${recoveryPercent(row.interval[1])}`
-                  : "Taxa indisponível neste filtro"}
-            </span>
-          </article>
-        ))}
-      </div>
-      {!rows.length && <p className={styles.empty}>Sem segmentos neste recorte.</p>}
-    </section>
-  );
+      <p className={segments.sample}>{row.matureCases} maduros / {row.cases} abandonados · {!row.sufficientSample ? "Amostra insuficiente" : row.interval ? "IC 95% " + recoveryPercent(row.interval[0])+"–"+recoveryPercent(row.interval[1]) : "Taxa indisponível neste filtro"}</p>
+    </article>)}</div>
+    {!group.rows.length && <p className={styles.empty}>Sem segmentos neste recorte.</p>}
+  </section>)}</div>;
 }
 export function RecoveryProducts({ data }: { data: RecoveryOverviewData }) {
   const [sort, setSort] = React.useState<"abandoned" | "recovered">("abandoned"),

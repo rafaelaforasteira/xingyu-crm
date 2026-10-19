@@ -1,0 +1,8 @@
+.kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.distribution { grid-template-columns: minmax(0, 1fr); }
+.kpis > :last-child { grid-column: auto; }
+.band { --band-color: var(--accent); }
+.band > div > :last-child { color: var(--accent); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+@media (max-width: 639px) { .kpis { grid-template-columns: minmax(0, 1fr); } }

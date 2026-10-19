@@ -103,6 +103,18 @@
   --kpi-ink: var(--tracking-data-yellow-ink);
   background: color-mix(in srgb, var(--tracking-data-yellow) var(--tracking-baby-weight), var(--tracking-surface));
 }
+.kpi[data-accent="estimate"] {
+  --kpi-accent: hsl(var(--primary));
+  --kpi-ink: hsl(var(--primary));
+  --art-size: 166px;
+  --art-right: -20px;
+  --art-bottom: -24px;
+  background: color-mix(in srgb, var(--kpi-accent) var(--tracking-baby-weight), var(--tracking-surface));
+}
+.labelWithEndInfo {
+  flex: 1;
+  justify-content: space-between;
+}
 :global(.dark) .kpi[data-accent] {
   background: color-mix(in srgb, var(--kpi-accent) var(--tracking-baby-weight), var(--tracking-surface));
 }

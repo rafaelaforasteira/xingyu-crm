@@ -1,0 +1,61 @@
+.gold.gold[data-accent] {
+  --recovery-bg: #fff7e9;
+  --kpi-accent: #f5b942;
+  --kpi-ink: #be7618;
+  --recovery-icon-bg: #fff0d4;
+  --art-size: 184px;
+  --art-right: -22px;
+  --art-bottom: -28px;
+}
+.copper.copper[data-accent] {
+  --recovery-bg: #fff0e5;
+  --kpi-accent: #f47b20;
+  --kpi-ink: #d56b1a;
+  --recovery-icon-bg: #ffe3cf;
+  --art-size: 180px;
+  --art-right: -22px;
+  --art-bottom: -26px;
+}
+.emerald.emerald[data-accent] {
+  --recovery-bg: #eefaef;
+  --kpi-accent: #24c65a;
+  --kpi-ink: #139747;
+  --recovery-icon-bg: #dcf5e1;
+  --art-size: 180px;
+  --art-right: -22px;
+  --art-bottom: -26px;
+}
+.cyan.cyan[data-accent] {
+  --recovery-bg: #eafbfc;
+  --kpi-accent: #00b8d9;
+  --kpi-ink: #009eb8;
+  --recovery-icon-bg: #d5f5f8;
+  --art-size: 192px;
+  --art-right: -22px;
+  --art-bottom: -28px;
+}
+.violet.violet[data-accent] {
+  --recovery-bg: #f5f0ff;
+  --kpi-accent: #8651e9;
+  --kpi-ink: #8050c8;
+  --recovery-icon-bg: #ece1ff;
+}
+:is(.gold, .copper, .emerald, .cyan, .violet)[data-accent] {
+  background: linear-gradient(110deg, var(--recovery-bg) 40%, color-mix(in srgb, var(--kpi-accent) 10%, var(--recovery-bg)));
+}
+:is(.gold, .copper, .emerald, .cyan, .violet)[data-accent] svg {
+  stroke-width: 2;
+}
+:is(.gold, .copper, .emerald, .cyan, .violet)[data-accent] > div > div:first-child > span:first-child {
+  background: var(--recovery-icon-bg);
+  color: var(--kpi-ink);
+}
+:is(.gold, .copper, .emerald, .cyan)[data-accent] > img {
+  object-position: center;
+  filter: none;
+}
+:global(.dark) :is(.gold, .copper, .emerald, .cyan, .violet)[data-accent] {
+  background: linear-gradient(110deg, var(--tracking-surface), color-mix(in srgb, var(--kpi-accent) 14%, var(--tracking-surface)));
+  --kpi-ink: var(--kpi-accent);
+  --recovery-icon-bg: color-mix(in srgb, var(--kpi-accent) 16%, var(--tracking-surface));
+}

@@ -12,6 +12,7 @@ import {
   recoveryHours,
 } from "./recovery-format";
 import styles from "./recovery.module.css";
+import methods from "./recovery-methods.module.css";
 
 const categories: Record<
   RecoveryCompositionMethod,
@@ -22,12 +23,12 @@ const categories: Record<
   UNKNOWN: { label: "Não identificada", color: "var(--tracking-data-charcoal)", weight: "6%" },
 };
 /** Same chart/card/row classes and exact Pie geometry as SalesOverview's approved composition. */
-export function RecoveryComposition({ data }: { data: RecoveryOverviewData }) {
+export function RecoveryComposition({ data, embedded = false }: { data: RecoveryOverviewData; embedded?: boolean }) {
   const { revision, reduced, initial } = useTrackingMotion();
   const rows = data.compositionBreakdown;
   return (
     <section
-      className={overview.chartCard + " " + styles.compositionWidget}
+      className={embedded ? methods.embeddedComposition : overview.chartCard + " " + styles.compositionWidget}
       aria-label="Composição da recuperação"
     >
       <h3 className="font-semibold">Composição da recuperação</h3>

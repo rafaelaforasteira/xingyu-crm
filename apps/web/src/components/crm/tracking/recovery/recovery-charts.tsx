@@ -1,18 +1,18 @@
 "use client";
 import * as React from "react";
-import { Bot, UserRound } from "lucide-react";
+import { Bot, UserRound, Clock3, ChartColumn, Lightbulb } from "lucide-react";
 import {
   ResponsiveContainer,
   Tooltip,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
 } from "recharts";
 import type { RecoveryOverviewData, RecoveryCompositionMethod } from "@xingyu/types";
 import { Button } from "@/components/ui/button";
-import { ConceptHelp, ChartTooltip, TrackingTooltipPortal } from "../tracking-help";
+import { ConceptHelp, TrackingTooltipPortal } from "../tracking-help";
 import { useInViewOnce, useTrackingMotion } from "../tracking-motion";
 import { integer, dateBR } from "../tracking-format";
 import {
@@ -23,6 +23,11 @@ import {
 } from "./recovery-format";
 import { METHOD_LABELS } from "./recovery-service";
 import styles from "./recovery.module.css";
+import overview from "../tracking-overview.module.css";
+import { RecoveryUnitToggle } from "./recovery-unit-toggle";
+import timing from "./recovery-time.module.css";
+import methods from "./recovery-methods.module.css";
+import evolution from "./recovery-evolution.module.css";
 import { RecoveryComposition } from "./recovery-composition";
 
 export const METHOD_COLORS: Record<RecoveryCompositionMethod, string> = {
@@ -32,7 +37,8 @@ export const METHOD_COLORS: Record<RecoveryCompositionMethod, string> = {
 };
 export function RecoveryMethodBreakdown({ data }: { data: RecoveryOverviewData }) {
   return (
-    <section className={styles.card} aria-labelledby="recovery-method-title">
+    <div className={methods.blocks}>
+    <section className={styles.card + " " + methods.widget} aria-labelledby="recovery-method-title">
       <div className={styles.sectionHead}>
         <div>
           <h2 id="recovery-method-title">Como a recuperação aconteceu</h2>
@@ -46,54 +52,46 @@ export function RecoveryMethodBreakdown({ data }: { data: RecoveryOverviewData }
       {!data.summary.recoveredCases ? (
         <p className={styles.empty}>Ainda não houve recuperações nesta coorte.</p>
       ) : (
-        <div className={styles.methodLayout}>
+        <div className={overview.profileBoard + " " + methods.board}>
           {(["AUTOMATIC", "CONSULTANT"] as const).map((method) => {
             const m = data.methodBreakdown.find((row) => row.method === method);
             if (!m) return null;
             const Icon = method === "AUTOMATIC" ? Bot : UserRound;
-            return (
-              <article
-                key={method}
-                className={styles.methodCard}
-                data-tone={method === "AUTOMATIC" ? "blue" : "pink"}
-              >
-                <div className={styles.methodCardHead}>
-                  <span className={styles.methodIcon}>
-                    <Icon size={23} />
-                  </span>
-                  <h3>{METHOD_LABELS[method]}</h3>
-                  <ConceptHelp
-                    label={`Recuperação ${METHOD_LABELS[method]}`}
-                    text={`${m.cases} pedidos; ${recoveryPercent(m.caseShare)} dos recuperados. Receita: ${recoveryMoney(m.revenueCents)}; participação ${recoveryPercent(m.revenueShare)}. Tempo médio ${recoveryHours(m.meanHours)}. Sem inferência de conversão ou desempenho individual.`}
-                  />
+            return <div key={method} className={overview.profileColumn}>
+              <article className={overview.profileCard + " " + methods.card} data-method={method}>
+                <div className={overview.profileIdentity}>
+                  <span className={overview.profileMark + " " + methods.mark}><Icon size={15} aria-hidden /></span>
+                  <h3 className={overview.profileName}>{METHOD_LABELS[method]}</h3>
+                  <ConceptHelp label={"Recuperação " + METHOD_LABELS[method]} text={m.cases + " pedidos; " + recoveryPercent(m.caseShare) + " dos recuperados. Receita: " + recoveryMoney(m.revenueCents) + "; participação " + recoveryPercent(m.revenueShare) + ". Tempo médio " + recoveryHours(m.meanHours) + ". Método exige evidência verificada. Participação usa a receita recuperada total, incluindo outros métodos. Sem inferência de conversão ou desempenho individual."} />
                 </div>
-                <span className={styles.metricCaption}>Receita recuperada</span>
-                <strong className={styles.methodAmount}>{recoveryMoney(m.revenueCents)}</strong>
-                <p className={styles.methodShare}>
-                  {recoveryPercent(m.revenueShare)} <span>da receita recuperada</span>
-                </p>
-                <div className={styles.barTrack}>
-                  <div
-                    className={styles.bar}
-                    style={{ width: `${m.revenueShare ?? 0}%`, background: METHOD_COLORS[method] }}
-                  />
+                <div className={overview.profileMetrics + " " + methods.metrics}>
+                  <strong className={overview.profileBuyers}>{integer(m.cases)}</strong>
+                  <strong className={overview.profileMoney} title={recoveryMoney(m.revenueCents)}>{recoveryCompactMoney(m.revenueCents)}</strong>
+                  <span className={overview.profileCaption}>Pedidos recuperados</span>
+                  <span className={overview.profileCaption}>Receita recuperada</span>
+                  <strong className={methods.secondary}>{recoveryPercent(m.revenueShare)}</strong>
+                  <strong className={methods.secondary}>{recoveryHours(m.meanHours)}</strong>
+                  <span className={overview.profileCaption}>Participação na receita</span>
+                  <span className={overview.profileCaption}>Tempo médio de recuperação</span>
                 </div>
-                <dl className={styles.methodStats}>
-                  <div>
-                    <dt>Pedidos recuperados</dt>
-                    <dd>{m.cases}</dd>
-                  </div>
-                  <div>
-                    <dt>Tempo médio</dt>
-                    <dd>{recoveryHours(m.meanHours)}</dd>
-                  </div>
-                </dl>
               </article>
-            );
+              {[
+                {label:"Composição dos pedidos recuperados", share:m.caseShare},
+                {label:"Composição da receita líquida", share:m.revenueShare},
+              ].map(({label,share}) => <div key={label} className={overview.profileDetail + " " + methods.composition} data-method={method}>
+                <div className={overview.profileDetailLabel}><span>{label}</span></div>
+                <div className={overview.profileDetailTrack} role="meter" aria-label={label + " · " + METHOD_LABELS[method]} aria-valuemin={0} aria-valuemax={100} aria-valuenow={share == null ? undefined : Math.max(0,Math.min(100,share))} aria-valuetext={recoveryPercent(share)}><span className={methods.fill} style={{width:Math.max(0,Math.min(100,share ?? 0)) + "%"}} /></div>
+                <strong className={overview.profileDetailValue + " " + methods.barValue} title="Participação no total elegível recuperado do período, incluindo os demais métodos.">{recoveryPercent(share)}</strong>
+              </div>)}
+
+            </div>;
           })}
-          <RecoveryComposition data={data} />
         </div>
       )}
+
+    </section>
+    <section className={styles.card + " " + methods.compositionBlock} aria-label="Composição e cobertura da recuperação">
+      {data.summary.recoveredCases > 0 && <RecoveryComposition data={data} embedded />}
       <div className={styles.coverage}>
         <span>Cobertura do método de recuperação</span>
         <strong>{recoveryPercent(data.attributionCoverage.revenuePercent)} da receita</strong>
@@ -111,43 +109,15 @@ export function RecoveryMethodBreakdown({ data }: { data: RecoveryOverviewData }
           Os pedidos recuperados ainda não possuem evidência suficiente para identificar o método.
         </p>
       )}
-      <details className={styles.details}>
-        <summary>Identidade da consultora e evidência</summary>
-        <p className={styles.note}>
-          Totais associados a evidências; sem ranking de desempenho ou comparação causal.
-        </p>
-        {data.consultantBreakdown.length ? (
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th scope="col">Identidade registrada</th>
-                <th scope="col">Pedidos</th>
-                <th scope="col">Receita associada</th>
-                <th scope="col">Tempo médio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.consultantBreakdown.map((r, i) => (
-                <tr key={r.id ?? i}>
-                  <th scope="row">{r.label}</th>
-                  <td>{r.cases}</td>
-                  <td>{recoveryMoney(r.revenueCents)}</td>
-                  <td>{recoveryHours(r.meanHours)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className={styles.empty}>Identidade da consultora não disponível na fonte atual.</p>
-        )}
-      </details>
     </section>
+    </div>
   );
 }
 
 export function RecoveryEvolution({ data }: { data: RecoveryOverviewData }) {
-  const [metric, setMetric] = React.useState<"recovered" | "abandoned">("recovered"),
-    [unit, setUnit] = React.useState<"value" | "carts">("value");
+  const gradientId = React.useId().replace(/:/g, "");
+  const metric: "recovered" | "abandoned" = "recovered";
+  const [unit, setUnit] = React.useState<"value" | "carts">("value");
   const { ref, seen } = useInViewOnce<HTMLDivElement>(),
     motion = useTrackingMotion();
   const key =
@@ -169,201 +139,105 @@ export function RecoveryEvolution({ data }: { data: RecoveryOverviewData }) {
   const formatter = unit === "value" ? recoveryMoney : integer,
     compact = unit === "value" ? recoveryCompactMoney : integer;
   const color =
-    metric === "recovered" ? "var(--tracking-data-green)" : "var(--tracking-chart-muted)";
+    metric === "recovered" ? "var(--tracking-data-green)" : "#F5B942";
   return (
-    <section className={styles.card} aria-labelledby="recovery-evolution-title">
-      <div className={styles.sectionHead}>
+    <section className={overview.chartCard + " " + overview.evolution + " " + evolution.root} aria-labelledby="recovery-evolution-title">
+      <div className={styles.sectionHead + " " + evolution.header}>
         <div>
-          <h2 id="recovery-evolution-title">Evolução da recuperação</h2>
+          <div className={evolution.titleRow}><h2 id="recovery-evolution-title">Evolução da recuperação</h2>
+          <ConceptHelp label="Evolução da recuperação" text="Cada ponto é uma coorte pela data de abandono, não a data do pagamento. A linha anterior está alinhada pelo dia relativo do período. Carrinhos recentes podem estar imaturos." /></div>
           <p>Resultados associados à data do abandono · períodos de igual duração.</p>
         </div>
-        <ConceptHelp
-          label="Evolução da recuperação"
-          text="Cada ponto é uma coorte pela data de abandono, não a data do pagamento. A linha anterior está alinhada pelo dia relativo do período. Carrinhos recentes podem estar imaturos."
-        />
+        <RecoveryUnitToggle value={unit} onChange={setUnit} />
       </div>
-      <div className={styles.chartControls}>
-        <div className={styles.toggle}>
-          {(["recovered", "abandoned"] as const).map((m) => (
-            <Button
-              key={m}
-              variant={metric === m ? "secondary" : "ghost"}
-              size="sm"
-              aria-pressed={metric === m}
-              onClick={() => setMetric(m)}
-            >
-              {m === "recovered" ? "Receita recuperada" : "Valor abandonado"}
-            </Button>
-          ))}
-        </div>
-        <div className={styles.toggle}>
-          {(["value", "carts"] as const).map((u) => (
-            <Button
-              key={u}
-              variant={unit === u ? "secondary" : "ghost"}
-              size="sm"
-              aria-pressed={unit === u}
-              onClick={() => setUnit(u)}
-            >
-              {u === "value" ? "Valor" : "Carrinhos"}
-            </Button>
-          ))}
-        </div>
-      </div>
+
       <div
         ref={ref}
-        className={styles.chart}
+        className={overview.chartPlot}
         role="img"
         aria-label={`${metric === "recovered" ? "Recuperação" : "Abandono"} em ${unit === "value" ? "reais" : "carrinhos"}; atual e anterior, pela coorte de abandono.`}
       >
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data.timeline} margin={{ top: 12, right: 12, bottom: 12, left: 6 }}>
-            <CartesianGrid stroke="var(--tracking-chart-grid)" vertical={false} />
+          <AreaChart accessibilityLayer data={data.timeline} margin={{ top: 20, right: 18, left: 0, bottom: 16 }}>
+            <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.16} /><stop offset="72%" stopColor={color} stopOpacity={0.04} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
+            <CartesianGrid stroke="var(--series-grid)" strokeDasharray="2 7" vertical={false} />
             <XAxis
               dataKey="date"
               tickFormatter={(d) => dateBR(d, "dd MMM")}
               minTickGap={24}
-              tick={{ fontSize: 12, fill: "var(--tracking-fg-muted)" }}
+              tickMargin={12}
+              tick={{ fontSize: 10, fill: "var(--tracking-fg-muted)" }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              width={68}
+              width={78}
+              tickMargin={8}
+              allowDecimals={false}
               tickFormatter={(n) => compact(n)}
-              tick={{ fontSize: 12, fill: "var(--tracking-fg-muted)" }}
+              tick={{ fontSize: 10, fill: "var(--tracking-fg-muted)" }}
               axisLine={false}
               tickLine={false}
             />
-            <Line
-              dataKey={key}
-              name="Atual"
-              stroke={color}
-              strokeWidth={2.5}
-              dot={false}
-              type="monotone"
-              isAnimationActive={!motion.reduced && motion.initial && seen}
+            <Area
+              dataKey={previousKey} name="Anterior" stroke="var(--series-gross)" strokeWidth={1.5} strokeOpacity={0.78}
+              fill="transparent" dot={false} type="monotone" isAnimationActive={false}
+              activeDot={{r:3.5, fill:"var(--series-gross)", stroke:"var(--tracking-surface)", strokeWidth:2}}
             />
-            <Line
-              dataKey={unit === "value" ? "abandonedCents" : "abandonedCases"}
-              name="Valor abandonado"
-              hide={metric === "abandoned"}
-              stroke="var(--tracking-chart-muted)"
-              strokeDasharray="6 5"
-              strokeWidth={1.5}
-              dot={false}
-              type="monotone"
-              isAnimationActive={false}
-            />
-            <Line
-              dataKey={previousKey}
-              name="Anterior"
-              stroke="var(--tracking-chart-muted)"
-              strokeDasharray="4 4"
-              dot={false}
-              strokeWidth={1.5}
-              type="monotone"
-              isAnimationActive={false}
+            <Area
+              dataKey={key} name="Atual" stroke={color} strokeWidth={3}
+              fill={"url(#" + gradientId + ")"} dot={false} type="monotone"
+              activeDot={{r:4, stroke:color, strokeWidth:2, fill:"var(--tracking-surface)"}}
+              isAnimationActive={!motion.reduced && motion.initial && seen} animationDuration={350}
             />
             <Tooltip
+              isAnimationActive={false}
+              cursor={{stroke:"var(--series-gross)",strokeOpacity:0.45}}
+              wrapperStyle={{outline:"none",zIndex:0,pointerEvents:"none"}}
               content={({ active, payload }) => {
                 const point = payload?.[0]?.payload as
                   RecoveryOverviewData["timeline"][number] | undefined;
                 return active && point ? (
                   <TrackingTooltipPortal resetKey={`${point.date}-${key}-${data.updatedAt}`}>
-                    <ChartTooltip
-                      title={`Coorte ${dateBR(point.date)}`}
-                      accent={color}
-                      rows={[
-                        ["Atual", formatter(point[key])],
-                        [
-                          "Abandonado (atual)",
-                          formatter(point[unit === "value" ? "abandonedCents" : "abandonedCases"]),
-                        ],
-                        ["Anterior (dia equivalente)", formatter(point[previousKey])],
-                      ]}
-                    />
+                    <div data-module-theme="tracking" className={overview.chartTip + " tracking-portal min-w-48 rounded-xl p-3 text-xs shadow-soft"}>
+                      <p className="mb-2 font-semibold">Coorte {dateBR(point.date)}</p>
+                      <p className="mb-2 text-muted-foreground">{metric === "recovered" ? "Receita recuperada" : "Valor abandonado"} · {unit === "value" ? "BRL" : "carrinhos"}</p>
+                      {[
+                        {label:"Atual", value:formatter(point[key]), swatch:color},
+                        {label:"Anterior (dia equivalente)", value:formatter(point[previousKey]), swatch:"var(--tip-gross)"},
+                        ...(metric === "recovered" ? [{label:"Abandonado (atual)",value:formatter(point[unit === "value" ? "abandonedCents" : "abandonedCases"]),swatch:"#F5B942"}] : []),
+                      ].map((row) => <div key={row.label} className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5 text-muted-foreground"><span className="h-2 w-2 rounded-full" style={{background:row.swatch}} />{row.label}</span><strong>{row.value}</strong></div>)}
+                    </div>
                   </TrackingTooltipPortal>
                 ) : null;
               }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
-      <div className={styles.legend}>
-        <span>
-          <i style={{ background: color }} />
-          Atual
-        </span>
-        <span>
-          <i style={{ background: "var(--tracking-chart-muted)" }} />
-          Anterior
-        </span>
-        {metric === "recovered" && <span>Tracejada · valor abandonado</span>}
-        <span>
-          {unit === "value" ? "Valores em BRL" : "Quantidade de carrinhos"} · eixo horizontal:
-          abandono
-        </span>
+      <div className={overview.chartLegend}>
+        <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{background:color}} />Atual</span>
+        <span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full" style={{background:"var(--series-gross)"}} />Anterior</span>
       </div>
     </section>
   );
 }
 
 export function RecoveryTimeAnalysis({ data }: { data: RecoveryOverviewData }) {
-  const max = Math.max(...data.timeToRecovery.buckets.map((b) => b.cases), 1);
   const colors = ["green", "blue", "yellow", "orange", "red", "deep-red"];
-  const predominant = [...data.timeToRecovery.buckets].sort((a, b) => b.cases - a.cases)[0];
-  return (
-    <section className={styles.card} aria-labelledby="recovery-time-title">
-      <div className={styles.sectionHead}>
-        <div>
-          <h2 id="recovery-time-title">Tempo até a recuperação</h2>
-          <p>Do abandono até o pagamento confirmado.</p>
-        </div>
-        <ConceptHelp
-          label="Tempo até a recuperação"
-          text="Média e mediana entre os casos efetivamente recuperados. Intervalos contínuos, sem lacunas; cores representam duração, não o maior grupo."
-        />
+  const predominant = [...data.timeToRecovery.buckets].sort((a,b)=>b.cases-a.cases)[0];
+  return <section className={overview.chartCard} aria-labelledby="recovery-time-title">
+    <div className="mb-4"><h2 id="recovery-time-title" className="flex items-center gap-1 font-semibold">Tempo até a recuperação<ConceptHelp label="Tempo até a recuperação" text="Do abandono até o pagamento confirmado. Média, mediana e distribuição consideram somente casos efetivamente recuperados. As faixas são contínuas e as cores representam duração, não desempenho." /></h2><p className="mt-1 text-xs text-muted-foreground">Do abandono até o pagamento confirmado.</p></div>
+    <div className={overview.repurchaseStage} data-revealed="true">
+      <div className={overview.repurchaseKpis + " " + timing.kpis}>
+        {[{label:"Tempo médio",value:data.timeToRecovery.meanHours,tone:"average",Icon:ChartColumn,help:"Média do tempo entre abandono e pagamento dos casos recuperados."},{label:"Mediana",value:data.timeToRecovery.medianHours,tone:"median",Icon:Clock3,help:"Tempo central da distribuição dos casos recuperados; metade está abaixo e metade acima."},{label:"Faixa campeã",value:predominant && predominant.cases > 0 ? predominant.share : null,tone:"return",Icon:Clock3,help:"Participação da faixa com mais casos no total de carrinhos recuperados. É uma distribuição observada, não uma taxa de conversão entre carrinhos expostos."}].map(({label,value,tone,Icon,help})=><article key={label} className={overview.repurchaseKpi} data-tone={tone}><p className={overview.repurchaseKpiLabel}><span className={overview.repurchaseIcon}><Icon size={16} aria-hidden /></span><span>{label}<ConceptHelp label={label} text={help} /></span></p><p className={overview.repurchaseKpiValue}>{tone === "return" ? recoveryPercent(value) : recoveryHours(value)}</p><p className={overview.repurchaseInsightNote}>{tone === "return" ? predominant && predominant.cases > 0 ? predominant.label + " · das recuperações" : "Dados insuficientes" : "dos carrinhos recuperados"}</p></article>)}
       </div>
-      <div className={styles.timeStats}>
-        <div>
-          <span>Tempo médio</span>
-          <strong>{recoveryHours(data.timeToRecovery.meanHours)}</strong>
-        </div>
-        <div>
-          <span>Mediana</span>
-          <strong>{recoveryHours(data.timeToRecovery.medianHours)}</strong>
-        </div>
+      <div className={overview.repurchaseMain + " " + timing.distribution}>
+        <section className={overview.repurchasePanel} aria-label="Distribuição do tempo de recuperação"><h3 className={overview.repurchaseHeading}>Distribuição do tempo de recuperação<ConceptHelp label="Distribuição do tempo de recuperação" text="Participação de cada faixa no total de casos recuperados. Os comprimentos representam os percentuais reais, sem normalização pela maior faixa." /></h3>
+          {!data.summary.recoveredCases ? <p className={styles.empty}>Ainda não houve recuperações nesta coorte.</p> : <div className={overview.repurchaseBands}>{data.timeToRecovery.buckets.map((b,i)=><div key={b.key} className={overview.repurchaseBand + " " + timing.band} style={{"--accent":"var(--tracking-data-"+colors[i]+")"} as React.CSSProperties}><div className={overview.repurchaseBandRow}><span className={overview.repurchaseBandName}>{b.label}</span><span className={overview.repurchaseTrack}><span className={timing.fill} style={{width:Math.max(0,Math.min(100,b.share ?? 0))+"%"}} /></span><span className={overview.repurchaseBandShare} title={b.cases+" carrinhos recuperados"}>{recoveryPercent(b.share)}</span></div></div>)}</div>}
+        </section>
+
       </div>
-      {!data.summary.recoveredCases ? (
-        <p className={styles.empty}>Ainda não houve recuperações nesta coorte.</p>
-      ) : (
-        <div className={styles.timeRows}>
-          {data.timeToRecovery.buckets.map((b, i) => (
-            <div key={b.key} className={styles.timeRow}>
-              <span>{b.label}</span>
-              <div className={styles.barTrack}>
-                <div
-                  className={styles.bar}
-                  style={{
-                    width: `${(b.cases / max) * 100}%`,
-                    background: `var(--tracking-data-${colors[i]})`,
-                  }}
-                />
-              </div>
-              <strong>
-                {b.cases} · {recoveryPercent(b.share)}
-              </strong>
-            </div>
-          ))}
-        </div>
-      )}
-      {predominant && predominant.cases > 0 && (
-        <div className={styles.timeInsight}>
-          <span>Maior concentração</span>
-          <strong>{predominant.label}</strong>
-          <p>{recoveryPercent(predominant.share)} das recuperações observadas.</p>
-        </div>
-      )}
-    </section>
-  );
+    </div>
+  </section>;
 }

@@ -7,13 +7,18 @@ export function LockedSidebarItem({
   label,
   icon: Icon,
   collapsed,
+  tooltipLabel,
 }: {
   label: string;
   icon: LucideIcon;
   collapsed: boolean;
+  tooltipLabel?: string;
 }) {
   return (
-    <SidebarTooltip label={label + " — Disponível para administradores"} enabled={collapsed}>
+    <SidebarTooltip
+      label={tooltipLabel ?? label + " — Disponível para administradores"}
+      enabled={collapsed || Boolean(tooltipLabel)}
+    >
       <div
         role="group"
         aria-label={label + " — disponível apenas para administradores"}

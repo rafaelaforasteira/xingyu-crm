@@ -1,9 +1,14 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { BaseMockAdapter, IntegrationResult } from "./base.adapter";
+import { ShopifyAdminClient } from "./shopify-admin.client";
 
 @Injectable()
 export class ShopifyAdapter extends BaseMockAdapter {
   private readonly logger = new Logger(ShopifyAdapter.name);
+
+  constructor(private readonly adminClient: ShopifyAdminClient) { super(); }
+
+  testConnection() { return this.adminClient.testConnection(); }
 
   async syncProducts(): Promise<IntegrationResult<{ synced: number }>> {
     this.logger.log("[demo] Shopify syncProducts");

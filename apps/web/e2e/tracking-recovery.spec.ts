@@ -278,6 +278,19 @@ test("Recovery opportunities sort, search and paginate with contained errors", a
   await expect(page.getByRole("heading", { name: "Resumo do período", exact: true })).toBeVisible();
 });
 
+test("Recovery admin navigation stays accessible expanded and collapsed", async ({ page }) => {
+  await ready(page);
+  for (const collapsed of [false, true]) {
+    if (collapsed) await page.getByRole("button", { name: "Recolher menu", exact: true }).click();
+    const recovery = page.getByRole("link", { name: "Recuperação", exact: true });
+    await expect(recovery).toHaveAttribute("href", "/tracking/recuperacao");
+    await expect(recovery).toHaveAttribute("aria-current", "page");
+    await expect(recovery.locator(".lucide-lock")).toHaveCount(0);
+    await recovery.click();
+    await expect(page).toHaveURL(/\/tracking\/recuperacao$/);
+  }
+});
+
 test("Secondary client cannot render Recovery or bypass the existing route guard", async ({
   page,
 }) => {
@@ -301,4 +314,19 @@ test("Secondary client cannot render Recovery or bypass the existing route guard
   await expect(page.getByText("Recuperação", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Recuperação", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Resumo do período", exact: true })).toBeVisible();
+  for (const collapsed of [false, true]) {
+    if (collapsed) await page.getByRole("button", { name: "Recolher menu", exact: true }).click();
+    const recovery = page.getByRole("group", {
+      name: "Recuperação — disponível apenas para administradores", exact: true,
+    });
+    await expect(recovery).toBeVisible();
+    await expect(recovery).toHaveAttribute("aria-disabled", "true");
+    await expect(recovery.locator(".lucide-lock")).toHaveCount(1);
+    await expect(recovery).toHaveCSS("cursor", "default");
+    await recovery.hover();
+    await expect(page.getByRole("tooltip")).toHaveText("Disponível para administradores");
+    await recovery.click({ force: true });
+    await expect(page).toHaveURL(/\/tracking\/vendas$/);
+    await expect(page.getByRole("link", { name: "Visão Geral", exact: true })).toHaveAttribute("href", "/tracking/vendas");
+  }
 });

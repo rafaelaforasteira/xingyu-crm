@@ -22,7 +22,7 @@ import styles from "./tracking-executive.module.css";
 
 const TICKET_HELP = "Vendas líquidas do período divididas pelos pedidos pagos.";
 
-type KpiAccent = "net" | "orders" | "buyers" | "ticket" | "repeat";
+type KpiAccent = "net" | "orders" | "buyers" | "ticket" | "repeat" | "estimate";
 
 const KPI_ART: Record<KpiAccent, string> = {
   net: "/tracking/kpi-art/net-sales.png",
@@ -30,6 +30,7 @@ const KPI_ART: Record<KpiAccent, string> = {
   buyers: "/tracking/kpi-art/buyers.png",
   ticket: "/tracking/kpi-art/average-order-value.png",
   repeat: "/tracking/kpi-art/repeat-revenue.png",
+  estimate: "/tracking/kpi-art/buyers.png",
 };
 
 export function TrackingExecutiveSummary({
@@ -121,7 +122,7 @@ export function TrackingExecutiveSummary({
   );
 }
 
-function ExecutiveKpi({
+export function ExecutiveKpi({
   accent,
   icon: Icon,
   label,
@@ -130,6 +131,11 @@ function ExecutiveKpi({
   help,
   trend,
   index,
+  artwork,
+  comparison,
+  auxiliary,
+  infoAtEnd = false,
+  className,
 }: {
   accent: KpiAccent;
   icon: LucideIcon;
@@ -139,16 +145,21 @@ function ExecutiveKpi({
   help: string;
   trend: Trend | null;
   index: number;
+  artwork?: string;
+  comparison?: ReactNode;
+  auxiliary?: ReactNode;
+  infoAtEnd?: boolean;
+  className?: string;
 }) {
   return (
     <article
-      className={styles.kpi}
+      className={[styles.kpi, className].filter(Boolean).join(" ")}
       data-accent={accent}
       style={{ "--delay": `${index * 45}ms` } as CSSProperties}
     >
       <img
         className={styles.artwork}
-        src={KPI_ART[accent]}
+        src={artwork ?? KPI_ART[accent]}
         alt=""
         aria-hidden="true"
         width={112}
@@ -160,7 +171,7 @@ function ExecutiveKpi({
           <span className={styles.icon}>
             <Icon size={15} aria-hidden="true" />
           </span>
-          <span className={styles.labelGroup}>
+          <span className={styles.labelGroup + (infoAtEnd ? " " + styles.labelWithEndInfo : "")}>
             <span className={styles.label}>{label}</span>
             <ConceptHelp
               label={label}
@@ -176,7 +187,8 @@ function ExecutiveKpi({
           <AnimatedMetric value={value} format={format} duration={650} />
         </p>
         <div className={styles.compare}>
-          {trend ? <Comparison trend={trend} /> : <UnavailableComparison />}
+          {comparison ?? (trend ? <Comparison trend={trend} /> : <UnavailableComparison />)}
+          {auxiliary && <span className={styles.compareLabel}>{auxiliary}</span>}
         </div>
       </div>
     </article>

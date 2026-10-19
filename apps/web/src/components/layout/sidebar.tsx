@@ -468,6 +468,7 @@ export function Sidebar() {
                       label={item.label}
                       icon={item.icon}
                       collapsed={collapsed}
+                      tooltipLabel={item.lockedTooltip}
                     />
                   );
                 if (item.expandablePipelines) {

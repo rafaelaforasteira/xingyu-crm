@@ -1,0 +1,21 @@
+import { describe, it, expect } from "vitest";
+import type { RecoveryOverviewData, RecoveryInsight } from "@xingyu/types";
+import {selectDiscovery, complementaryMetric} from "./recovery-insight-selection";
+const insight=(id:string, values:Record<string,number|null>, confidence:RecoveryInsight["confidence"]="HIGH"):RecoveryInsight=>({id,category:"PATTERN",severity:"INFO",title:id,summary:"Observação disponível",confidence,actionStatus:"INFORMATIONAL",evidence:Object.entries(values).map(([metric,value])=>({metric,value}))});
+const data=(intelligence:RecoveryInsight[],extra={})=>({source:"demo",intelligence,summary:{recoveredCases:100,recoveredCents:10000},methodBreakdown:[],...extra} as unknown as RecoveryOverviewData);
+const early=()=>insight("early",{sharePercent:60,recoveredCases:100});
+const open=()=>insight("open",{openCases:20,openCents:20000});
+describe("deterministic discovery selection",()=>{
+ it("selects a supported temporal majority",()=>expect(selectDiscovery(data([early()]))?.unit).toBe("percent"));
+ it("changes with filtered or period data without mutable state",()=>{expect(selectDiscovery(data([early()]))?.insight.id).toBe("early");expect(selectDiscovery(data([early(),open()]))?.insight.id).toBe("open");expect(selectDiscovery(data([]))).toBeUndefined();});
+ it("prioritizes majority attribution gaps over financial opportunity",()=>expect(selectDiscovery(data([open(),insight("coverage",{unknownCases:60})]))?.insight.id).toBe("coverage"));
+ it("uses predictable ID tie breaking independent of input order",()=>{const a=insight("early",{sharePercent:40,recoveredCases:100});const b=insight("open",{openCases:2,openCents:100});expect(selectDiscovery(data([a,b]))?.insight.id).toBe(selectDiscovery(data([b,a]))?.insight.id);});
+ it("rejects low confidence and unavailable samples",()=>expect(selectDiscovery(data([insight("early",{sharePercent:60,recoveredCases:2},"LOW")]))).toBeUndefined());
+ it("does not change descriptive results for demo data",()=>expect(selectDiscovery(data([early()]))?.source).toBe("descriptive"));
+ it("supports money and points without fictitious prediction",()=>{expect(selectDiscovery(data([open()]))?.formattedValue).toContain("R$");expect(selectDiscovery(data([insight("trend",{deltaPoints:-12,currentRate:40,previousRate:52},"MEDIUM")]))?.unit).toBe("points");});
+ it("rejects null values, missing evidence, invalid denominator and impossible rates",()=>{for(const i of [insight("early",{sharePercent:null,recoveredCases:20}),insight("early",{sharePercent:70,recoveredCases:0}),insight("segment",{rate:101,matureCases:50}),insight("coverage",{unknownCases:120}),insight("coverage",{})]) expect(selectDiscovery(data([i]))).toBeUndefined();});
+ it("associates segment rate and mature sample",()=>expect(complementaryMetric(insight("segment",{rate:60,matureCases:36}),data([]))).toContain("36 carrinhos maduros"));
+ it("uses existing UNKNOWN share with eligible recovered denominator",()=>{const i=insight("coverage",{unknownCases:8});const d=data([],{methodBreakdown:[{method:"UNKNOWN",cases:8,caseShare:8}]});expect(complementaryMetric(i,d)).toContain("8,0%");expect(complementaryMetric(i,data([]))).toBeUndefined();});
+ it("uses only eligible open evidence for money, retaining unavailable state",()=>{expect(complementaryMetric(open(),data([]))).toContain("R$");expect(complementaryMetric(insight("open",{openCases:20}),data([]))).toBeUndefined();});
+ it("returns stable results across renders and does not mutate input",()=>{const d=data([early(),open()]);const before=JSON.stringify(d);expect(selectDiscovery(d)).toEqual(selectDiscovery(d));expect(JSON.stringify(d)).toBe(before);});
+});

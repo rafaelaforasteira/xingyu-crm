@@ -1,0 +1,62 @@
+.panel {
+  padding: 16px;
+  border: 1px solid var(--tracking-border);
+  border-radius: var(--tracking-radius-widget);
+  background: var(--tracking-surface);
+  color: var(--tracking-fg);
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+.pairedWidgets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.pairedWidgets > div { display: flex; min-width: 0; }
+.pairedWidgets > div > section { width: 100%; min-width: 0; }
+.pairedWidgets .panel { align-content: start; padding: 20px; }
+@media (max-width: 1023px) { .pairedWidgets { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 639px) { .pairedWidgets .panel { padding: 16px; } }
+.header, .identity, .cardHead, .discoveryHead, .methodology { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.header { justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.identity { gap: 10px; }
+.bot, .contextIcon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
+.header p { margin: 3px 0 0; color: var(--tracking-fg-muted); font-size: 12px; line-height: 1.4; }
+.status { border-radius: 999px; padding: 4px 10px; background: hsl(var(--primary) / .06); color: var(--tracking-fg-muted); font-size: 11px; font-weight: 600; }
+.composition { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+.composition:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+.discovery { padding: 18px; min-width: 0; border: 1px solid color-mix(in srgb, hsl(var(--primary)) 15%, var(--tracking-border)); border-radius: var(--tracking-radius-widget); background: radial-gradient(ellipse at 100% 100%, hsl(var(--primary) / .04), transparent 70%), color-mix(in srgb, hsl(var(--primary)) 5%, var(--tracking-surface)); transition: border-color 160ms ease; }
+.discovery:hover { border-color: var(--tracking-border-strong); }
+.discoveryHead > svg { color: hsl(var(--primary)); flex-shrink: 0; }
+.discoveryHead { justify-content: flex-start; gap: 6px; }
+.discoveryHead > button { margin-left: 0; flex-shrink: 0; }
+.discoveryHead > span { min-width: 0; }
+.cardHead { justify-content: flex-start; gap: 4px; }
+.value { display: block; margin: 12px 0 6px; font-size: clamp(36px, 3vw, 48px); line-height: 1.1; letter-spacing: -.035em; font-weight: 650; font-variant-numeric: tabular-nums; }
+.value small { font-size: 14px; margin-left: 6px; }
+.discoveryFoot { display: block; margin-top: 14px; padding-top: 10px; border-top: 1px solid hsl(var(--primary) / .08); font-size: 11px; color: var(--tracking-fg-muted); }
+.readings { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.reading { --reading-accent: var(--tracking-data-green); display: grid; grid-template-columns: 30px minmax(0, 1fr) minmax(180px, 46%); align-items: center; gap: 10px; padding: 12px; min-width: 0; border: 1px solid color-mix(in srgb, var(--reading-accent) 15%, var(--tracking-border)); border-radius: var(--tracking-radius-widget); background: color-mix(in srgb, var(--reading-accent) 7%, var(--tracking-surface)); }
+.metricColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; border-left: 1px solid var(--tracking-border); padding-left: 10px; }
+.numericCell { min-width: 0; display: grid; grid-template-rows: auto 1fr; align-content: start; gap: 4px; text-align: left; }
+.numericCell + .numericCell { border-left: 1px solid var(--tracking-border); padding-left: 8px; }
+.numericCell strong { font-size: 20px; font-weight: 650; line-height: 1.25; white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: -.025em; }
+.numericCell span { font-size: 11px; line-height: 1.4; color: var(--tracking-fg-muted); }
+@media (max-width: 1023px) { .reading { grid-template-columns: 30px minmax(0, 1fr); } .metricColumns { grid-column: 2 / -1; border-left: 0; padding-left: 0; } }
+.metricGroup { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-left: 10px; border-left: 1px solid var(--tracking-border); text-align: right; }
+.metricGroup .readingValue { border: 0; padding: 0; }
+.supporting { color: var(--tracking-fg-muted); font-size: 11px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.value { overflow-wrap: anywhere; }
+@container tracking (max-width: 479px) { .reading .metricGroup { grid-column: 2 / -1; text-align: left; border-left: 0; padding: 0; } .reading .metricGroup .readingValue { text-align: left; } }
+.reading[data-tone="orange"] { --reading-accent: var(--tracking-data-orange); }
+.reading[data-tone="blue"] { --reading-accent: var(--tracking-data-blue); }
+.contextIcon { color: var(--reading-accent); background: color-mix(in srgb, var(--reading-accent) 10%, var(--tracking-surface)); }
+.cardHead h3 { margin: 0; font-size: 13px; font-weight: 650; line-height: 1.35; }
+.cardHead > button { flex-shrink: 0; }
+.readingCopy { min-width: 0; }
+.readingCopy p { margin: 4px 0 0; color: var(--tracking-fg-muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.readingValue { padding-left: 12px; border-left: 1px solid color-mix(in srgb, var(--reading-accent) 10%, var(--tracking-border)); font-size: 22px; font-weight: 650; letter-spacing: -.025em; line-height: 1.25; text-align: right; font-variant-numeric: tabular-nums; }
+.readingValue small { display: block; color: var(--tracking-fg-muted); font-size: 11px; font-weight: 500; letter-spacing: normal; }
+.methodology { flex-wrap: wrap; gap: 6px; padding-top: 10px; border-top: 1px solid var(--tracking-border); color: var(--tracking-fg-muted); font-size: 11px; line-height: 1.5; }
+@container tracking (max-width: 850px) { .composition { grid-template-columns: minmax(0, 1fr); gap: 6px; } .discovery { padding: 16px; } }
+@container tracking (max-width: 479px) { .panel { padding: 12px; } .reading { gap: 8px; grid-template-columns: 26px minmax(0, 1fr) auto; } .contextIcon { width: 26px; height: 26px; } .readingValue { font-size: 20px; } .cardHead { gap: 3px; } }
+@media (prefers-reduced-motion: reduce) { .discovery { transition: none; } }

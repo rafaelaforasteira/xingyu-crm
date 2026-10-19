@@ -5,8 +5,6 @@
     var(--tracking-data-red) 60%,
     var(--tracking-data-charcoal)
   );
-  max-width: 1600px;
-  margin-inline: auto;
 }
 .compositionWidget {
   min-width: 0;
@@ -90,7 +88,7 @@
 }
 .kpiGrid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 .kpi {
@@ -165,12 +163,16 @@
   border: 1px solid var(--tracking-border);
   border-radius: var(--tracking-radius-widget);
   background: var(--tracking-surface);
-  padding: 22px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(16, 16, 16, 0.04);
   min-width: 0;
   transition: border-color 160ms ease;
 }
 .card:hover {
   border-color: var(--tracking-border-strong);
+}
+@media (min-width: 640px) {
+  .card { padding: 20px; }
 }
 .sectionHead {
   align-items: flex-start;

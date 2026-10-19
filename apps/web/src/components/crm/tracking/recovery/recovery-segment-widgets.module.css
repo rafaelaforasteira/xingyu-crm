@@ -1,0 +1,5 @@
+.rows { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.row { gap: 10px; }
+.mark { background: color-mix(in srgb, var(--profile-identity) 12%, var(--tracking-surface)); color: var(--profile-identity); }
+.secondary { margin-top: 6px; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sample { margin: 0; font-size: 11px; color: var(--tracking-fg-muted); line-height: 1.4; }

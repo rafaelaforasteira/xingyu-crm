@@ -14,6 +14,7 @@ import {
   DEFAULT_RECOVERY_FILTERS,
   type RecoveryFilters,
 } from "./recovery-service";
+import { RecoveryValueComposition } from "./recovery-value-composition";
 import { RecoveryFiltersPanel } from "./recovery-filters";
 import { RecoverySummary } from "./recovery-summary";
 import {
@@ -26,7 +27,9 @@ import { RecoverySegments, RecoveryProducts } from "./recovery-segments";
 import { RecoveryOpportunities } from "./recovery-opportunities";
 import { RecoveryDataQuality } from "./recovery-data-quality";
 import theme from "../tracking-theme.module.css";
+import overview from "../tracking-overview.module.css";
 import styles from "./recovery.module.css";
+import insights from "./recovery-insights.module.css";
 
 export function RecoveryPage() {
   const { user } = useAuth();
@@ -46,6 +49,17 @@ export function RecoveryPage() {
     if (query.data) lastValid.current = query.data;
   }, [query.data]);
   const data = query.data ?? lastValid.current;
+  const periodMeta = data ? (
+    <div className={overview.periodMeta + " text-[11px] text-muted-foreground"} aria-live="polite">
+      <span>{dateBR(data.range.startDate)} → {dateBR(data.range.endDate)}</span>
+      {data.source === "demo" && (
+        <span data-tracking-badge="demo" className="rounded-full px-2.5 py-1 font-medium">
+          Dados demonstrativos
+        </span>
+      )}
+      {query.isFetching && <span>Atualizando análise…</span>}
+    </div>
+  ) : null;
   const refresh = async () => {
     const result = await query.refetch();
     if (!result.isError)
@@ -85,24 +99,6 @@ export function RecoveryPage() {
           />
         </div>
       </div>
-      <div className={styles.meta} aria-live="polite">
-        {data && (
-          <>
-            <span>
-              {dateBR(data.range.startDate)} → {dateBR(data.range.endDate)} · coorte de abandono
-            </span>
-            <span className={styles.sourceBadge}>
-              {data.source === "demo"
-                ? "Dados demonstrativos · não são resultados reais"
-                : "Dados normalizados da organização"}
-            </span>
-            <span>
-              {data.timezone} · {data.currency}
-            </span>
-          </>
-        )}
-        {query.isFetching && <span>Atualizando análise…</span>}
-      </div>
       {query.isError && (
         <div role="alert" className={styles.error}>
           <div>
@@ -121,8 +117,8 @@ export function RecoveryPage() {
       {!data && query.isLoading && <RecoverySkeleton />}
       {data && (
         <TrackingMotion revision={Date.parse(data.updatedAt)}>
-          <div className={styles.sections} aria-busy={query.isFetching}>
-            <RecoverySummary data={data} />
+          <div className={overview.sections} aria-busy={query.isFetching}>
+            <RecoverySummary data={data} meta={periodMeta} />
             {!data.summary.eligibleCases ? (
               <section className={styles.card}>
                 <h2>Nenhum carrinho abandonado neste período.</h2>
@@ -137,17 +133,18 @@ export function RecoveryPage() {
                     Os carrinhos deste período ainda estão dentro da janela de recuperação.
                   </p>
                 )}
+                <div className={insights.pairedWidgets}>
+                  <RecoveryReveal><RecoveryIntelligence data={data} /></RecoveryReveal>
+                  <RecoveryReveal><RecoveryMethodBreakdown data={data} /></RecoveryReveal>
+                </div>
                 <RecoveryReveal>
-                  <RecoveryIntelligence data={data} />
-                </RecoveryReveal>
-                <RecoveryReveal>
-                  <RecoveryMethodBreakdown data={data} />
-                </RecoveryReveal>
-                <RecoveryReveal>
-                  <div className={styles.twoColumns}>
+                  <div className="grid items-stretch gap-3 xl:grid-cols-[1.7fr_0.8fr]">
                     <RecoveryEvolution data={data} />
-                    <RecoveryTimeAnalysis data={data} />
+                    <RecoveryValueComposition data={data} />
                   </div>
+                </RecoveryReveal>
+                <RecoveryReveal>
+                  <RecoveryTimeAnalysis data={data} />
                 </RecoveryReveal>
                 <RecoveryReveal>
                   <RecoverySegments data={data} />
@@ -194,11 +191,22 @@ function RecoverySkeleton() {
   return (
     <div aria-label="Carregando recuperação" className={styles.sections}>
       <div className={styles.kpiGrid}>
-        {Array.from({ length: 6 }, (_, i) => (
+        {Array.from({ length: 5 }, (_, i) => (
           <Skeleton key={i} className="h-36 w-full rounded-xl" />
         ))}
       </div>
-      <Skeleton className="h-48 w-full rounded-xl" />
+      <div className={insights.panel} aria-label="Carregando insights">
+        <Skeleton className="h-10 w-64 max-w-full rounded-xl" />
+        <div className={insights.composition}>
+          <Skeleton className="h-52 w-full rounded-xl" />
+          <div className="space-y-3">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-14 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
+        <Skeleton className="h-8 w-full rounded-xl" />
+      </div>
       <Skeleton className="h-80 w-full rounded-xl" />
       <div className={styles.twoColumns}>
         <Skeleton className="h-80 w-full rounded-xl" />

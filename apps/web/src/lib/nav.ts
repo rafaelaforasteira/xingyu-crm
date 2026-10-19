@@ -34,6 +34,7 @@ export interface NavItem {
   countKey?: "openDeals" | "waitingConversations" | "tasksToday";
   /** Match only exact pathname (ignore nested routes) */
   exact?: boolean;
+  lockedTooltip?: string;
   /** Render expandable pipeline children under this item */
   expandablePipelines?: boolean;
   pipelineSpace?: "COMMERCIAL" | "ATTENDANCE";
@@ -126,7 +127,12 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
     label: "Tracking",
     items: [
       { href: "/tracking/vendas", label: "Visão Geral", icon: Radar },
-      { href: "/tracking/recuperacao", label: "Recuperação", icon: Undo2 },
+      {
+        href: "/tracking/recuperacao",
+        label: "Recuperação",
+        icon: Undo2,
+        lockedTooltip: "Disponível para administradores",
+      },
     ],
   },
   {
@@ -237,7 +243,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Tracking",
     items: [
       { href: "/tracking/vendas", label: "Visão Geral", icon: Radar },
-      { href: "/tracking/recuperacao", label: "Recuperação", icon: Undo2 },
+      {
+        href: "/tracking/recuperacao",
+        label: "Recuperação",
+        icon: Undo2,
+        lockedTooltip: "Disponível para administradores",
+      },
     ],
   },
   {
