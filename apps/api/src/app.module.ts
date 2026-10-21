@@ -42,6 +42,7 @@ import { FinanceModule } from "./finance/finance.module";
 import { ClientsModule } from "./clients/clients.module";
 import { ConnectionsModule } from "./connections/connections.module";
 import { RecoveryModule } from "./tracking/recovery/recovery.module";
+import { TrackingOverviewModule } from "./tracking/overview/tracking-overview.module";
 import path from "node:path";
 
 const rootEnvFile = path.resolve(__dirname, "../../../.env");
@@ -92,6 +93,7 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
     ClientsModule,
     ConnectionsModule,
     RecoveryModule,
+    TrackingOverviewModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: UserThrottlerGuard },

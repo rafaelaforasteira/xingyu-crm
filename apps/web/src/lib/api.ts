@@ -164,12 +164,19 @@ function redirectToLogin() {
 
 async function request<T>(
   path: string,
-  options: RequestInit & { query?: Record<string, QueryValue>; _retried?: boolean } = {},
+  options: RequestInit & {
+    query?: Record<string, QueryValue>;
+    _retried?: boolean;
+    timeoutMs?: number;
+  } = {},
 ): Promise<T> {
-  const { query, headers, _retried, ...rest } = options;
+  const { query, headers, _retried, timeoutMs, ...rest } = options;
   const url = buildUrl(path, query);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    timeoutMs ?? REQUEST_TIMEOUT_MS,
+  );
 
   let response: Response;
   try {
@@ -244,8 +251,11 @@ function safeJson(text: string) {
 }
 
 export const api = {
-  get: <T>(path: string, query?: Record<string, QueryValue>) =>
-    request<T>(path, { method: "GET", query }),
+  get: <T>(
+    path: string,
+    query?: Record<string, QueryValue>,
+    options?: { timeoutMs?: number },
+  ) => request<T>(path, { method: "GET", query, timeoutMs: options?.timeoutMs }),
   post: <T>(path: string, data?: unknown) =>
     request<T>(path, {
       method: "POST",

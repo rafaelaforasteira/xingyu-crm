@@ -24,6 +24,7 @@ import { WebhooksAdapter } from "./webhooks.adapter";
   exports: [
     IntegrationsService,
     ShopifyAdapter,
+    ShopifyAdminClient,
     WhatsAppAdapter,
     InstagramAdapter,
     MetaAdsAdapter,

@@ -53,7 +53,12 @@ export function SalesTrackingPage() {
       </span>
       {data.source === "mock" && (
         <span data-tracking-badge="demo" className="rounded-full px-2.5 py-1 font-medium">
-          Dados demonstrativos
+          Dados demonstrativos — configure Shopify
+        </span>
+      )}
+      {data.source === "api" && (
+        <span data-tracking-badge="shopify" className="rounded-full px-2.5 py-1 font-medium">
+          Dados Shopify
         </span>
       )}
       {fetching && <span>Atualizando análise…</span>}

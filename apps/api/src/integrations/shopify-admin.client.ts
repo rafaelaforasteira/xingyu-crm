@@ -17,7 +17,8 @@ export type ShopifyErrorCode =
   | "NETWORK_ERROR";
 
 const messages: Record<ShopifyErrorCode, string> = {
-  ENV_MISSING: "Configure SHOPIFY_SHOP, SHOPIFY_CLIENT_ID e SHOPIFY_CLIENT_SECRET no backend.",
+  ENV_MISSING:
+    "Configure SHOPIFY_SHOP e SHOPIFY_ACCESS_TOKEN (custom app) ou SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET.",
   INVALID_SHOP: "Informe o subdomínio da loja ou seu domínio myshopify.com válido.",
   INVALID_API_VERSION: "SHOPIFY_API_VERSION deve usar o formato YYYY-MM de uma versão trimestral.",
   INVALID_CLIENT_ID: "Client ID rejeitado pela Shopify.",
@@ -33,10 +34,55 @@ const messages: Record<ShopifyErrorCode, string> = {
   NETWORK_ERROR: "Não foi possível comunicar com a Shopify.",
 };
 
-class ShopifyFailure extends Error {
+export class ShopifyFailure extends Error {
   constructor(readonly code: ShopifyErrorCode) {
     super(messages[code]);
   }
+}
+
+export interface ShopifyMoneySet {
+  shopMoney?: { amount?: string; currencyCode?: string } | null;
+}
+
+export interface ShopifyTrackingOrderNode {
+  id: string;
+  name?: string | null;
+  createdAt: string;
+  processedAt?: string | null;
+  cancelledAt?: string | null;
+  displayFinancialStatus?: string | null;
+  totalPriceSet?: ShopifyMoneySet | null;
+  totalRefundedSet?: ShopifyMoneySet | null;
+  customer?: {
+    id: string;
+    displayName?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+  customerJourneySummary?: {
+    firstVisit?: {
+      landingPage?: string | null;
+      referrerUrl?: string | null;
+      utmParameters?: {
+        source?: string | null;
+        medium?: string | null;
+        campaign?: string | null;
+        content?: string | null;
+        term?: string | null;
+      } | null;
+    } | null;
+    lastVisit?: {
+      landingPage?: string | null;
+      referrerUrl?: string | null;
+      utmParameters?: {
+        source?: string | null;
+        medium?: string | null;
+        campaign?: string | null;
+        content?: string | null;
+        term?: string | null;
+      } | null;
+    } | null;
+  } | null;
 }
 
 export interface ShopifyShop {
@@ -57,6 +103,7 @@ export type ShopifyConnectionResult =
 export class ShopifyAdminClient {
   private readonly logger = new Logger(ShopifyAdminClient.name);
   private readonly shop = process.env.SHOPIFY_SHOP?.trim() ?? "";
+  private readonly accessToken = process.env.SHOPIFY_ACCESS_TOKEN?.trim() ?? "";
   private readonly clientId = process.env.SHOPIFY_CLIENT_ID?.trim() ?? "";
   private readonly clientSecret = process.env.SHOPIFY_CLIENT_SECRET?.trim() ?? "";
   private readonly version = process.env.SHOPIFY_API_VERSION?.trim() || "2026-07";
@@ -64,12 +111,34 @@ export class ShopifyAdminClient {
   private expiresAt = 0;
   private tokenRequest: Promise<string> | null = null;
 
+  private get hasStaticAccessToken(): boolean {
+    return Boolean(this.accessToken);
+  }
+
+  private get hasClientCredentials(): boolean {
+    return Boolean(this.clientId && this.clientSecret);
+  }
+
   private get configured(): boolean {
-    return Boolean(this.shop && this.clientId && this.clientSecret);
+    return Boolean(this.shop && (this.hasStaticAccessToken || this.hasClientCredentials));
+  }
+
+  isConfigured(): boolean {
+    return this.configured;
+  }
+
+  shopDomain(): string | null {
+    try {
+      return this.domain();
+    } catch {
+      return null;
+    }
   }
 
   private domain(): string {
-    if (!this.configured) throw new ShopifyFailure("ENV_MISSING");
+    if (!this.shop) throw new ShopifyFailure("ENV_MISSING");
+    if (!this.hasStaticAccessToken && !this.hasClientCredentials)
+      throw new ShopifyFailure("ENV_MISSING");
     const slug = this.shop.toLowerCase().replace(/\.myshopify\.com$/, "");
     // No URLs, ports, paths, arbitrary hosts or redirects may receive credentials.
     if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug))
@@ -84,7 +153,7 @@ export class ShopifyAdminClient {
     init: RequestInit,
   ): Promise<{ status: number; ok: boolean; body: any }> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10_000);
+    const timer = setTimeout(() => controller.abort(), 30_000);
     try {
       const response = await fetch(url, { ...init, redirect: "error", signal: controller.signal });
       let body: any;
@@ -149,6 +218,8 @@ export class ShopifyAdminClient {
   }
 
   private async getToken(): Promise<string> {
+    // Custom apps (Admin API access token) — preferred when present.
+    if (this.hasStaticAccessToken) return this.accessToken;
     if (this.token && Date.now() < this.expiresAt - 60_000) return this.token;
     if (!this.tokenRequest) this.tokenRequest = this.acquireToken();
     try {
@@ -158,7 +229,11 @@ export class ShopifyAdminClient {
     }
   }
 
-  private async graphql<T>(query: string): Promise<T> {
+  async graphql<T>(
+    query: string,
+    variables?: Record<string, unknown>,
+    attempt = 0,
+  ): Promise<T> {
     const domain = this.domain();
     const token = await this.getToken();
     const response = await this.request(
@@ -166,7 +241,7 @@ export class ShopifyAdminClient {
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify(variables ? { query, variables } : { query }),
       },
     );
     if (response.status === 401) {
@@ -175,11 +250,24 @@ export class ShopifyAdminClient {
       throw new ShopifyFailure("INVALID_CLIENT_CREDENTIALS");
     }
     if (response.status === 403) throw new ShopifyFailure("INSUFFICIENT_SCOPE");
+    if (response.status === 429 && attempt < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      return this.graphql(query, variables, attempt + 1);
+    }
     if (!response.ok) throw new ShopifyFailure("GRAPHQL_REQUEST_FAILED");
     if (!response.body) throw new ShopifyFailure("GRAPHQL_ERROR");
     if (response.body.errors != null && !Array.isArray(response.body.errors))
       throw new ShopifyFailure("GRAPHQL_ERROR");
     if (response.body.errors?.length) {
+      const throttled = response.body.errors.some(
+        (error: any) =>
+          error?.extensions?.code === "THROTTLED" ||
+          /throttl/i.test(String(error?.message ?? "")),
+      );
+      if (throttled && attempt < 5) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+        return this.graphql(query, variables, attempt + 1);
+      }
       const denied = response.body.errors.some(
         (error: any) => error?.extensions?.code === "ACCESS_DENIED",
       );
@@ -187,6 +275,92 @@ export class ShopifyAdminClient {
     }
     if (!response.body.data) throw new ShopifyFailure("GRAPHQL_ERROR");
     return response.body.data as T;
+  }
+
+  /**
+   * Paginated orders for Tracking Visão Geral (live, not persisted).
+   * Caps pages to keep the request bounded (~18 months of history).
+   */
+  async fetchOrdersForTracking(since: Date): Promise<ShopifyTrackingOrderNode[]> {
+    // Inclusive calendar day in UTC for the Shopify search query + local cutoff.
+    const sinceDay = since.toISOString().slice(0, 10);
+    const sinceMs = Date.parse(`${sinceDay}T00:00:00.000Z`);
+    // Only finalized money — skips PENDING/EXPIRED noise and cuts page count ~30%.
+    const searchQuery = `(financial_status:paid OR financial_status:partially_refunded OR financial_status:refunded) AND created_at:>=${sinceDay}`;
+    // Newest first; paginate until the lookback window is fully covered (no soft cap
+    // that drops older history used for LTV / existing-customer classification).
+    const ordersQuery = `
+      query OrdersForTracking($cursor: String, $query: String!) {
+        orders(first: 250, after: $cursor, query: $query, sortKey: CREATED_AT, reverse: true) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id
+              name
+              createdAt
+              processedAt
+              cancelledAt
+              displayFinancialStatus
+              totalPriceSet { shopMoney { amount currencyCode } }
+              totalRefundedSet { shopMoney { amount currencyCode } }
+              customer {
+                id
+                displayName
+                email
+                phone
+              }
+              customerJourneySummary {
+                firstVisit {
+                  landingPage
+                  referrerUrl
+                  utmParameters { source medium campaign content term }
+                }
+                lastVisit {
+                  landingPage
+                  referrerUrl
+                  utmParameters { source medium campaign content term }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const collected: ShopifyTrackingOrderNode[] = [];
+    let cursor: string | null = null;
+    const maxPages = 250; // safety valve (~25k orders)
+
+    for (let page = 0; page < maxPages; page += 1) {
+      const data = await this.graphql<{
+        orders?: {
+          pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+          edges?: Array<{ node?: ShopifyTrackingOrderNode | null } | null>;
+        };
+      }>(ordersQuery, { cursor, query: searchQuery });
+
+      const edges = data.orders?.edges ?? [];
+      let reachedSince = false;
+      for (const edge of edges) {
+        const node = edge?.node;
+        if (!node?.id) continue;
+        const createdMs = Date.parse(node.createdAt);
+        if (Number.isFinite(createdMs) && createdMs < sinceMs) {
+          reachedSince = true;
+          break;
+        }
+        collected.push(node);
+      }
+
+      const pageInfo = data.orders?.pageInfo;
+      if (reachedSince || !pageInfo?.hasNextPage || !pageInfo.endCursor) break;
+      cursor = pageInfo.endCursor;
+    }
+
+    this.logger.log(
+      `Shopify tracking fetch: ${collected.length} orders since ${sinceDay}`,
+    );
+    return collected;
   }
 
   async testConnection(): Promise<ShopifyConnectionResult> {

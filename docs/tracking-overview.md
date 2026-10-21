@@ -4,6 +4,12 @@
 
 A entrada de navegação passou de **Vendas** para **Visão Geral**, mantendo o título **Inteligência de Vendas** e a URL **/tracking/vendas**. A página usa uma única análise de pedidos históricos para reconciliar números, gráficos, filtros e tabela.
 
+## Fonte de dados (Shopify live)
+
+- Com `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID` e `SHOPIFY_CLIENT_SECRET` configurados, `GET /api/tracking/overview` busca pedidos na Admin GraphQL (últimos ~18 meses), normaliza para `TrackingDataset` e o frontend aplica `analyzeTrackingOverview` com `source: "api"` (badge **Dados Shopify**).
+- Sem credenciais ou em falha Shopify, a UI mantém o mock local com badge **Dados demonstrativos — configure Shopify**.
+- Nesta etapa **não** há sync Prisma nem webhooks; o fetch é ao vivo (cache em memória ~60s no backend).
+
 ## Auditoria realizada antes das alterações
 
 - Branch encontrada e mantida: `feature/beta-orders-operation-center`.
