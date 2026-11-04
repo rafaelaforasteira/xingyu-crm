@@ -7,6 +7,7 @@ import { TrackingSelect } from "./tracking-select";
 import { Popover } from "@/components/ui/popover";
 import { TrackingPeriodSelector } from "./tracking-period-selector";
 import type { TrackingFilters } from "./sales-tracking-types";
+import { trackingFilterCount } from "./tracking-view";
 import styles from "./sales-tracking-filters.module.css";
 
 export const DEFAULT_TRACKING_FILTERS: TrackingFilters = {
@@ -28,10 +29,7 @@ export function SalesTrackingFilters({
     if (next) setDraftFilters(structuredClone(appliedFilters));
     setOpen(next);
   };
-  const count =
-    Number(appliedFilters.period.mode !== "preset" || appliedFilters.period.preset !== "30d") +
-    Number(appliedFilters.customerType !== "ALL") +
-    Number(appliedFilters.purchaseStage !== "ALL");
+  const count = trackingFilterCount(appliedFilters);
   const range = draftFilters.period;
   const today = new Date();
   const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -58,7 +56,7 @@ export function SalesTrackingFilters({
           data-tracking-control="filter"
           data-active={count > 0 ? "true" : "false"}
           className="relative h-9 w-9 shrink-0 rounded-full"
-          aria-label="Filtrar dados de vendas"
+          aria-label={`Filtrar dados de vendas, ${count === 0 ? "nenhum filtro ativo" : count === 1 ? "1 filtro ativo" : `${count} filtros ativos`}`}
           title="Filtrar dados"
           aria-haspopup="dialog"
           aria-expanded={open}
@@ -67,7 +65,7 @@ export function SalesTrackingFilters({
           <Filter className="h-4 w-4" aria-hidden />
           {count > 0 && (
             <span
-              aria-label={`${count} filtros ativos`}
+              aria-hidden="true"
               className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-card bg-primary px-0.5 text-[9px] font-semibold text-primary-foreground"
             >
               {count}

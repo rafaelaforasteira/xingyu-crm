@@ -167,7 +167,7 @@
 }
 .evolution {
   --series-gross: var(--tracking-data-charcoal);
-  --series-net: var(--tracking-accent);
+  --series-net: var(--tracking-accent-strong);
   --series-grid: color-mix(in srgb, var(--tracking-fg) 6%, transparent);
 }
 :global(.dark) .evolution {
@@ -332,7 +332,7 @@
   background: var(--tracking-accent-soft);
 }
 .compositionChip[data-sentiment="negative"] {
-  color: var(--tracking-data-red);
+  color: var(--tracking-data-red-ink);
   background: color-mix(in srgb, var(--tracking-data-red) 12%, var(--tracking-surface));
 }
 .compositionChip[data-sentiment="neutral"],

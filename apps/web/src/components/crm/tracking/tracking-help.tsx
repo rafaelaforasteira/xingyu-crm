@@ -10,8 +10,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
+import { createTooltipPresence } from "./tracking-tooltip-presence";
 
-export const TRACKING_TOOLTIP_LAYER = "pointer-events-none fixed z-[90]";
+const TRACKING_TOOLTIP_POSITION = "fixed z-[90]";
+export const TRACKING_TOOLTIP_LAYER = "pointer-events-none " + TRACKING_TOOLTIP_POSITION;
 
 export const TOOLTIP_OPEN_EVENT = "tracking:tooltip-open";
 
@@ -35,7 +37,7 @@ export function useTrackingTooltipDismissal(id: string, dismiss: () => void) {
 let closeActiveConcept: (() => void) | null = null;
 
 /** The shared Popover has a modal backdrop, so it cannot provide hover tooltips.
- * Opens only from this button. Leaving the button, blurring, scrolling or resizing closes immediately. */
+ * Keeps help readable while the trigger has focus or the pointer crosses into its text. */
 export function ConceptHelp({
   label,
   text,
@@ -58,19 +60,30 @@ export function ConceptHelp({
   const tip = useRef<HTMLDivElement>(null);
   const setOpenRef = useRef(setOpen);
   setOpenRef.current = setOpen;
-  const close = useRef<(() => void) | null>(null);
-  if (!close.current) {
-    close.current = () => {
-      setOpenRef.current(false);
-      if (closeActiveConcept === close.current) closeActiveConcept = null;
-    };
+  const presenceRef = useRef<ReturnType<typeof createTooltipPresence> | null>(null);
+  if (!presenceRef.current) {
+    presenceRef.current = createTooltipPresence({
+      show: () => {
+        if (closeActiveConcept && closeActiveConcept !== presenceRef.current?.dismiss)
+          closeActiveConcept();
+        window.dispatchEvent(new CustomEvent(TOOLTIP_OPEN_EVENT, { detail: id }));
+        closeActiveConcept = presenceRef.current!.dismiss;
+        setOpenRef.current(true);
+      },
+      hide: () => {
+        setOpenRef.current(false);
+        if (closeActiveConcept === presenceRef.current?.dismiss) closeActiveConcept = null;
+      },
+    });
   }
-  const show = () => {
-    if (closeActiveConcept && closeActiveConcept !== close.current) closeActiveConcept();
-    window.dispatchEvent(new CustomEvent(TOOLTIP_OPEN_EVENT, { detail: id }));
-    closeActiveConcept = close.current;
-    setOpen(true);
-  };
+  const presence = presenceRef.current;
+  useEffect(
+    () => () => {
+      presence.dispose();
+      if (closeActiveConcept === presence.dismiss) closeActiveConcept = null;
+    },
+    [presence],
+  );
   useLayoutEffect(() => {
     if (!open) {
       setBox(null);
@@ -97,8 +110,7 @@ export function ConceptHelp({
       });
     };
     place();
-    const dismiss = close.current;
-    if (!dismiss) return;
+    const dismiss = presence.dismiss;
     const otherTooltip = (event: Event) => {
       if ((event as CustomEvent<string>).detail !== id) dismiss();
     };
@@ -107,7 +119,10 @@ export function ConceptHelp({
       if (event.key === "Escape") dismiss();
     };
     const outside = (event: PointerEvent) => {
-      if (!(event.target instanceof Node) || !trigger.current?.contains(event.target)) dismiss();
+      if (
+        !(event.target instanceof Node) ||
+        (!trigger.current?.contains(event.target) && !tip.current?.contains(event.target))
+      ) dismiss();
     };
     window.addEventListener("keydown", escape);
     window.addEventListener("resize", dismiss);
@@ -120,7 +135,7 @@ export function ConceptHelp({
       window.removeEventListener("scroll", dismiss, true);
       document.removeEventListener("pointerdown", outside);
     };
-  }, [open, id]);
+  }, [open, id, presence]);
   return (
     <>
       <button
@@ -128,11 +143,11 @@ export function ConceptHelp({
         type="button"
         aria-label={"Informações sobre " + label}
         aria-describedby={open ? id : undefined}
-        onClick={hoverOnly ? undefined : show}
-        onFocus={show}
-        onBlur={() => close.current?.()}
-        onMouseEnter={show}
-        onMouseLeave={() => close.current?.()}
+        onClick={hoverOnly ? undefined : presence.open}
+        onFocus={presence.focus}
+        onBlur={presence.blur}
+        onMouseEnter={presence.enter}
+        onMouseLeave={presence.leave}
         style={style}
         className={
           className ??
@@ -147,6 +162,8 @@ export function ConceptHelp({
             ref={tip}
             id={id}
             role="tooltip"
+            onMouseEnter={presence.enter}
+            onMouseLeave={presence.leave}
             style={{
               position: "fixed",
               left: box?.left ?? 0,
@@ -156,7 +173,7 @@ export function ConceptHelp({
               maxWidth: "calc(100vw - 24px)",
             }}
             data-module-theme="tracking"
-            className={TRACKING_TOOLTIP_LAYER + " tracking-portal rounded-xl p-3 text-xs font-normal leading-relaxed shadow-soft"}
+            className={"pointer-events-auto " + TRACKING_TOOLTIP_POSITION + " tracking-portal rounded-xl p-3 text-xs font-normal leading-relaxed shadow-soft"}
           >
             {text}
           </div>,

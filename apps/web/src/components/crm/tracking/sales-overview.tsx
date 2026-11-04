@@ -88,9 +88,9 @@ export function SalesHero({ data }: { data: SalesTrackingData }) {
                 >
                   <defs>
                     <linearGradient id="netSalesGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--series-net)" stopOpacity={0.16} />
-                      <stop offset="72%" stopColor="var(--series-net)" stopOpacity={0.04} />
-                      <stop offset="100%" stopColor="var(--series-net)" stopOpacity={0} />
+                      <stop offset="0%" stopColor="var(--tracking-accent)" stopOpacity={0.16} />
+                      <stop offset="72%" stopColor="var(--tracking-accent)" stopOpacity={0.04} />
+                      <stop offset="100%" stopColor="var(--tracking-accent)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} stroke="var(--series-grid)" strokeDasharray="2 7" />

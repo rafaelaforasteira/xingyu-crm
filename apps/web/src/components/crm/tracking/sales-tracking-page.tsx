@@ -19,6 +19,7 @@ import { createTrackingRefresh } from "./tracking-refresh";
 import { TrackingMotion } from "./tracking-motion";
 import { SalesTrackingFilters, DEFAULT_TRACKING_FILTERS } from "./sales-tracking-filters";
 import { getSalesTrackingData } from "./sales-tracking-service";
+import { loadTrackingView, summarizeTrackingFilters } from "./tracking-view";
 import type { TrackingFilters } from "./sales-tracking-types";
 import { ChannelOriginSection } from "./channel-origin-section";
 import { TrackingExecutiveSummary } from "./tracking-executive-summary";
@@ -33,8 +34,8 @@ export function SalesTrackingPage() {
   const [appliedFilters, setAppliedFilters] =
     React.useState<TrackingFilters>(DEFAULT_TRACKING_FILTERS);
   const query = useQuery({
-    queryKey: ["tracking", "sales", appliedFilters],
-    queryFn: () => getSalesTrackingData(appliedFilters),
+    queryKey: ["tracking", "sales", "view", appliedFilters],
+    queryFn: () => loadTrackingView(appliedFilters, getSalesTrackingData),
     placeholderData: (previous) => previous,
     retry: false,
   });
@@ -42,7 +43,8 @@ export function SalesTrackingPage() {
   React.useEffect(() => {
     if (query.data) lastValid.current = query.data;
   }, [query.data]);
-  const data = query.data ?? lastValid.current;
+  const displayedView = query.data ?? lastValid.current;
+  const data = displayedView?.data;
   const runner = React.useRef(createTrackingRefresh());
   const [refreshing, setRefreshing] = React.useState(false);
   const fetching = query.isFetching || refreshing;
@@ -50,6 +52,9 @@ export function SalesTrackingPage() {
     <div className={styles.periodMeta + " text-[11px] text-muted-foreground"} aria-live="polite">
       <span>
         {dateBR(data.range.startDate)} → {dateBR(data.range.endDate)}
+      </span>
+      <span className="min-w-0 break-words">
+        Recorte exibido: {summarizeTrackingFilters(displayedView!.filters)}
       </span>
       {data.source === "mock" && (
         <span data-tracking-badge="demo" className="rounded-full px-2.5 py-1 font-medium">
