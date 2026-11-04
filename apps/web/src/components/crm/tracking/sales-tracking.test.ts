@@ -58,25 +58,31 @@ function checkInvariants(data: SalesTrackingData) {
   }
 }
 describe("Tracking overview analytics", () => {
-  it("keeps every section reconciled across all 84 filter combinations", () => {
-    const dataset = createTrackingDataset(today);
-    for (const preset of ["30d", "90d", "12m"] as const)
-      for (const customerType of ["ALL", "NEW", "EXISTING", "REACTIVATED"] as const)
-        for (const purchaseStage of ["ALL", "1", "2", "3", "4", "5", "6+"] as const) {
-          const filters = {
-            period: { mode: "preset" as const, preset },
-            customerType,
-            purchaseStage,
-          };
-          checkInvariants(
-            analyzeTrackingOverview(
-              dataset,
-              filters,
-              resolveTrackingDateRange(filters.period, today),
-            ),
-          );
-        }
-  });
+  const reconciliationDataset = createTrackingDataset(today);
+  const combinations = (["30d", "90d", "12m"] as const).flatMap((preset) =>
+    (["ALL", "NEW", "EXISTING", "REACTIVATED"] as const).flatMap((customerType) =>
+      (["ALL", "1", "2", "3", "4", "5", "6+"] as const).map((purchaseStage) => ({
+        preset,
+        customerType,
+        purchaseStage,
+      })),
+    ),
+  );
+  // Keep all 84 cases and assertions; give each combination its own failure and
+  // timeout boundary instead of making their combined runtime a 5-second test.
+  it.each(combinations)(
+    "reconciles $preset / $customerType / $purchaseStage",
+    ({ preset, customerType, purchaseStage }) => {
+      const filters = { period: { mode: "preset" as const, preset }, customerType, purchaseStage };
+      checkInvariants(
+        analyzeTrackingOverview(
+          reconciliationDataset,
+          filters,
+          resolveTrackingDateRange(filters.period, today),
+        ),
+      );
+    },
+  );
   it("separates new-buyer revenue from first-purchase revenue, including under NEW filter", () => {
     const dataset: TrackingDataset = {
       customers: [identity("a"), identity("b")],
