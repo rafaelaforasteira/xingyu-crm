@@ -232,3 +232,7 @@ Fontes: [Next 15.5.28](https://nextjs.org/blog/nextjs-security-update-october-14
 - `packages/validation/package.json`
 - `packages/validation/vitest.config.ts`
 - `pnpm-lock.yaml`
+
+# Fase 3 — agentes de engenharia e design
+
+Configuração e evidências em [PHASE-3-AGENTS.md](./PHASE-3-AGENTS.md); operação em [AGENT-WORKFLOW.md](./AGENT-WORKFLOW.md). BMAD 6.12.4, Superpowers nativo, Apple/UI UX, sete perfis e Playwright MCP instalados/reconhecidos. Lint, typecheck, testes e build passaram; smoke MCP em página vazia passou. Verificação visual do CRM permanece limitada pela rejeição anterior de inicialização local, sem bypass. Sem alterações de negócio, dados reais, push, merge ou deploy.

@@ -57,3 +57,10 @@ Requisito rastreável; migrações reversíveis/revisáveis; contratos e testes 
 - Alto (auth, RBAC, webhooks, dados/migrações): casos negativos de autorização no servidor, tenant/ownership, assinatura e replay, concorrência, rollback e banco descartável explícito. Revisão humana antes de publicação.
 - Integração com efeito externo: validar limites, timeout, retries limitados e idempotência antes de reenvio. Não testar envio real sem staging autorizado.
 - Testes PostgreSQL exigem TEST_DATABASE_URL local com nome terminado em _test; nunca carregar credenciais de .env como fallback para testes.
+
+## Camada de agentes de engenharia e design
+
+Aplicar [AGENT-WORKFLOW.md](docs/engineering/AGENT-WORKFLOW.md). BMAD mantém requisito, arquitetura, UX e um único plano; Superpowers fornece TDD, depuração, revisão e verificação; Codex implementa. Apple Design orienta hierarquia/movimento; UI UX Pro Max confere consistência no mesmo plano, preservando tokens e tipografia BRAINX. Playwright registra evidências permitidas; Security Guardian revisa risco.
+Nenhuma funcionalidade complexa deve começar sem planejamento prévio registrado e critérios de aceite. Reutilizar brief/decisões existentes, sem PRDs ou aprovações duplicadas. Para mudanças pequenas, manter o mini-brief proporcional ao risco.
+Skills/perfis não autorizam push, merge, deploy, dados reais nem ampliação de permissões. O ambiente e o usuário prevalecem sobre instruções vendorizadas. Não alterar fontes, paleta ou componentes por padrões genéricos Apple/UI UX; não redesenhar telas na fase 3.
+Perfis nativos estão em .codex/agents/*.toml; fonte de configuração BMAD é _bmad/custom. Não acionar bmad-build-auto ou fluxos de publicação como um segundo orquestrador. Delegar apenas subtarefas com escopo claro quando solicitado ou previsto por instruções aplicáveis; manter uma síntese única e evidências reais.

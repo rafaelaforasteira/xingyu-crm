@@ -86,3 +86,10 @@ secrets
 
 apps/web/e2e/.beta-screenshots/
 apps/web/.nav-perf/
+
+# BRAINX agent-system generated/personal files
+_bmad/render/
+_bmad/config.user.toml
+_bmad/custom/*.user.toml
+__pycache__/
+*.pyc

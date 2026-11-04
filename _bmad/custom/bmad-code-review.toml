@@ -1,0 +1,3 @@
+[workflow]
+persistent_facts = ["file:{project-root}/AGENTS.md", "file:{project-root}/docs/architecture.md", "file:{project-root}/docs/ui-guidelines.md", "file:{project-root}/docs/engineering/AGENT-WORKFLOW.md"]
+activation_steps_prepend = ["Confirmar a stack BRAINX e o escopo/risco; preservar políticas de segurança e trabalho local."]

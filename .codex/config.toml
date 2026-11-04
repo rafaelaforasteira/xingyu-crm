@@ -1,0 +1,39 @@
+# Project-local tools only. Inherits existing sandbox, approvals, model and MCPs.
+[shell_environment_policy.set]
+UV_PYTHON = 'C:\Users\Windows\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+UV_PYTHON_DOWNLOADS = "never"
+
+[mcp_servers.brainx_playwright]
+command = "cmd.exe"
+args = ["/d", "/c", "npx", "--yes", "@playwright/mcp@0.0.84", "--headless", "--isolated", "--executable-path", 'C:\Users\Windows\AppData\Local\ms-playwright\chromium-1248\chrome-win64\chrome.exe', "--block-service-workers", "--no-webmcp", "--allowed-origins", "http://127.0.0.1:3107;http://localhost:3107;http://127.0.0.1:3347", "--output-dir", ".temp/playwright-mcp"]
+startup_timeout_sec = 60
+tool_timeout_sec = 60
+enabled_tools = ["browser_tabs", "browser_navigate", "browser_snapshot", "browser_click", "browser_type", "browser_fill_form", "browser_press_key", "browser_select_option", "browser_resize", "browser_take_screenshot", "browser_console_messages", "browser_network_requests", "browser_close"]
+
+[agents."brainx-engineering"]
+description = "Superpowers: TDD, depuraÃ§Ã£o sistemÃ¡tica, revisÃ£o e verificaÃ§Ã£o de engenharia."
+config_file = "agents/brainx-engineering.toml"
+
+[agents."brainx-implementer"]
+description = "Codex: implementar escopo autorizado a partir do plano e dos critÃ©rios de aceite."
+config_file = "agents/brainx-implementer.toml"
+
+[agents."brainx-planner"]
+description = "BMAD: requisitos, PM, arquitetura, UX e planejamento tÃ©cnico antes de uma funcionalidade complexa."
+config_file = "agents/brainx-planner.toml"
+
+[agents."brainx-ux-consistency"]
+description = "UI UX Pro Max: consistÃªncia de componentes, design system e experiÃªncia do usuÃ¡rio."
+config_file = "agents/brainx-ux-consistency.toml"
+
+[agents."brainx-visual-design"]
+description = "Apple Design: hierarquia, tipografia, espaÃ§amento, acessibilidade, responsividade e movimento."
+config_file = "agents/brainx-visual-design.toml"
+
+[agents."brainx-visual-verifier"]
+description = "Playwright MCP: inspeÃ§Ã£o visual com evidÃªncias em ambiente isolado e autorizado."
+config_file = "agents/brainx-visual-verifier.toml"
+
+[agents."security-guardian"]
+description = "Auditoria de seguranÃ§a: contratos, permissÃµes, uploads, sessÃµes, webhooks e produÃ§Ã£o."
+config_file = "agents/security-guardian.toml"
