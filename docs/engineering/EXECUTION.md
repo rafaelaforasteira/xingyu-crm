@@ -96,3 +96,139 @@ Fontes de ferramentas: [Gitleaks](https://github.com/gitleaks/gitleaks), [Semgre
 ## Revisão final
 
 `git diff --check` passou após formatação. Foram revisados os diffs de CI, Turbo e proteção de banco, preservando os artefatos anteriores. Varredura Gitleaks dos arquivos finais e conferência de staging precedem o commit local. Não é possível declarar validação remota sem publicar/executar Actions.
+
+# Fase 2 — correções de engenharia e segurança (2026-11-04)
+
+Esta seção substitui o estado dos achados da fase 1 acima. Branch preservada: `codex/brainx-quality-security`, base local `dc44b04`. As pastas preexistentes `artifacts/layout-fix/` e `artifacts/tracking-recovery/` foram preservadas. Não houve push, merge, deploy ou migração nova.
+
+## Mini-brief e fluxo revisado
+
+Problema: dependências com alertas críticos/altos, downloads estáticos sem guard, consumo concorrente de refresh e recibos de webhook baseados no timestamp do envelope.
+Escopo: patches direcionados, autorização de arquivos, validação de bytes/limites, transações concorrentes e execução portátil de SAST. Fora do escopo: reescrita, mudança de stack, contas reais, produção, filas externas e migrações destrutivas.
+Aceite: preservar URLs/contratos funcionais, negar acesso sem sessão/organização/recurso, não aceitar MIME falsificado, selecionar uma única renovação e um único efeito de webhook no PostgreSQL, executar testes e registrar impedimentos.
+Fluxos: multipart -> guards/permissão/recurso -> validação -> arquivo UUID privado -> vínculo no banco -> download autorizado; cookie refresh -> sessão -> consumo condicional + sucessora na mesma transação -> cookies; webhook autenticado pelo provider -> identidade estável -> lock transacional -> recibo + efeitos -> resposta/retry.
+
+## Dependências: investigação e resultado
+
+Baseline: 9 críticos, 49 altos, 41 moderados, 10 baixos. Resultado de `pnpm audit`: **0 críticos, 0 altos, 29 moderados, 5 baixos**. O pnpm 9 retornou exit 1 mesmo com `--audit-level high`, pois ainda há findings; a verificação explícita dos campos critical/high retornou 0. Não apresentar audit global como completamente limpo.
+Trivy 0.76.1, com `--include-dev-deps --severity CRITICAL,HIGH`, sem ignorar não corrigidas: **exit 0, nenhum crítico/alto** no lockfile final. Snapshot apenas de manifests/lockfile; não é análise de código ou garantia de ausência de vulnerabilidades.
+Lockfile SHA-256: `D3981037B6BF788417408E7C6FE32D336B8157B092260CD087C2CAF007A8677C`.
+
+Decisões derivadas dos caminhos/advisories, sem `audit --fix` ou atualização geral:
+
+- Next e eslint-config-next: 15.5.22 -> 15.5.28, permanecendo na linha 15, conforme release oficial de segurança.
+- Vitest: 2.1.9 -> 4.1.0 nos três pacotes de teste. Vitest 3 ainda dependia de tinypool 1 vulnerável; a linha 4 remove essa dependência. Vite 6.4.4 adicionado explicitamente como peer de desenvolvimento, sem migrar a aplicação Next para Vite.
+- Zod: 3.25.76 -> 4.6.6; resolvers de formulário 5.2.2 e react-hook-form ^7.62.0 para compatibilidade. A migração passou no typecheck/build e nas suítes existentes; interação visual dos formulários não foi validada.
+- Overrides por linha afetada: body-parser 1.20.9; brace-expansion 1.1.20/2.1.6/5.0.11; fast-uri 3.1.7; glob 10.5.0; handlebars 4.7.10; js-yaml 3.15.2/4.3.2; lodash 4.18.0; multer 2.5.0 (incluindo a cópia transitiva do Nest); nanoid 3.3.18; picomatch 4.0.4; postcss 8.5.18; proxy-addr 2.0.8; source-map-js 1.2.2; tmp 0.2.7; sharp 0.35.5; deepmerge-ts 8.0.0; Vite mínimo 6.4.4.
+- A primeira atualização revelou o advisory subsequente de tmp 0.2.6; corrigido para 0.2.7 e repetida a auditoria. Vite exigiu peer explícito, corrigido antes das verificações finais.
+- Licenças consultadas nas versões publicadas: MIT para Next/Vitest/Vite/Zod/resolvers/tmp; BSD-3-Clause para deepmerge-ts; Apache-2.0 para sharp. Node local 24.14.1 atende aos engines. Sharp exige Node >=20.9; usar Node LTS compatível. Permanece aviso de peers opcionais WASM do resolver ESLint; build nativo Windows passou. Não foram instalados runtimes/serviços criativos nem ferramentas de agente.
+
+## Uploads: todos os pontos de entrada encontrados
+
+Auditoria por `FileInterceptor`, `FilesInterceptor`, `UploadedFile(s)`, `validateAndSaveUpload` e `useStaticAssets` encontrou quatro rotas multipart:
+
+- POST `/api/conversations/:id/messages`: AuthGuard global e acesso à conversa antes da gravação; até 10 arquivos.
+- POST `/api/tasks/:id/comments`: AuthGuard global e acesso à tarefa antes da gravação; até 10 arquivos.
+- POST `/api/orders/:orderId/payments/:paymentId/receipt`: autenticação, finance.sensitive, acesso ao pedido e pagamento da organização; um arquivo, PDF/JPG/PNG.
+- POST `/api/settings/profile/avatar`: autenticação, profile.edit e usuário derivado da sessão; um arquivo, JPG/PNG/WEBP, limite de transporte de 5 MB.
+
+Multipart agora limita também campos, partes e tamanho de campo (20 campos, partes = arquivos + 20, 64 KiB/campo). Demais arquivos mantêm o limite configurado existente. Arquivos de conversa/tarefa são pré-validados em lote antes da primeira gravação.
+Validação compartilhada exige buffer não vazio, confere tamanho declarado E real, extensão/MIME compatíveis e assinatura binária de formatos permitidos; texto exige UTF-8 sem bytes de controle inesperados. SVG/HTML e extensões executáveis não são aceitos. Arquivos recebem UUID, criação exclusiva `wx` e modo 0600; novos diretórios usam 0700 onde suportado. Não são usados nomes de cliente como caminho de armazenamento.
+
+O middleware estático foi removido. GET/HEAD `/api/uploads/files/*` preservam as URLs, mas agora passam por sessão válida e resolução de referência pertencente à organização: anexo de mensagem/conversa, comentário/tarefa, comprovante/pedido, arquivo curado/deal ou avatar de colega. São aplicadas as permissões/políticas de domínio existentes; permitir a rota no guard não concede leitura do arquivo. Avatares de colegas continuam visíveis na mesma organização, inclusive para perfis restritos; arquivos de negócio não reabrem módulos restritos.
+O caminho real deve permanecer no diretório configurado; traversal, ADS Windows, arquivos sem vínculo e symlinks externos são negados. Respostas usam no-store/private, nosniff, CSP sandbox; documentos e MIME legado desconhecido são baixados como anexo, mídia permitida permanece inline.
+
+Limites explícitos: magic bytes identificam o contêiner, não fazem antivírus/CDR nem certificam conteúdo de Office/PDF. Arquivos órfãos por falhas de persistência não são publicamente acessíveis, mas retenção/limpeza transacional de disco continua uma tarefa operacional. Avaliar quotas e armazenamento por objeto antes de aumentar volume. Não foi alterado nem varrido o conteúdo de uploads reais.
+
+## Refresh: concorrência corrigida e política preservada
+
+A criação da sucessora agora ocorre na mesma transação de um `updateMany` condicional (`id`, revokedAt:null, expiresAt>agora). Apenas count=1 pode criar sucessora; count=0 retorna 401, sem apagar cookies que a resposta concorrente vencedora possa ter acabado de instalar. Falha ao persistir sucessora desfaz o consumo.
+Testes reais usam duas instâncias de AuthService e uma barreira de leitura para obrigar a disputa no PostgreSQL: exatamente uma resposta bem-sucedida, duas sessões totais (antiga + sucessora) e apenas uma ativa. Outro teste injeta falha de criação dentro da transação e confirma rollback.
+Web: auth bootstrap e retentativa da API compartilham uma única chamada e clones de resposta. Web Locks, quando disponíveis, serializam abas e verificam `/auth/me` depois do lock, reutilizando cookies renovados pela outra aba. Três testes cobrem compartilhamento, falha de rede e lock entre abas.
+A política anterior de replay deliberado permanece: reapresentar token já revogado pode revogar todas as sessões. Navegadores sem Web Locks têm proteção por página, não garantia entre abas/processos externos. Não houve adoção de janela de tolerância que enfraqueça a detecção de replay.
+
+## Webhooks: identidade, transação e retries
+
+Evolution agora usa o ID de mensagem estável, sem timestamp de entrega, e ignora mensagens sem ID estável. A autenticação do fornecedor por segredo de header foi preservada; não foi inventado HMAC nem feita chamada a fornecedor real.
+O processamento adquire advisory lock PostgreSQL por canal e lê recibos sob ReadCommitted, para que uma requisição que esperou o lock veja o commit anterior. Procura externalEventId OU externalMessageId, incluindo recibos legados com timestamp. Recibo e mensagem/contato/card/contadores/evento permanecem na mesma transação.
+P2002 de domínio não é mais falsamente reconhecido como entrega duplicada. Apenas P2034 (conflito/deadlock) recebe até três tentativas com espera exponencial curta e jitter; demais falhas propagam erro para reentrega, sem confirmar sucesso inexistente.
+Testes confirmam duplicidade sequencial, envelopes com timestamps diferentes, disputa entre duas instâncias, rollback do recibo, contadores sem duplicação e retry após corrigir uma rota inativa. Não foi necessária migração nem alteração de dados existentes.
+Em implantação futura, não misturar workers/API antigos (que não usam o lock) com novos para o mesmo canal durante o processamento. Quiescer entregas ou atualizar conjuntamente. Contrato real, lotes do fornecedor, limites e reprocessamentos em staging continuam pendentes.
+
+## Semgrep e CI
+
+SAST passou a usar a imagem oficial `semgrep/semgrep:1.183.0`, com digest verificado no registro: `sha256:2e45517a85e13a9cca14a2a00df6bb48affd66b8ebfae1b0991cd57578362fb0`. Não depende de Python/WSL local ou pip do runner. Usa CE, métricas desligadas, configuração p/default e `--strict`; erros de pull/configuração/parser/execução falham o job, findings ERROR são consultivos e aparecem no resumo/artefato até a revisão da baseline. Não há supressão de findings.
+YAML foi formatado/validado pelo Prettier e o script passou em `bash -n`. Tag/digest existem no registro. Execução real Semgrep ainda NÃO validada: daemon Docker local indisponível; Actions não foi executado porque não houve push. Próximo passo administrativo: executar workflow_dispatch e revisar o artefato.
+Trivy do CI fixa 0.76.1, inclui dev dependencies e deixa de ignorar vulnerabilidades sem correção. Root `test:coverage` agora chama diretamente o script de cobertura da API, sem passar --coverage como argumento posicional.
+
+## Evidências desta fase
+
+Logs locais ignorados pelo Git em `.temp/phase2/`; relatórios não devem ser publicados indiscriminadamente. Cluster novo em `.temp/phase2/pgdata`, loopback 55441, usuário/banco sintéticos `phase2_test`. Nenhum comando de banco usou o alvo habitual do CRM.
+
+- `pnpm install` dirigido pelos manifests/overrides: passou. `pnpm install --frozen-lockfile`: passou com o lockfile resultante.
+- `pnpm db:generate`: passou. `pnpm db:migrate:deploy` e `pnpm db:seed`: passaram no banco novo isolado. A primeira conexão de migração falhou por nome incorreto do usuário sintético; corrigida a URL de teste. Logs migrate.log, migrate-final.log e seed.log.
+- Regressões antes das correções: auth-before.log (2 falhas), upload-before.log (5 falhas), webhooks-before.log (4 falhas). Comando inicial de Jest via pnpm com flags na posição errada foi rejeitado; repetido corretamente por pnpm exec jest, sem declarar esse erro como execução de testes.
+- `pnpm lint`/`pnpm typecheck`: primeiras tentativas falharam no tipo de retorno de Web Locks; corrigido com flatten da Promise. Repetições passaram. Logs lint-final.log/typecheck-final.log. Typecheck API após ampliar testes HTTP também passou.
+- Segurança direcionada: 24 testes HTTP de uploads passaram (incluindo todos os quatro endpoints), 4 testes PostgreSQL de concorrência passaram, 3 testes web de renovação passaram; demais suites auth/provider/upload passaram nas execuções direcionadas e cobertura.
+- `pnpm build`: passou, Next 15.5.28, 38 páginas; warnings ESLint preexistentes e aviso de output vazio de packages/ui, sem desligar regras. Prisma generate/migrate e build exercitaram a compatibilidade dos overrides de configuração e pacotes nativos.
+- `pnpm test:coverage`: passou de verdade, 70 suítes / 456 testes API. Cobertura global de statements 42,61%; auth.service 89,14%, uploads.service 94,54%, connections-inbound 84,72%. Não alegar cobertura completa de contratos/autorização.
+- Suíte completa final: passou, 70 suítes/456 testes API, 63 arquivos/458 testes web, 4 testes database e 3 validation; 7 tasks bem-sucedidos. Log test-complete.log. Primeira tentativa Vitest descobriu dist/index.test.js CommonJS; escopo do pacote validation foi explicitado como src. Duas tentativas posteriores falharam por timeout de um teste que agregava 84 combinações. As 84 combinações e todas as invariantes foram mantidas como casos separados (93 testes nesse arquivo), sem skip, sem aumentar timeout e sem alterar análise de produção. Repetição final registrada separadamente.
+- `pnpm test:load:helpers`: passou, 7 testes; nenhum tráfego de carga contra aplicação real.
+- Dependências: audit-before.json, audit-after1.json, audit-after.json, audit-final.json; verificação explícita critical/high passou. trivy-final.json/log: exit 0 incluindo dev, sem critical/high. Licenças/engines em licenses.json.
+- Visual/Playwright ao vivo: NÃO executado. Nova tentativa de Next start em 127.0.0.1:3107 foi rejeitada pela revisão automática com “blocked by policy”, sem motivo adicional. API isolada subiu com ignoreEnvFile=true, banco fictício e provider fake; foi encerrada ao constatar o bloqueio da web. Não atribuir validação visual aos testes unitários de componentes.
+- Semgrep real: NÃO executado local/remoto; validação de configuração e sintaxe apenas. Sem push/merge/deploy.
+- Revisão final: git diff --check passou; Gitleaks 8.30.1, dir --redact nos 39 arquivos desta fase, passou sem findings. Logs gitleaks-final.json/log. Lint e typecheck de fechamento também passaram após a parametrização e formatação.
+
+## Pendências priorizadas e reversão da fase 2
+
+1. Executar Semgrep/CI em Linux Node20/Postgres16 e validação visual em ambiente autorizado; o ambiente local foi Windows Node24/Postgres17. Verificar login, dashboard, Kanban, conversa, anexos e formulários após Zod/resolver.
+2. Triar os 29 moderados/5 baixos e peers opcionais WASM sem upgrades cegos. Revisar os primeiros relatórios remotos antes de tornar todos os scanners obrigatórios.
+3. Manter download autenticado e não reintroduzir proxy/static externo sem a mesma autorização. Definir quotas, retenção/orphans, AV/CDR e armazenamento de objetos conforme volume.
+4. Revisar CSRF/Origin/Referer, política de replay em múltiplas abas sem Web Locks e retenção/mascaramento de dados em atividades/erros. São riscos anteriores não declarados corrigidos por esta fase.
+5. Homologar fornecedor com dados sintéticos, inclusive lotes, autenticação configurada, reentregas e idempotência de envio externo após timeout. A deduplicação inbound não torna envios externos exatamente uma vez.
+
+Reversão por git revert dos commits desta fase, preservando o commit base da fase 1 e artefatos anteriores. Não há schema novo ou migração a desfazer. Reverter o código de downloads reabriria a exposição estática anterior: só fazê-lo com contenção equivalente. API e PostgreSQL descartáveis foram encerrados; cluster parado com pg_ctl stop -m fast, sem reset/clean. Dados sintéticos e logs foram preservados em .temp/phase2 para revisão.
+
+Fontes: [Next 15.5.28](https://nextjs.org/blog/nextjs-security-update-october-14-2026), [migração Vitest](https://vitest.dev/guide/migration/), [transações Prisma](https://www.prisma.io/docs/orm/v6/prisma-client/queries/transactions), [Semgrep CE no CI](https://semgrep.dev/docs/semgrep-ci/sample-ci-configs), [Trivy action v0.36.0](https://github.com/aquasecurity/trivy-action/blob/v0.36.0/action.yaml). Os caminhos/advisories exatos de cada dependência estão no relatório JSON local do pnpm, sem reproduzir payloads ofensivos ou segredos.
+
+## Arquivos editados/adicionados na fase 2 (39)
+
+- `.github/workflows/security.yml`
+- `apps/api/src/app.module.ts`
+- `apps/api/src/auth/auth.service.spec.ts`
+- `apps/api/src/auth/auth.service.ts`
+- `apps/api/src/common/upload/upload.util.spec.ts`
+- `apps/api/src/common/upload/upload.util.ts`
+- `apps/api/src/common/upload/uploads.controller.ts`
+- `apps/api/src/common/upload/uploads.http.spec.ts`
+- `apps/api/src/common/upload/uploads.module.ts`
+- `apps/api/src/common/upload/uploads.service.ts`
+- `apps/api/src/connections/connections-inbound.service.spec.ts`
+- `apps/api/src/connections/connections-inbound.service.ts`
+- `apps/api/src/connections/providers/evolution-whatsapp.provider.spec.ts`
+- `apps/api/src/connections/providers/evolution-whatsapp.provider.ts`
+- `apps/api/src/conversations/conversations.controller.ts`
+- `apps/api/src/conversations/conversations.service.ts`
+- `apps/api/src/main.ts`
+- `apps/api/src/orders/orders.controller.ts`
+- `apps/api/src/security/concurrency.integration.spec.ts`
+- `apps/api/src/settings/settings.controller.ts`
+- `apps/api/src/tasks/tasks.controller.ts`
+- `apps/api/src/tasks/tasks.service.ts`
+- `apps/web/package.json`
+- `apps/web/src/components/crm/tracking/sales-tracking.test.ts`
+- `apps/web/src/lib/api.ts`
+- `apps/web/src/lib/auth-api.ts`
+- `apps/web/src/lib/session-refresh.test.ts`
+- `apps/web/src/lib/session-refresh.ts`
+- `docs/architecture.md`
+- `docs/engineering/EXECUTION.md`
+- `docs/engineering/PR.md`
+- `docs/homologation-auth.md`
+- `docs/integrations.md`
+- `package.json`
+- `packages/config/src/index.ts`
+- `packages/database/package.json`
+- `packages/validation/package.json`
+- `packages/validation/vitest.config.ts`
+- `pnpm-lock.yaml`

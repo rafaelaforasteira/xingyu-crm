@@ -1,3 +1,4 @@
+import { requestSessionRefresh } from "./session-refresh";
 import type { AuthUser } from "./auth-types";
 import { ApiError } from "./api";
 
@@ -31,7 +32,7 @@ async function authRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(authUrl(path), {
+  const response = path === "/auth/refresh" ? await requestSessionRefresh(authUrl(path)) : await fetch(authUrl(path), {
     ...init,
     credentials: "include",
     headers: {

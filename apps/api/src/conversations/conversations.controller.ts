@@ -19,7 +19,7 @@ import { DemoUser, type DemoUser as DemoUserType } from "../common/decorators/de
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
 import { PipelineAccessService } from "../pipelines/pipeline-access.service";
-import { uploadMaxBytes } from "../common/upload/upload.util";
+import { uploadLimits } from "../common/upload/upload.util";
 import {
   CreateConversationDto,
   UpdateConversationDto,
@@ -121,7 +121,7 @@ export class ConversationsController {
   @UseInterceptors(
     FilesInterceptor("files", 10, {
       storage: memoryStorage(),
-      limits: { fileSize: uploadMaxBytes(), files: 10 },
+      limits: uploadLimits(10),
     }),
   )
   async sendMessage(

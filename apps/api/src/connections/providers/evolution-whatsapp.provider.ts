@@ -68,10 +68,7 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
 
   async disconnect(_channelId: string, externalInstanceId: string): Promise<void> {
     try {
-      await this.request(
-        "DELETE",
-        `/instance/logout/${encodeURIComponent(externalInstanceId)}`,
-      );
+      await this.request("DELETE", `/instance/logout/${encodeURIComponent(externalInstanceId)}`);
     } catch (error) {
       const status = this.statusOf(error);
       if (status === 400 || status === 404) return;
@@ -81,10 +78,7 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
 
   async deleteInstance(_channelId: string, externalInstanceId: string): Promise<void> {
     try {
-      await this.request(
-        "DELETE",
-        `/instance/delete/${encodeURIComponent(externalInstanceId)}`,
-      );
+      await this.request("DELETE", `/instance/delete/${encodeURIComponent(externalInstanceId)}`);
     } catch (error) {
       const status = this.statusOf(error);
       // Already removed remotely — treat as success so CRM soft-delete can continue.
@@ -146,7 +140,8 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
     }
     const eventName = this.eventName(record);
     const data = this.asObject(record.data) ?? record;
-    const instance = this.stringValue(record.instance) ?? this.stringValue(data.instance) ?? "unknown";
+    const instance =
+      this.stringValue(record.instance) ?? this.stringValue(data.instance) ?? "unknown";
     const occurredAt = this.occurredAt(record, data);
 
     if (eventName === "connection.update") {
@@ -211,11 +206,11 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
     const phone = this.messagePhone(key, remoteJid);
     if (!phone) return { kind: "ignored", reason: "missing-phone" };
 
-    const messageId = this.stringValue(key.id) ?? "unknown";
-    const dateTime = this.stringValue(envelope.date_time) ?? occurredAt.toISOString();
+    const messageId = this.stringValue(key.id);
+    if (!messageId) return { kind: "ignored", reason: "missing-message-id" };
     return {
       kind: "inbound_message",
-      externalEventId: `evolution:${instance}:messages.upsert:${messageId}:${dateTime}`,
+      externalEventId: `evolution:${instance}:messages.upsert:${messageId}`,
       externalMessageId: messageId,
       phone,
       contactName: this.stringValue(message.pushName),
@@ -449,7 +444,9 @@ export class EvolutionWhatsAppProvider implements ConnectionProvider {
   }
 
   private isTimeout(error: unknown) {
-    return Boolean(error && typeof error === "object" && "name" in error && error.name === "AbortError");
+    return Boolean(
+      error && typeof error === "object" && "name" in error && error.name === "AbortError",
+    );
   }
 
   private hasEvolutionError(payload: unknown) {

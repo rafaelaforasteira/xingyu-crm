@@ -19,3 +19,12 @@ Fluxo local:
 A autenticação de homologação usa JWT de acesso + refresh opaco com cookies
 HttpOnly; rotas são privadas por padrão (`AuthGuard` global + `@Public()`).
 Detalhes em [homologation-auth.md](./homologation-auth.md).
+
+## Arquivos privados
+
+Uploads multipart são validados antes da gravação. O diretório de uploads não é
+servido por middleware estático: UploadsModule atende as URLs existentes, sob
+AuthGuard, organização e autorização do recurso associado, verificando o caminho
+real e aplicando headers restritivos. Não publicar esse diretório diretamente
+por proxy/CDN sem uma camada equivalente de autorização. Evidências na fase 2
+de docs/engineering/EXECUTION.md.

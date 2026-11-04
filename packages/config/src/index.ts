@@ -66,6 +66,7 @@ export function canAccessCrmApi(
     ?.replace(/^\/api(?=\/|$)/, "")
     .replace(/\/+$/, "");
   return (
+    (["GET", "HEAD"].includes(method) && route?.startsWith("/uploads/files/")) ||
     (method === "GET" && route === "/auth/me") ||
     (method === "POST" && route === "/auth/change-password") ||
     (["GET", "PATCH"].includes(method) && route === "/settings/profile") ||

@@ -33,7 +33,7 @@ import {
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
 import { PipelineAccessService } from "../pipelines/pipeline-access.service";
-import { uploadMaxBytes } from "../common/upload/upload.util";
+import { uploadLimits } from "../common/upload/upload.util";
 import { can, getScope } from "../auth/access-policy";
 import { Permissions } from "../auth/decorators/permissions.decorator";
 
@@ -170,7 +170,7 @@ export class OrdersController {
   @UseInterceptors(
     FileInterceptor("file", {
       storage: memoryStorage(),
-      limits: { fileSize: uploadMaxBytes(), files: 1 },
+      limits: uploadLimits(1),
     }),
   )
   async uploadPaymentReceipt(

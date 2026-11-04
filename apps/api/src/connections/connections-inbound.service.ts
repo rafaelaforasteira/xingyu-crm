@@ -1,12 +1,9 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConnectionLifecycleStatus, Prisma } from "@xingyu/database";
 import { allocateLeadSequence } from "../common/lead-sequence";
 import { normalizePhone } from "../common/phone-normalization";
 import { PrismaService } from "../prisma/prisma.service";
+import { acquirePipelineChannelIdentityLock } from "../pipelines/pipeline-channel-lock";
 import { mapProviderStatus } from "./connection-status";
 import type { NormalizedProviderEvent } from "./providers/connection-provider.types";
 
@@ -34,49 +31,56 @@ export class ConnectionsInboundService {
     return channel;
   }
 
-  async process(
-    channel: { id: string; organizationId: string },
-    event: NormalizedProviderEvent,
-  ) {
+  async process(channel: { id: string; organizationId: string }, event: NormalizedProviderEvent) {
     if (event.kind === "ignored") {
       return { accepted: true, ignored: true };
     }
-    try {
-      return await this.prisma.$transaction(
-        async (tx) => {
-          const duplicate = await tx.providerEventReceipt.findUnique({
-            where: {
-              channelId_externalEventId: {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.prisma.$transaction(
+          async (tx) => {
+            // Serialize effects per channel across API processes. ReadCommitted is
+            // essential: a waiter must see the receipt committed by the lock holder.
+            await acquirePipelineChannelIdentityLock(tx, "provider-inbound:" + channel.id);
+            const duplicate = await tx.providerEventReceipt.findFirst({
+              where: {
+                channelId: channel.id,
+                OR: [
+                  { externalEventId: event.externalEventId },
+                  ...(event.kind === "inbound_message" && event.externalMessageId
+                    ? [{ externalMessageId: event.externalMessageId }]
+                    : []),
+                ],
+              },
+              select: { id: true },
+            });
+            if (duplicate) return { accepted: true, duplicate: true };
+            await tx.providerEventReceipt.create({
+              data: {
+                organizationId: channel.organizationId,
                 channelId: channel.id,
                 externalEventId: event.externalEventId,
+                externalMessageId:
+                  event.kind === "inbound_message" ? (event.externalMessageId ?? null) : null,
               },
-            },
-            select: { id: true },
-          });
-          if (duplicate) return { accepted: true, duplicate: true };
-
-          await tx.providerEventReceipt.create({
-            data: {
-              organizationId: channel.organizationId,
-              channelId: channel.id,
-              externalEventId: event.externalEventId,
-              externalMessageId:
-                event.kind === "inbound_message" ? event.externalMessageId ?? null : null,
-            },
-          });
-
-          if (event.kind === "connection_status") {
-            return this.processStatus(tx, channel, event);
-          }
-          return this.processInboundMessage(tx, channel, event);
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        return { accepted: true, duplicate: true };
+            });
+            return event.kind === "connection_status"
+              ? this.processStatus(tx, channel, event)
+              : this.processInboundMessage(tx, channel, event);
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+        );
+      } catch (error) {
+        // Only a transaction conflict is retryable; a domain P2002 must not be
+        // acknowledged as success after all effects rolled back.
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== "P2034" ||
+          attempt >= 2
+        )
+          throw error;
+        await new Promise((resolve) => setTimeout(resolve, 25 * 2 ** attempt + Math.random() * 25));
       }
-      throw error;
     }
   }
 
@@ -93,7 +97,8 @@ export class ConnectionsInboundService {
         displayAccount: event.displayAccount,
         lastActivityAt: event.occurredAt,
         lastErrorAt: status === ConnectionLifecycleStatus.ERROR ? event.occurredAt : null,
-        lastErrorCode: status === ConnectionLifecycleStatus.ERROR ? event.errorCode ?? "PROVIDER_ERROR" : null,
+        lastErrorCode:
+          status === ConnectionLifecycleStatus.ERROR ? (event.errorCode ?? "PROVIDER_ERROR") : null,
         lastErrorMessage: null,
         ...(status === ConnectionLifecycleStatus.CONNECTED
           ? {
@@ -112,11 +117,17 @@ export class ConnectionsInboundService {
           : {}),
       },
     });
-    if (status === ConnectionLifecycleStatus.CONNECTED || status === ConnectionLifecycleStatus.DISCONNECTED) {
+    if (
+      status === ConnectionLifecycleStatus.CONNECTED ||
+      status === ConnectionLifecycleStatus.DISCONNECTED
+    ) {
       await tx.automationDomainEvent.create({
         data: {
           organizationId: channel.organizationId,
-          eventType: status === ConnectionLifecycleStatus.CONNECTED ? "connection.connected" : "connection.disconnected",
+          eventType:
+            status === ConnectionLifecycleStatus.CONNECTED
+              ? "connection.connected"
+              : "connection.disconnected",
           aggregateType: "channel",
           aggregateId: channel.id,
           origin: "INTEGRATION",

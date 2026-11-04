@@ -13,7 +13,7 @@ import {
   UpdateTaskStatusDto,
   CreateTaskCommentDto,
 } from "./dto/task.dto";
-import { validateAndSaveUpload } from "../common/upload/upload.util";
+import { validateAndSaveUpload, validateUpload } from "../common/upload/upload.util";
 
 const TASK_INCLUDE = {
   assignee: { select: { id: true, name: true, avatarUrl: true } },
@@ -480,6 +480,7 @@ export class TasksService {
       where: { id: { in: mentionIds }, organizationId, status: "ACTIVE", deletedAt: null }, select: { id: true },
     }) : [];
     if (validUsers.length !== mentionIds.length) throw new BadRequestException("Usuário mencionado inválido.");
+    files.forEach(validateUpload);
     const uploads = files.map(validateAndSaveUpload);
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.taskComment.create({

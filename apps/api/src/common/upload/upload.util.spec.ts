@@ -3,11 +3,7 @@ import { Test } from "@nestjs/testing";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-  ensureUploadDir,
-  uploadMaxBytes,
-  validateAndSaveUpload,
-} from "./upload.util";
+import { ensureUploadDir, uploadMaxBytes, validateAndSaveUpload } from "./upload.util";
 
 describe("upload.util", () => {
   const previousDir = process.env.UPLOAD_DIR;
@@ -35,8 +31,11 @@ describe("upload.util", () => {
       originalname: "../../evil.png",
       encoding: "7bit",
       mimetype: "image/png",
-      size: 12,
-      buffer: Buffer.from("fake-image"),
+      size: 68,
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
       destination: "",
       filename: "",
       path: "",
@@ -82,5 +81,43 @@ describe("upload.util", () => {
         stream: undefined as never,
       }),
     ).toThrow(BadRequestException);
+  });
+
+  it.each([
+    ["image/png", "payload.png", Buffer.from("<svg onload=alert(1) />")],
+    ["text/html", "payload.pdf", Buffer.from("<script>alert(1)</script>")],
+    ["image/svg+xml", "payload.png", Buffer.from("<svg />")],
+    ["application/pdf", "payload.exe", Buffer.from("%PDF-1.7")],
+  ])(
+    "rejects spoofed or active content (%s, %s) without writing",
+    (mimetype, originalname, buffer) => {
+      expect(() =>
+        validateAndSaveUpload({
+          mimetype,
+          originalname,
+          buffer,
+          size: buffer.length,
+        } as Express.Multer.File),
+      ).toThrow(BadRequestException);
+      expect(fs.readdirSync(tempDir)).toHaveLength(0);
+    },
+  );
+
+  it("checks actual bytes even when the declared size is small", () => {
+    const previous = process.env.UPLOAD_MAX_SIZE_MB;
+    process.env.UPLOAD_MAX_SIZE_MB = "0.001";
+    try {
+      expect(() =>
+        validateAndSaveUpload({
+          originalname: "file.txt",
+          mimetype: "text/plain",
+          size: 1,
+          buffer: Buffer.alloc(2048, 65),
+        } as Express.Multer.File),
+      ).toThrow(BadRequestException);
+    } finally {
+      if (previous === undefined) delete process.env.UPLOAD_MAX_SIZE_MB;
+      else process.env.UPLOAD_MAX_SIZE_MB = previous;
+    }
   });
 });

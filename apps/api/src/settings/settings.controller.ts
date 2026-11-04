@@ -32,7 +32,7 @@ import {
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import type { AuthenticatedUser } from "../auth/types";
 import { Permissions } from "../auth/decorators/permissions.decorator";
-import { uploadMaxBytes } from "../common/upload/upload.util";
+import { uploadLimits } from "../common/upload/upload.util";
 
 @ApiTags("settings")
 @ApiCookieAuth("xingyu_access_token")
@@ -67,7 +67,7 @@ export class SettingsController {
   @UseInterceptors(
     FileInterceptor("file", {
       storage: memoryStorage(),
-      limits: { fileSize: uploadMaxBytes(), files: 1 },
+      limits: uploadLimits(1, 5 * 1024 * 1024),
     }),
   )
   uploadAvatar(

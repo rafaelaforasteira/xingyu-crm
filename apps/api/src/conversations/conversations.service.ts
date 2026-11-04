@@ -18,7 +18,7 @@ import {
   mergeConversationTags,
 } from "../common/mappers/conversation.mapper";
 import { toPipelineResponse, toPipelineStageResponse } from "../common/mappers/pipeline.mapper";
-import { validateAndSaveUpload } from "../common/upload/upload.util";
+import { validateAndSaveUpload, validateUpload } from "../common/upload/upload.util";
 import {
   CreateConversationDto,
   UpdateConversationDto,
@@ -975,6 +975,7 @@ export class ConversationsService {
     now: Date,
   ) {
     const hasFiles = files.length > 0;
+    files.forEach(validateUpload);
     const savedUploads = files.map((file) => validateAndSaveUpload(file));
     const isAutomation = dto.senderType === "automation";
     const senderId = direction === "OUTBOUND" && !isAutomation ? userId : null;

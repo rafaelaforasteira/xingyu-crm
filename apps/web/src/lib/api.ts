@@ -1,3 +1,4 @@
+import { requestSessionRefresh } from "./session-refresh";
 import type {
   Activity,
   Automation,
@@ -137,12 +138,7 @@ async function tryRefreshSession(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
     try {
-      const response = await fetch(buildUrl("/auth/refresh"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-      });
+      const response = await requestSessionRefresh(buildUrl("/auth/refresh"));
       return response.ok;
     } catch {
       return false;

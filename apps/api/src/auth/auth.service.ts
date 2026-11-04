@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  BadRequestException,
-  Logger,
-} from "@nestjs/common";
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { AuthRole, UserStatus } from "@xingyu/database";
@@ -120,15 +115,8 @@ export class AuthService {
     };
   }
 
-  setAuthCookies(
-    res: Response,
-    tokens: { accessToken: string; refreshToken: string },
-  ): void {
-    res.cookie(
-      AUTH_COOKIE.access,
-      tokens.accessToken,
-      this.cookieOptions(accessTokenMaxAgeMs()),
-    );
+  setAuthCookies(res: Response, tokens: { accessToken: string; refreshToken: string }): void {
+    res.cookie(AUTH_COOKIE.access, tokens.accessToken, this.cookieOptions(accessTokenMaxAgeMs()));
     res.cookie(
       AUTH_COOKIE.refresh,
       tokens.refreshToken,
@@ -161,11 +149,7 @@ export class AuthService {
     return { userAgent, ipAddress: ipAddress?.slice(0, 128) };
   }
 
-  async login(
-    dto: LoginDto,
-    req: Request,
-    res: Response,
-  ): Promise<{ user: PublicUser }> {
+  async login(dto: LoginDto, req: Request, res: Response): Promise<{ user: PublicUser }> {
     const email = this.normalizeEmail(dto.email);
     const user = await this.prisma.user.findFirst({
       where: { email, deletedAt: null },
@@ -233,8 +217,9 @@ export class AuthService {
   }
 
   async refresh(req: Request, res: Response): Promise<{ user: PublicUser }> {
-    const rawRefresh = (req as Request & { cookies?: Record<string, string> })
-      .cookies?.[AUTH_COOKIE.refresh];
+    const rawRefresh = (req as Request & { cookies?: Record<string, string> }).cookies?.[
+      AUTH_COOKIE.refresh
+    ];
     if (!rawRefresh) {
       throw new UnauthorizedException("Sessão não autenticada.");
     }
@@ -297,12 +282,19 @@ export class AuthService {
     const meta = this.clientMeta(req);
     const expiresAt = new Date(Date.now() + refreshTokenMaxAgeMs());
 
-    await this.prisma.$transaction([
-      this.prisma.userSession.update({
-        where: { id: session.id },
+    // Compare-and-swap inside the same transaction as successor creation. Only one
+    // concurrent request can consume this refresh token, including across processes.
+    const newSession = await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.userSession.updateMany({
+        where: { id: session.id, revokedAt: null, expiresAt: { gt: new Date() } },
         data: { revokedAt: new Date() },
-      }),
-      this.prisma.userSession.create({
+      });
+      if (consumed.count !== 1) {
+        // Do not clear cookies here: a successful concurrent response may already
+        // have installed its successor in the same browser.
+        throw new UnauthorizedException("Sessão já renovada ou revogada.");
+      }
+      return tx.userSession.create({
         data: {
           userId: user.id,
           refreshTokenHash: nextHash,
@@ -310,12 +302,7 @@ export class AuthService {
           ipAddress: meta.ipAddress ?? session.ipAddress,
           expiresAt,
         },
-      }),
-    ]);
-
-    const newSession = await this.prisma.userSession.findFirstOrThrow({
-      where: { userId: user.id, refreshTokenHash: nextHash, revokedAt: null },
-      orderBy: { createdAt: "desc" },
+      });
     });
 
     const accessToken = await this.signAccessToken({

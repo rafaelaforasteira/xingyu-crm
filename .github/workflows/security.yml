@@ -40,14 +40,22 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install Semgrep
-        run: python -m pip install semgrep==1.183.0
-      - name: Analyze application source (advisory during baseline review)
-        continue-on-error: true
-        run: semgrep scan --config p/default --metrics off --severity ERROR --error --json-output semgrep.json apps packages
+      # Official CE image: independent of Windows/WSL and runner Python packages.
+      - name: Semgrep CE (findings advisory; scanner failures fail)
+        shell: bash
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/src" --workdir /src \
+            semgrep/semgrep:1.183.0@sha256:2e45517a85e13a9cca14a2a00df6bb48affd66b8ebfae1b0991cd57578362fb0 \
+            semgrep scan --config p/default --metrics off --strict --severity ERROR --error --json-output semgrep.json apps packages
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then exit "$status"; fi
+          test -s semgrep.json
+          jq -e '(.errors // []) | length == 0' semgrep.json >/dev/null
+          findings=$(jq '.results | length' semgrep.json)
+          echo "Semgrep: $findings ERROR findings (advisory until baseline review)." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -eq 1 ]; then echo "::warning::Semgrep findings require baseline review; see semgrep-report."; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -63,12 +71,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: aquasecurity/trivy-action@v0.36.0
         continue-on-error: true
+        env:
+          TRIVY_INCLUDE_DEV_DEPS: "true"
         with:
+          version: v0.76.1
           scan-type: fs
           scan-ref: .
           scanners: vuln,misconfig
           severity: CRITICAL,HIGH
-          ignore-unfixed: true
+          ignore-unfixed: false
           exit-code: "1"
           format: json
           output: trivy.json

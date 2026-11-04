@@ -1,5 +1,6 @@
 import { PrismaService } from "../prisma/prisma.service";
 import { ConnectionsInboundService } from "./connections-inbound.service";
+import { Prisma } from "@xingyu/database";
 
 const channel = { id: "channel-a", organizationId: "org-a" };
 const event = {
@@ -14,7 +15,8 @@ const event = {
 
 function createPrisma() {
   const prisma: any = {
-    providerEventReceipt: { findUnique: jest.fn(), create: jest.fn() },
+    providerEventReceipt: { findUnique: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
+    $queryRaw: jest.fn().mockResolvedValue([]),
     pipelineChannelConnection: { findFirst: jest.fn(), findMany: jest.fn() },
     contact: { findFirst: jest.fn(), create: jest.fn() },
     conversation: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
@@ -95,6 +97,7 @@ describe("ConnectionsInboundService", () => {
   it("acknowledges an already received webhook without side effects", async () => {
     const prisma = createPrisma();
     prisma.providerEventReceipt.findUnique.mockResolvedValue({ id: "receipt-a" });
+    prisma.providerEventReceipt.findFirst.mockResolvedValue({ id: "receipt-a" });
     const service = new ConnectionsInboundService(prisma as PrismaService);
 
     await expect(service.process(channel, event)).resolves.toEqual({
@@ -103,6 +106,37 @@ describe("ConnectionsInboundService", () => {
     });
     expect(prisma.pipelineChannelConnection.findFirst).not.toHaveBeenCalled();
     expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates a legacy message receipt even if the envelope timestamp changes", async () => {
+    const prisma = createPrisma();
+    prepareInbound(prisma);
+    prisma.providerEventReceipt.findFirst.mockResolvedValue({ id: "legacy-receipt" });
+    const service = new ConnectionsInboundService(prisma as PrismaService);
+    await expect(
+      service.process(channel, { ...event, externalEventId: "new-envelope-timestamp" }),
+    ).resolves.toEqual({ accepted: true, duplicate: true });
+    expect(prisma.message.create).not.toHaveBeenCalled();
+    expect(prisma.providerEventReceipt.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          channelId: channel.id,
+          OR: expect.arrayContaining([{ externalMessageId: event.externalMessageId }]),
+        }),
+      }),
+    );
+  });
+
+  it("does not acknowledge an unrelated unique-constraint failure as a delivered event", async () => {
+    const prisma = createPrisma();
+    const error = new Prisma.PrismaClientKnownRequestError("domain conflict", {
+      code: "P2002",
+      clientVersion: "test",
+    });
+    prisma.$transaction.mockRejectedValue(error);
+    await expect(
+      new ConnectionsInboundService(prisma as PrismaService).process(channel, event),
+    ).rejects.toBe(error);
   });
 
   it("resolves a tenant only from provider and external instance", async () => {

@@ -88,7 +88,9 @@ describe("EvolutionWhatsAppProvider", () => {
       externalInstanceId: INSTANCE_NAME,
       status: ConnectionLifecycleStatus.DRAFT,
     });
-    const createCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/instance/create"));
+    const createCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes("/instance/create"),
+    );
     expect(createCall).toBeDefined();
     const [url, init] = createCall as [string, RequestInit];
     expect(url).toBe("https://evolution.example.com/instance/create");
@@ -227,7 +229,9 @@ describe("EvolutionWhatsAppProvider", () => {
     fetchMock.mockResolvedValue(jsonResponse(401, { message: `unauthorized ${API_KEY}` }));
 
     await expect(provider.create(CHANNEL_ID)).rejects.toBeInstanceOf(BadGatewayException);
-    await expect(provider.create(CHANNEL_ID)).rejects.toThrow("Evolution API authentication failed");
+    await expect(provider.create(CHANNEL_ID)).rejects.toThrow(
+      "Evolution API authentication failed",
+    );
     try {
       await provider.create(CHANNEL_ID);
     } catch (error) {
@@ -312,13 +316,26 @@ describe("EvolutionWhatsAppProvider", () => {
 
     expect(event).toEqual({
       kind: "inbound_message",
-      externalEventId: `evolution:${INSTANCE_NAME}:messages.upsert:MSG123:2026-08-24T18:00:00.000Z`,
+      externalEventId: `evolution:${INSTANCE_NAME}:messages.upsert:MSG123`,
       externalMessageId: "MSG123",
       phone: "5511987654321",
       contactName: "Maria Silva",
       body: "Olá",
       occurredAt: new Date("2026-08-24T18:00:00.000Z"),
     });
+  });
+
+  it("keeps message identity stable across re-delivery timestamps", () => {
+    const payload = webhookEnvelope("messages.upsert", {
+      key: { remoteJid: "5511987654321@s.whatsapp.net", id: "REPLAY1" },
+      message: { conversation: "test" },
+    });
+    const first = provider.normalizeWebhook(payload);
+    const second = provider.normalizeWebhook({ ...payload, date_time: "2026-08-25T18:00:00.000Z" });
+    expect(first.kind).toBe("inbound_message");
+    expect(second.kind).toBe("inbound_message");
+    if (first.kind === "inbound_message" && second.kind === "inbound_message")
+      expect(second.externalEventId).toBe(first.externalEventId);
   });
 
   it("normalizes extendedTextMessage text", () => {
@@ -415,12 +432,7 @@ describe("EvolutionWhatsAppProvider", () => {
       }),
     );
 
-    const result = await provider.sendText(
-      CHANNEL_ID,
-      INSTANCE_NAME,
-      "5511999999999",
-      "Mensagem",
-    );
+    const result = await provider.sendText(CHANNEL_ID, INSTANCE_NAME, "5511999999999", "Mensagem");
 
     expect(result).toEqual({
       externalMessageId: "BAE5OUTBOUND1",
@@ -571,7 +583,9 @@ describe("ConnectionProviderRegistry with Evolution", () => {
     expect(created.externalInstanceId).toMatch(/^fake-channel-test-/);
     expect(created.status).toBe(ConnectionLifecycleStatus.DRAFT);
 
-    const sent = await registry.get("fake").sendText("channel-test", created.externalInstanceId, "5511999999999", "oi");
+    const sent = await registry
+      .get("fake")
+      .sendText("channel-test", created.externalInstanceId, "5511999999999", "oi");
     expect(sent.externalMessageId).toMatch(/^fake-/);
     expect(sent.remoteJid).toBe("5511999999999@s.whatsapp.net");
     expect(sent.status).toBe("SENT");

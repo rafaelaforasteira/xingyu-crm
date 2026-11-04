@@ -19,9 +19,14 @@ function createService(overrides?: {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
-    $transaction: jest.fn(async (ops: unknown[]) => ops),
+    $transaction: jest.fn(),
     ...(overrides?.prisma ?? {}),
   };
+
+  prisma.$transaction.mockImplementation(async (operation) =>
+    typeof operation === "function" ? operation(prisma) : Promise.all(operation),
+  );
+  prisma.userSession.updateMany.mockResolvedValue({ count: 1 });
 
   const jwt = {
     signAsync: jest.fn().mockResolvedValue("access.jwt"),
@@ -223,13 +228,40 @@ describe("AuthService", () => {
     );
 
     expect(result.user.role).toBe(AuthRole.ADMIN);
-    expect(prisma.userSession.update).toHaveBeenCalledWith(
+    expect(prisma.userSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "s-old" },
+        where: { id: "s-old", revokedAt: null, expiresAt: { gt: expect.any(Date) } },
         data: { revokedAt: expect.any(Date) },
       }),
     );
     expect(res.cookie).toHaveBeenCalled();
+  });
+
+  it("does not create a successor when another request already consumed the refresh token", async () => {
+    const { service, prisma } = createService();
+    prisma.userSession.findFirst.mockResolvedValue({
+      id: "old",
+      userId: "u1",
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60000),
+      user: {
+        id: "u1",
+        name: "Test",
+        email: "test@example.invalid",
+        authRole: AuthRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prisma.userSession.updateMany.mockResolvedValue({ count: 0 });
+    const res = mockRes();
+    await expect(
+      service.refresh(
+        mockReq({ cookies: { xingyu_refresh_token: "test" } }) as never,
+        res as never,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(res.cookie).not.toHaveBeenCalled();
   });
 
   it("refresh rejects revoked token and revokes all sessions", async () => {
@@ -254,10 +286,7 @@ describe("AuthService", () => {
 
     const res = mockRes();
     await expect(
-      service.refresh(
-        mockReq({ cookies: { xingyu_refresh_token: raw } }) as never,
-        res as never,
-      ),
+      service.refresh(mockReq({ cookies: { xingyu_refresh_token: raw } }) as never, res as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.userSession.updateMany).toHaveBeenCalled();
     expect(res.clearCookie).toHaveBeenCalled();
@@ -298,15 +327,12 @@ describe("AuthService", () => {
     const res = mockRes();
 
     await expect(
-      service.logout(
-        mockReq({ cookies: { xingyu_refresh_token: raw } }) as never,
-        res as never,
-      ),
+      service.logout(mockReq({ cookies: { xingyu_refresh_token: raw } }) as never, res as never),
     ).resolves.toEqual({ ok: true });
 
-    await expect(
-      service.logout(mockReq({ cookies: {} }) as never, res as never),
-    ).resolves.toEqual({ ok: true });
+    await expect(service.logout(mockReq({ cookies: {} }) as never, res as never)).resolves.toEqual({
+      ok: true,
+    });
   });
 
   it("me returns public user", async () => {

@@ -18,7 +18,7 @@ import {
   ReorderTaskStatusesDto,
   CreateTaskCommentDto,
 } from "./dto/task.dto";
-import { uploadMaxBytes } from "../common/upload/upload.util";
+import { uploadLimits } from "../common/upload/upload.util";
 
 @ApiTags("tasks")
 @ApiHeader({ name: "X-Demo-User-Id", required: false })
@@ -111,7 +111,7 @@ export class TasksController {
 
   @Post(":id/comments")
   @ApiConsumes("application/json", "multipart/form-data")
-  @UseInterceptors(FilesInterceptor("files", 10, { storage: memoryStorage(), limits: { fileSize: uploadMaxBytes(), files: 10 } }))
+  @UseInterceptors(FilesInterceptor("files", 10, { storage: memoryStorage(), limits: uploadLimits(10) }))
   async comment(
     @OrganizationId() orgId: string,
     @CurrentUser() user: AuthenticatedUser,

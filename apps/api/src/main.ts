@@ -4,7 +4,6 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { GlobalExceptionFilter } from "./common/filters/http-exception.filter";
-import { ensureUploadDir } from "./common/upload/upload.util";
 import { setupSwagger } from "./openapi/openapi";
 
 async function bootstrap() {
@@ -37,8 +36,6 @@ async function bootstrap() {
   app.use(cookieParser());
   app.setGlobalPrefix("api");
 
-  const uploadDir = ensureUploadDir();
-  app.useStaticAssets(uploadDir, { prefix: "/api/uploads/files/" });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -57,7 +54,6 @@ async function bootstrap() {
   const host = process.env.API_HOST ?? "0.0.0.0";
   await app.listen(port, host);
   logger.log(`API running on http://${host}:${port}`);
-  logger.log(`Uploads directory: ${uploadDir}`);
   if (swaggerEnabled) {
     logger.log(`Swagger docs at http://localhost:${port}/docs`);
   }
