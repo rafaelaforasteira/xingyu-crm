@@ -1,5 +1,7 @@
 # Xingyu CRM
 
+Base de engenharia e resultados verificáveis: [execução BRAINX](docs/engineering/EXECUTION.md).
+
 ## Desenvolvimento local no Windows
 
 Primeira execução:
@@ -104,7 +106,7 @@ pnpm dev
 - Web: http://localhost:3000
 - API / Swagger: http://localhost:3333/docs
 
-Usuário demonstrativo (sem login): **Raffaela** (`demo-admin`), equipe Gestão.
+Autenticação obrigatória por cookies HttpOnly; consulte [homologation-auth.md](docs/homologation-auth.md). O administrador inicial é configurado por variáveis de ambiente no seed de desenvolvimento/teste.
 
 ## Scripts
 
@@ -136,14 +138,14 @@ Shopify, WhatsApp, Instagram, Meta Ads, Google Analytics e Webhooks — interfac
 
 ## Limitações
 
-- Sem autenticação/login nesta versão
-- Integrações externas mockadas
+- Autenticação implementada com JWT, refresh opaco e guards globais; a política atual restringe módulos de negócio a ADMIN.
+- Integrações mistas: Shopify Admin e Evolution possuem clientes reais; outros adapters permanecem demonstrativos. Consulte o inventário em docs/engineering/EXECUTION.md.
 - Redis opcional
 - Permissões modeladas, ainda não enforced na UI
 
 ## Roadmap
 
-Login e RBAC, WhatsApp/Instagram reais, Shopify sync, filas Redis, PWA/mobile, campos personalizados avançados no editor visual de automações.
+Endurecimento de sessão e downloads privados, integrações em staging e revisão de retries; veja docs/engineering/ROADMAP.md.
 
 ## Licença
 

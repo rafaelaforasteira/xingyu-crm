@@ -52,14 +52,28 @@ Se as variáveis faltarem, o seed falha com mensagem clara (sem exibir senhas).
 
 ## Endpoints
 
-| Método | Rota | Público | Descrição |
-|--------|------|---------|-----------|
-| POST | `/api/auth/login` | sim | login + cookies |
-| POST | `/api/auth/refresh` | sim | rotação de refresh |
-| POST | `/api/auth/logout` | sim | revoga sessão |
-| GET | `/api/auth/me` | não | usuário atual |
+| Método | Rota                | Público | Descrição          |
+| ------ | ------------------- | ------- | ------------------ |
+| POST   | `/api/auth/login`   | sim     | login + cookies    |
+| POST   | `/api/auth/refresh` | sim     | rotação de refresh |
+| POST   | `/api/auth/logout`  | sim     | revoga sessão      |
+| GET    | `/api/auth/me`      | não     | usuário atual      |
 
 Cookies: `xingyu_access_token` (curto) e `xingyu_refresh_token` (longo, hash no banco).
+
+## Limites verificados na revisão BRAINX
+
+Os cookies usam `SameSite=Lax`. CORS aceita apenas origens explícitas, mas não há
+validação de Origin/Referer nem token anti-CSRF nas mutações; revisar também
+subdomínios do mesmo site. CORS não substitui autorização nem proteção anti-CSRF.
+O guard global consulta sessão e status/role atuais no banco; a política atual
+restringe módulos de negócio a ADMIN. Refresh opaco é armazenado como SHA-256,
+rotacionado em transação e logout revoga a sessão. A rotação ainda precisa de
+teste concorrente e consumo condicional atômico da sessão anterior.
+
+Testes de integração com PostgreSQL exigem `TEST_DATABASE_URL` explícita para um
+banco local descartável com nome terminado em `_test`. O runner não usa `.env`
+como fallback. Evidências e riscos: [EXECUTION.md](engineering/EXECUTION.md).
 
 ## Frontend
 

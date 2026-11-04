@@ -1,8 +1,8 @@
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import { existsSync, readFileSync } from "node:fs";
+import { configureTestDatabase } from "../common/test-database";
 import type { AddressInfo } from "node:net";
-import { resolve } from "node:path";
+
 import { PrismaService } from "../prisma/prisma.service";
 import { ReactivationController } from "./reactivation.controller";
 import { ReactivationService } from "./reactivation.service";
@@ -48,32 +48,13 @@ type HttpReactivationResponse = {
   };
 };
 
-function ensureDatabaseUrl() {
-  if (process.env.DATABASE_URL) return;
-
-  const candidates = [
-    resolve(process.cwd(), ".env"),
-    resolve(process.cwd(), "../../.env"),
-    resolve(process.cwd(), "../../packages/database/.env"),
-    resolve(process.cwd(), "../../.env.example"),
-  ];
-  for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
-    const match = readFileSync(candidate, "utf8").match(/^DATABASE_URL\s*=\s*(.+)$/m);
-    if (!match?.[1]) continue;
-    process.env.DATABASE_URL = match[1].trim().replace(/^(['"])(.*)\1$/, "$2");
-    return;
-  }
-  throw new Error("DATABASE_URL is required for the reactivation integration test");
-}
-
 describe("GET /api/reactivation integration", () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let baseUrl: string;
 
   beforeAll(async () => {
-    ensureDatabaseUrl();
+    configureTestDatabase();
     prisma = new PrismaService();
     await prisma.$connect();
 
