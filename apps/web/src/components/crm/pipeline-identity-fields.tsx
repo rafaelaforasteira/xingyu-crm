@@ -1,157 +1,217 @@
 "use client";
 
 import * as React from "react";
-import { Check, Star } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/form-controls";
+import { Check, Pencil, Pipette, Star } from "lucide-react";
 import { Popover } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  PIPELINE_ICON_OPTIONS,
-  resolvePipelineIcon,
-} from "@/lib/pipeline-icons";
+import { PIPELINE_ICON_OPTIONS, resolvePipelineIcon } from "@/lib/pipeline-icons";
 import { cn } from "@/lib/utils";
 
-export const PIPELINE_DESCRIPTION_MAX_LENGTH = 140;
+export const PIPELINE_DESCRIPTION_MAX_LENGTH = 80;
+
+/** Paleta curta para escolher a cor em um clique; o seletor livre continua disponível. */
+export const PIPELINE_COLOR_PRESETS = [
+  "#7C3AED",
+  "#2563EB",
+  "#0EA5E9",
+  "#10B981",
+  "#F59E0B",
+  "#F43F5E",
+  "#EC4899",
+  "#64748B",
+] as const;
+
+const HEX = /^#[0-9a-f]{6}$/i;
+const safeColor = (value: string) => (HEX.test(value) ? value : "#7C3AED");
+
+/** Bloco do ícone: mostra a identidade atual e abre a grade de ícones. */
+export function PipelineIconPicker({
+  color,
+  icon,
+  error,
+  onChange,
+}: {
+  color: string;
+  icon: string;
+  error?: string;
+  onChange: (icon: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const SelectedIcon = resolvePipelineIcon(icon);
+  const tint = safeColor(color);
+
+  return (
+    <div className="shrink-0">
+      <Popover
+        open={open}
+        onOpenChange={setOpen}
+        align="start"
+        contentWidth={288}
+        aria-label="Escolher ícone do pipeline"
+        trigger={
+          <button
+            type="button"
+            aria-label="Escolher ícone do pipeline"
+            aria-expanded={open}
+            title="Trocar ícone"
+            onClick={() => setOpen((current) => !current)}
+            className="group relative flex h-14 w-14 items-center justify-center rounded-2xl transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            style={{ backgroundColor: `${tint}1f`, color: tint }}
+          >
+            <SelectedIcon className="h-6 w-6" />
+            <span
+              aria-hidden
+              className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-card text-white shadow-sm transition-transform group-hover:scale-110"
+              style={{ backgroundColor: tint }}
+            >
+              <Pencil className="h-2.5 w-2.5" strokeWidth={2.5} />
+            </span>
+          </button>
+        }
+      >
+        <div className="grid max-h-64 grid-cols-6 gap-1 overflow-y-auto p-2">
+          {PIPELINE_ICON_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const selected = option.key === icon;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                title={option.label}
+                aria-label={option.label}
+                aria-pressed={selected}
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-xl transition",
+                  selected ? "text-white" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+                style={selected ? { backgroundColor: tint } : undefined}
+                onClick={() => {
+                  onChange(option.key);
+                  setOpen(false);
+                }}
+              >
+                <Icon className="h-[18px] w-[18px]" />
+              </button>
+            );
+          })}
+        </div>
+      </Popover>
+      {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
 
 export function PipelineIdentityFields({
   description,
   color,
-  icon,
   favorite,
   errors,
   onChange,
 }: {
   description: string;
   color: string;
-  icon: string;
+  icon?: string;
   favorite: boolean;
   errors?: { description?: string; color?: string; icon?: string };
   onChange: (field: "description" | "color" | "icon" | "favorite", value: string | boolean) => void;
 }) {
-  const [iconPickerOpen, setIconPickerOpen] = React.useState(false);
-  const SelectedIcon = resolvePipelineIcon(icon);
   const descriptionCounterId = React.useId();
+  const current = safeColor(color).toUpperCase();
+  const isCustom = !PIPELINE_COLOR_PRESETS.includes(current as (typeof PIPELINE_COLOR_PRESETS)[number]);
 
   return (
     <>
-      <div className="space-y-1.5">
-        <Label htmlFor="pipeline-description">Descrição</Label>
-        <Textarea
-          id="pipeline-description"
-          rows={3}
-          maxLength={description.length <= PIPELINE_DESCRIPTION_MAX_LENGTH ? PIPELINE_DESCRIPTION_MAX_LENGTH : undefined}
-          aria-describedby={descriptionCounterId}
-          aria-invalid={Boolean(errors?.description)}
-          placeholder="Explique quando este pipeline deve ser usado."
-          value={description}
-          onChange={(event) => onChange("description", event.target.value)}
-        />
-        <div className="flex items-start justify-between gap-3">
-          <p className="text-xs text-destructive">{errors?.description}</p>
+      <div className="space-y-2">
+        <label htmlFor="pipeline-description" className="text-[13px] font-medium text-foreground">
+          Descrição <span className="font-normal text-muted-foreground">(opcional)</span>
+        </label>
+        <div className="relative">
+          <Textarea
+            id="pipeline-description"
+            rows={2}
+            maxLength={description.length <= PIPELINE_DESCRIPTION_MAX_LENGTH ? PIPELINE_DESCRIPTION_MAX_LENGTH : undefined}
+            aria-describedby={descriptionCounterId}
+            aria-invalid={Boolean(errors?.description)}
+            placeholder="Quando este pipeline deve ser usado?"
+            className="min-h-[72px] resize-none rounded-xl pb-6"
+            value={description}
+            onChange={(event) => onChange("description", event.target.value)}
+          />
           <p
             id={descriptionCounterId}
             className={cn(
-              "ml-auto text-xs text-muted-foreground",
+              "pointer-events-none absolute bottom-2 right-3 text-[11px] tabular-nums text-muted-foreground/80",
+              description.length >= PIPELINE_DESCRIPTION_MAX_LENGTH - 15 && "text-foreground",
               description.length > PIPELINE_DESCRIPTION_MAX_LENGTH && "text-destructive",
-              description.length >= 125 && description.length <= PIPELINE_DESCRIPTION_MAX_LENGTH && "text-foreground",
             )}
           >
             {description.length}/{PIPELINE_DESCRIPTION_MAX_LENGTH}
           </p>
         </div>
+        {errors?.description ? <p className="text-xs text-destructive">{errors.description}</p> : null}
       </div>
 
-      <fieldset className="rounded-xl border border-border bg-muted/20 p-4">
-        <legend className="sr-only">Identidade visual</legend>
-        <div className="flex items-end gap-8">
-          <div className="min-w-0 space-y-1.5">
-            <Label htmlFor="pipeline-color" className="block">Cor</Label>
+      <fieldset className="space-y-2">
+        <legend className="text-[13px] font-medium text-foreground">Identidade visual</legend>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Cor do pipeline">
+            {PIPELINE_COLOR_PRESETS.map((preset) => {
+              const selected = current === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={`Cor ${preset}`}
+                  onClick={() => onChange("color", preset)}
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                    selected && "ring-2 ring-offset-2 ring-offset-card",
+                  )}
+                  style={{ backgroundColor: preset, ...(selected ? { ["--tw-ring-color" as string]: preset } : {}) }}
+                >
+                  {selected ? <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} /> : null}
+                </button>
+              );
+            })}
             <label
-              className="relative block h-10 w-10 cursor-pointer rounded-full border-4 border-card shadow-[0_0_0_1px_hsl(var(--border))] transition-transform hover:scale-105 focus-within:ring-2 focus-within:ring-primary/25"
-              style={{ backgroundColor: /^#[0-9a-f]{6}$/i.test(color) ? color : "#7c3aed" }}
+              title="Outra cor"
+              className={cn(
+                "relative ml-0.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-dashed border-border text-muted-foreground transition hover:border-primary/40 hover:text-primary",
+                isCustom && "border-solid ring-2 ring-offset-2 ring-offset-card",
+              )}
+              style={isCustom ? { backgroundColor: current, color: "#fff", ["--tw-ring-color" as string]: current } : undefined}
             >
+              <Pipette className="h-3.5 w-3.5" />
               <input
                 id="pipeline-color"
                 type="color"
                 aria-label="Escolher cor do pipeline"
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                value={/^#[0-9a-f]{6}$/i.test(color) ? color : "#7c3aed"}
+                value={safeColor(color)}
                 onChange={(event) => onChange("color", event.target.value.toUpperCase())}
               />
             </label>
-            {errors?.color ? <p className="text-xs text-destructive">{errors.color}</p> : null}
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="block">Ícone</Label>
-            <Popover
-              open={iconPickerOpen}
-              onOpenChange={setIconPickerOpen}
-              align="start"
-              contentWidth={304}
-              aria-label="Escolher ícone do pipeline"
-              trigger={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Escolher ícone do pipeline"
-                  aria-expanded={iconPickerOpen}
-                  className="h-10 w-10 rounded-full border border-border bg-card p-0 text-primary shadow-sm hover:border-primary/35 hover:bg-primary/5"
-                  onClick={() => setIconPickerOpen((current) => !current)}
-                >
-                  <SelectedIcon className="h-5 w-5" style={{ color }} />
-                </Button>
-              }
-            >
-              <div className="grid max-h-64 grid-cols-5 gap-1 overflow-y-auto p-3">
-                {PIPELINE_ICON_OPTIONS.map((option) => {
-                  const Icon = option.icon;
-                  const selected = option.key === icon;
-                  return (
-                    <Button
-                      key={option.key}
-                      type="button"
-                      variant={selected ? "secondary" : "ghost"}
-                      size="icon"
-                      title={option.label}
-                      aria-label={option.label}
-                      aria-pressed={selected}
-                      className="relative h-10 w-10"
-                      onClick={() => {
-                        onChange("icon", option.key);
-                        setIconPickerOpen(false);
-                      }}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {selected ? <Check className="absolute right-0.5 top-0.5 h-3 w-3" /> : null}
-                    </Button>
-                  );
-                })}
-              </div>
-            </Popover>
-            {errors?.icon ? <p className="text-xs text-destructive">{errors.icon}</p> : null}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="block">Preferência</Label>
-            <button
-              type="button"
-              className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-full border bg-card transition-colors",
-                favorite
-                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                  : "border-border text-muted-foreground shadow-sm hover:border-primary/35 hover:bg-primary/5 hover:text-primary",
-              )}
-              aria-label={favorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-              aria-pressed={favorite}
-              onClick={() => onChange("favorite", !favorite)}
-            >
-              <Star className={cn("h-5 w-5", favorite && "fill-current")} />
-            </button>
-          </div>
+          <button
+            type="button"
+            aria-label={favorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+            aria-pressed={favorite}
+            onClick={() => onChange("favorite", !favorite)}
+            className={cn(
+              "flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
+              favorite
+                ? "border-amber-300 bg-amber-50 text-amber-700"
+                : "border-border text-muted-foreground hover:border-amber-300 hover:text-amber-700",
+            )}
+          >
+            <Star className={cn("h-3.5 w-3.5", favorite && "fill-amber-400 text-amber-400")} />
+            {favorite ? "Favorito" : "Favoritar"}
+          </button>
         </div>
+        {errors?.color ? <p className="text-xs text-destructive">{errors.color}</p> : null}
       </fieldset>
     </>
   );

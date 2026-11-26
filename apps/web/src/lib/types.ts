@@ -298,6 +298,7 @@ export interface Pipeline {
   favorite?: boolean;
   archived?: boolean;
   position?: number;
+  accessMode?: "ORGANIZATION" | "RESTRICTED";
   defaultTeamId?: string | null;
   defaultTeam?: Team | null;
   defaultOwnerId?: string | null;
