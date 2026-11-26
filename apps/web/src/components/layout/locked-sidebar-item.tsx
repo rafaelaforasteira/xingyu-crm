@@ -8,11 +8,13 @@ export function LockedSidebarItem({
   icon: Icon,
   collapsed,
   tooltipLabel,
+  ariaDescription = "disponível apenas para administradores",
 }: {
   label: string;
   icon: LucideIcon;
   collapsed: boolean;
   tooltipLabel?: string;
+  ariaDescription?: string;
 }) {
   return (
     <SidebarTooltip
@@ -21,7 +23,7 @@ export function LockedSidebarItem({
     >
       <div
         role="group"
-        aria-label={label + " — disponível apenas para administradores"}
+        aria-label={label + " — " + ariaDescription}
         aria-disabled="true"
         data-nav-locked="true"
         className={cn(

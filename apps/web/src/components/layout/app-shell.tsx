@@ -7,7 +7,9 @@ import { Toaster } from "sonner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { LockedArea } from "@/components/layout/locked-area";
 import { shouldHideGlobalHeader } from "@/lib/feature-flags";
+import { isPathUnlocked, lockedAreaLabel } from "@/lib/area-locks";
 import { cn } from "@/lib/utils";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -59,7 +61,11 @@ function AuthorizedAppShell({ children }: { children: React.ReactNode }) {
             hideGlobalHeader ? "overflow-hidden p-0" : "overflow-auto p-4 sm:p-6",
           )}
         >
-          {children}
+          {pathname && !isPathUnlocked(pathname) ? (
+            <LockedArea label={lockedAreaLabel(pathname)} />
+          ) : (
+            children
+          )}
         </main>
       </div>
       <CommandPalette />

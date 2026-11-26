@@ -15,6 +15,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { useUiStore } from "@/stores/ui";
 import { useAuth } from "@/components/auth/auth-provider";
 import { can, canOpenPath } from "@/lib/access-policy";
+import { isPathUnlocked, LOCKED_AREA_TOOLTIP } from "@/lib/area-locks";
 import { Button } from "@/components/ui/button";
 
 import { LockedSidebarItem } from "./locked-sidebar-item";
@@ -461,6 +462,17 @@ export function Sidebar() {
             ) : null}
             <div className="space-y-0.5">
               {group.items.map((item) => {
+                if (!isPathUnlocked(item.href))
+                  return (
+                    <LockedSidebarItem
+                      key={`${group.id}-${item.href}-${item.label}`}
+                      label={item.label}
+                      icon={item.icon}
+                      collapsed={collapsed}
+                      tooltipLabel={LOCKED_AREA_TOOLTIP}
+                      ariaDescription="área bloqueada nesta etapa"
+                    />
+                  );
                 if (!canOpenPath(user, item.href))
                   return (
                     <LockedSidebarItem
@@ -525,7 +537,15 @@ export function Sidebar() {
       </nav>
 
       <div className="shrink-0 space-y-1 border-t border-sidebar-border px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
-        {canOpenPath(user, "/settings") ? (
+        {!isPathUnlocked("/settings") ? (
+          <LockedSidebarItem
+            label="Configurações"
+            icon={Settings}
+            collapsed={collapsed}
+            tooltipLabel={LOCKED_AREA_TOOLTIP}
+            ariaDescription="área bloqueada nesta etapa"
+          />
+        ) : canOpenPath(user, "/settings") ? (
           <SidebarNavLink
             href="/settings"
             label="Configurações"
