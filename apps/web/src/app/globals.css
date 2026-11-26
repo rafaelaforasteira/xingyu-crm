@@ -1066,3 +1066,44 @@ header[data-header-theme="tracking"] [data-header-popover="notifications"] [clas
 @media (prefers-reduced-motion: reduce) {
   [data-module-theme="tracking"] *, .tracking-portal * { animation: none !important; transition: none !important; }
 }
+
+/*
+ * Barra de rolagem da plataforma: 1,5px, roxa, visível só enquanto rola.
+ * `data-scrolling` é posto pelo componente ScrollActivity.
+ * Fica fora de @layer para valer sobre as regras de barra de cada tela.
+ */
+@supports selector(::-webkit-scrollbar) {
+  * {
+    /* No Chrome, scrollbar-width/color diferentes de auto desligam o estilo abaixo. */
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+  }
+  *::-webkit-scrollbar {
+    width: 5px !important;
+    height: 5px !important;
+    background: transparent !important;
+  }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent !important;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: transparent !important;
+    border: 1.75px solid transparent !important;
+    border-radius: 999px !important;
+    background-clip: content-box !important;
+  }
+  [data-scrolling]::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--primary) / 0.85) !important;
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin !important;
+    scrollbar-color: transparent transparent !important;
+  }
+  [data-scrolling] {
+    scrollbar-color: hsl(var(--primary) / 0.85) transparent !important;
+  }
+}

@@ -215,13 +215,8 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "journeys",
     label: "Jornadas",
     items: [
-      {
-        href: "/pipelines",
-        label: "Pipelines",
-        icon: Kanban,
-        exact: true,
-        expandablePipelines: true,
-      },
+      // Link simples: a lista de pipelines fica na própria página /pipelines.
+      { href: "/pipelines", label: "Pipelines", icon: Kanban },
       {
         href: "/orders",
         label: "Pedidos",

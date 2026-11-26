@@ -8,7 +8,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { LockedArea } from "@/components/layout/locked-area";
-import { shouldHideGlobalHeader } from "@/lib/feature-flags";
+import { shouldHideGlobalHeader, shouldHideTopBar } from "@/lib/feature-flags";
 import { isPathUnlocked, lockedAreaLabel } from "@/lib/area-locks";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +52,14 @@ function AuthorizedAppShell({ children }: { children: React.ReactNode }) {
     >
       {hideGlobalSidebar ? null : <Sidebar />}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {hideGlobalHeader ? null : <Header />}
+        {hideGlobalHeader ? null : shouldHideTopBar(pathname) ? (
+          // No computador some; no celular continua, pois tem o botão que abre o menu.
+          <div className="lg:hidden">
+            <Header />
+          </div>
+        ) : (
+          <Header />
+        )}
         <main
           data-testid="app-main"
           data-operation-mode={hideGlobalHeader ? "core" : "default"}

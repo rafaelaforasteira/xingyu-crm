@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight, Settings, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronsLeft, ChevronsRight, Settings, X, type LucideIcon } from "lucide-react";
 import { APP_NAME } from "@xingyu/config";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
@@ -16,7 +16,6 @@ import { useUiStore } from "@/stores/ui";
 import { useAuth } from "@/components/auth/auth-provider";
 import { can, canOpenPath } from "@/lib/access-policy";
 import { isPathUnlocked, LOCKED_AREA_TOOLTIP } from "@/lib/area-locks";
-import { Button } from "@/components/ui/button";
 
 import { LockedSidebarItem } from "./locked-sidebar-item";
 import { SidebarTooltip } from "./sidebar-tooltip";
@@ -24,6 +23,35 @@ import "./sidebar-shell.css";
 
 const PIPELINES_HREF = "/pipelines";
 const PIPELINES_NAV_STALE_TIME = 3 * 60_000;
+
+/** Estilos compartilhados do menu claro (roxo = item ativo). */
+const NAV_ITEM_BASE =
+  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors";
+const NAV_ITEM_ACTIVE = "bg-primary/[0.08] text-primary font-semibold";
+const NAV_ITEM_IDLE = "text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground";
+const NAV_SUBITEM_BASE =
+  "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors";
+const NAV_SUBITEM_ACTIVE = "bg-primary/[0.08] text-primary font-semibold";
+const NAV_SUBITEM_IDLE = "text-sidebar-muted hover:bg-sidebar-accent hover:text-foreground";
+const NAV_EXPAND_BUTTON =
+  "mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-muted transition hover:bg-sidebar-accent hover:text-foreground";
+
+function NavCount({ count, collapsed }: { count?: number; collapsed: boolean }) {
+  if (!count || count <= 0) return null;
+  if (collapsed) {
+    return (
+      <span
+        aria-hidden
+        className="absolute right-3.5 top-2.5 h-1.5 w-1.5 rounded-full bg-primary"
+      />
+    );
+  }
+  return (
+    <span className="ml-auto flex h-6 min-w-6 items-center justify-center rounded-md border border-sidebar-border bg-white px-1.5 text-xs font-medium text-sidebar-foreground">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 function SidebarNavLink({
   href,
@@ -57,24 +85,15 @@ function SidebarNavLink({
         onMouseEnter={() => onPrefetch(href)}
         onFocus={() => onPrefetch(href)}
         className={cn(
-          "flex items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors",
-          active
-            ? "bg-white/10 text-white"
-            : "text-sidebar-foreground/75 hover:bg-white/5 hover:text-white",
+          NAV_ITEM_BASE,
+          "relative",
+          active ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE,
           collapsed && "justify-center px-0",
         )}
       >
-        <Icon className={cn("h-4 w-4 shrink-0", active && "text-white")} />
-        {!collapsed ? (
-          <>
-            <span className="min-w-0 flex-1 truncate">{label}</span>
-            {count && count > 0 ? (
-              <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                {count > 99 ? "99+" : count}
-              </span>
-            ) : null}
-          </>
-        ) : null}
+        <Icon className="h-[18px] w-[18px] shrink-0" />
+        {!collapsed ? <span className="min-w-0 flex-1 truncate">{label}</span> : null}
+        <NavCount count={count} collapsed={collapsed} />
       </Link>
     </SidebarTooltip>
   );
@@ -129,13 +148,11 @@ function PipelinesNavSection({
           onClick={() => onNavigate(basePath)}
           onMouseEnter={() => onPrefetch(basePath)}
           className={cn(
-            "flex items-center justify-center rounded-[11px] py-2.5 transition-colors",
-            sectionActive
-              ? "bg-white/10 text-white"
-              : "text-sidebar-foreground/75 hover:bg-white/5",
+            "flex items-center justify-center rounded-xl py-2.5 transition-colors",
+            sectionActive ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE,
           )}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-[18px] w-[18px]" />
         </Link>
       </SidebarTooltip>
     );
@@ -143,17 +160,23 @@ function PipelinesNavSection({
 
   return (
     <div className="space-y-0.5">
-      <div className={cn("flex items-center gap-1 rounded-[11px]", sectionActive && "bg-white/5")}>
+      <div
+        className={cn(
+          "flex items-center gap-1 rounded-xl transition-colors",
+          sectionActive ? "bg-primary/[0.08]" : "hover:bg-sidebar-accent",
+        )}
+      >
         <Link
           href={basePath}
           onClick={() => onNavigate(basePath)}
           onMouseEnter={() => onPrefetch(basePath)}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors",
-            sectionActive ? "text-white" : "text-sidebar-foreground/75 hover:text-white",
+            NAV_ITEM_BASE,
+            "min-w-0 flex-1",
+            sectionActive ? "font-semibold text-primary" : "text-sidebar-foreground hover:text-foreground",
           )}
         >
-          <Icon className="h-4 w-4 shrink-0" />
+          <Icon className="h-[18px] w-[18px] shrink-0" />
           <span className="truncate">{item.label}</span>
         </Link>
         <button
@@ -161,17 +184,17 @@ function PipelinesNavSection({
           aria-expanded={expanded}
           aria-label={expanded ? "Recolher pipelines" : "Expandir pipelines"}
           onClick={() => setExpanded((value) => !value)}
-          className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-muted transition hover:bg-white/10 hover:text-white"
+          className={NAV_EXPAND_BUTTON}
         >
           <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
         </button>
       </div>
 
       {expanded ? (
-        <div className="ml-3 space-y-0.5 border-l border-white/10 pl-2">
+        <div className="ml-[22px] space-y-0.5 border-l border-sidebar-border pl-2.5">
           {navigation.isLoading
             ? Array.from({ length: 3 }).map((_, index) => (
-                <div key={index} className="h-7 animate-pulse rounded-md bg-white/5" />
+                <div key={index} className="h-7 animate-pulse rounded-lg bg-sidebar-accent" />
               ))
             : null}
           {navigation.data?.map((pipeline) => {
@@ -193,18 +216,13 @@ function PipelinesNavSection({
                 aria-current={active ? "page" : undefined}
                 onClick={() => onNavigate(href)}
                 onMouseEnter={() => onPrefetch(href)}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold tracking-wide transition-colors",
-                  active
-                    ? "bg-white/10 text-white"
-                    : "text-sidebar-foreground/65 hover:bg-white/5 hover:text-white",
-                )}
+                className={cn(NAV_SUBITEM_BASE, active ? NAV_SUBITEM_ACTIVE : NAV_SUBITEM_IDLE)}
               >
                 <PipelineIcon
-                  className="h-3.5 w-3.5 shrink-0 opacity-80"
+                  className="h-3.5 w-3.5 shrink-0"
                   style={{ color: pipeline.color ?? undefined }}
                 />
-                <span className="min-w-0 flex-1 truncate uppercase">{label}</span>
+                <span className="min-w-0 flex-1 truncate">{label}</span>
               </Link>
             );
           })}
@@ -271,16 +289,22 @@ function StaticPipelineNavSection({
 
   return (
     <div className="space-y-0.5">
-      <div className={cn("flex items-center gap-1 rounded-[11px]", sectionActive && "bg-white/5")}>
+      <div
+        className={cn(
+          "flex items-center gap-1 rounded-xl transition-colors",
+          sectionActive ? "bg-primary/[0.08]" : "hover:bg-sidebar-accent",
+        )}
+      >
         <Link
           href={item.href}
           onClick={() => onNavigate(item.href)}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium transition-colors",
-            sectionActive ? "text-white" : "text-sidebar-foreground/75 hover:text-white",
+            NAV_ITEM_BASE,
+            "min-w-0 flex-1",
+            sectionActive ? "font-semibold text-primary" : "text-sidebar-foreground hover:text-foreground",
           )}
         >
-          <Icon className="h-4 w-4 shrink-0" />
+          <Icon className="h-[18px] w-[18px] shrink-0" />
           <span className="truncate">{item.label}</span>
         </Link>
         <button
@@ -288,13 +312,13 @@ function StaticPipelineNavSection({
           aria-expanded={expanded}
           aria-label={expanded ? `Recolher ${item.label}` : `Expandir ${item.label}`}
           onClick={() => setExpanded((value) => !value)}
-          className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sidebar-muted transition hover:bg-white/10 hover:text-white"
+          className={NAV_EXPAND_BUTTON}
         >
           <ChevronDown className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} />
         </button>
       </div>
       {expanded ? (
-        <div className="ml-3 space-y-0.5 border-l border-white/10 pl-2">
+        <div className="ml-[22px] space-y-0.5 border-l border-sidebar-border pl-2.5">
           {item.children?.map((child) => {
             const active = currentHref === child.href || pendingHref === child.href;
             const ChildIcon = child.icon;
@@ -311,12 +335,7 @@ function StaticPipelineNavSection({
                 title={numberedLabel}
                 onClick={() => onNavigate(child.href)}
                 onMouseEnter={() => onPrefetch(child.href)}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors",
-                  active
-                    ? "bg-white/10 text-white"
-                    : "text-sidebar-foreground/65 hover:bg-white/5 hover:text-white",
-                )}
+                className={cn(NAV_SUBITEM_BASE, active ? NAV_SUBITEM_ACTIVE : NAV_SUBITEM_IDLE)}
               >
                 {ChildIcon ? (
                   <ChildIcon className="h-3.5 w-3.5 shrink-0" style={{ color }} />
@@ -404,11 +423,11 @@ export function Sidebar() {
       data-testid="beta-sidebar"
       data-collapsed={collapsed}
       className={cn(
-        "crm-sidebar flex h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-[240ms] motion-reduce:transition-none",
-        collapsed ? "w-[68px]" : "w-60",
+        "crm-sidebar flex h-full flex-col bg-sidebar text-sidebar-foreground transition-[width] duration-[240ms] motion-reduce:transition-none",
+        collapsed ? "w-[76px]" : "w-64",
       )}
     >
-      <div className="crm-sidebar-brand flex items-center gap-2 border-b border-sidebar-border px-3">
+      <div className="crm-sidebar-brand border-b border-sidebar-border">
         <Link
           href={homeHref}
           className="flex min-w-0 items-center gap-2.5"
@@ -418,47 +437,42 @@ export function Sidebar() {
           <img
             src="/brand/brainx-mark.png"
             alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8 shrink-0 object-contain"
+            width={36}
+            height={36}
+            className="h-9 w-9 shrink-0 object-contain"
             decoding="async"
           />
           {!collapsed ? (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold tracking-tight text-white">{APP_NAME}</p>
-            </div>
+            <p className="truncate text-lg font-bold tracking-tight text-primary">{APP_NAME}</p>
           ) : null}
         </Link>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="crm-sidebar-toggle hidden h-7 w-7 shrink-0 text-sidebar-muted hover:bg-white/10 hover:text-white lg:inline-flex"
+        <button
+          type="button"
+          className="crm-sidebar-toggle hidden shrink-0 items-center justify-center transition-colors lg:inline-flex"
           onClick={toggleSidebar}
           aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
           aria-expanded={!collapsed}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-sidebar-muted hover:bg-white/10 hover:text-white lg:hidden"
+          {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          aria-label="Fechar menu"
+          className="crm-sidebar-toggle inline-flex shrink-0 items-center justify-center transition-colors lg:hidden"
           onClick={() => setMobileOpen(false)}
         >
           <X className="h-4 w-4" />
-        </Button>
+        </button>
       </div>
 
       <nav
         data-testid="sidebar-navigation"
-        className="scrollbar-thin min-h-0 flex-1 space-y-5 overflow-y-auto px-2 py-4"
+        className="scrollbar-thin min-h-0 flex-1 divide-y divide-sidebar-border overflow-y-auto"
       >
         {NAV_GROUPS.map((group) => (
-          <div key={group.id} className="space-y-1.5">
+          <div key={group.id} className="space-y-2 px-3 py-4">
             {!collapsed ? (
-              <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-muted">
-                {group.label}
-              </p>
+              <p className="px-3 text-[13px] font-medium text-sidebar-muted">{group.label}</p>
             ) : null}
             <div className="space-y-0.5">
               {group.items.map((item) => {
@@ -536,7 +550,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="shrink-0 space-y-1 border-t border-sidebar-border px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+      <div className="shrink-0 space-y-1 border-t border-sidebar-border px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
         {!isPathUnlocked("/settings") ? (
           <LockedSidebarItem
             label="Configurações"
@@ -574,7 +588,7 @@ export function Sidebar() {
             aria-label="Fechar menu"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 w-60 shadow-drawer">{content}</div>
+          <div className="crm-sidebar-drawer absolute inset-y-0 left-0 flex">{content}</div>
         </div>
       ) : null}
     </>

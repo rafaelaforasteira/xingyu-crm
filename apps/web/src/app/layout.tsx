@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import { APP_NAME } from "@xingyu/config";
 import { Providers } from "@/components/layout/app-shell";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { ScrollActivity } from "@/components/layout/scroll-activity";
 import "./globals.css";
 
 const fontSans = Plus_Jakarta_Sans({
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <AuthProvider>{children}</AuthProvider>
         </Providers>
+        <ScrollActivity />
       </body>
     </html>
   );

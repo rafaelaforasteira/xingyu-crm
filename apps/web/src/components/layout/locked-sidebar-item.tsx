@@ -27,19 +27,19 @@ export function LockedSidebarItem({
         aria-disabled="true"
         data-nav-locked="true"
         className={cn(
-          "relative flex cursor-default items-center gap-2.5 rounded-[11px] px-3 py-2.5 text-sm font-medium",
+          "relative flex cursor-default select-none items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium",
           collapsed && "justify-center px-0",
         )}
       >
-        <Icon className="h-4 w-4 shrink-0 text-sidebar-foreground/50" aria-hidden />
+        <Icon className="h-[18px] w-[18px] shrink-0 text-sidebar-muted/60" aria-hidden />
         {!collapsed && (
-          <span className="min-w-0 flex-1 truncate text-sidebar-foreground/50">{label}</span>
+          <span className="min-w-0 flex-1 truncate text-sidebar-muted/80">{label}</span>
         )}
         <Lock
           aria-hidden
           className={cn(
-            "h-3.5 w-3.5 shrink-0 text-sidebar-foreground/65",
-            collapsed && "absolute bottom-1 right-1 h-2.5 w-2.5",
+            "h-3.5 w-3.5 shrink-0 text-sidebar-muted/70",
+            collapsed && "absolute right-3 top-2 h-2.5 w-2.5",
           )}
         />
       </div>
