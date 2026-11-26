@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, MoreHorizontal, Plus } from "lucide-react";
+import { CircleX, GripVertical, MoreHorizontal, Plus, Trophy } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/form-controls";
 import { pipelineStagesApi } from "@/lib/api";
 import { STAGE_COLOR_PRESETS, isValidStageName, sanitizeStageName } from "@/lib/operation-utils";
+import {
+  CLOSING_DEFAULTS,
+  findArchivedClosing,
+  needsReorder,
+  orderWithClosingLast,
+  splitClosingStages,
+  type ClosingKind,
+} from "@/lib/closing-stages";
+import { Switch } from "@/components/ui/switch";
 import { queryKeys } from "@/lib/query-keys";
 import type { PipelineStage } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -217,6 +226,110 @@ function SortableStageRow({
   );
 }
 
+/** Linha de uma coluna de encerramento (ganho ou perdido): liga/desliga e nome. */
+function ClosingStageRow({
+  kind,
+  stage,
+  pending,
+  existingNames,
+  onToggle,
+  onRename,
+}: {
+  kind: ClosingKind;
+  stage: PipelineStage | null;
+  pending: boolean;
+  existingNames: string[];
+  onToggle: (enabled: boolean) => void;
+  onRename: (name: string) => Promise<void>;
+}) {
+  const defaults = CLOSING_DEFAULTS[kind];
+  const enabled = Boolean(stage);
+  const [name, setName] = React.useState(stage?.name ?? defaults.name);
+  const [error, setError] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setName(stage?.name ?? defaults.name);
+    setError(null);
+  }, [stage?.name, defaults.name]);
+
+  const commit = async () => {
+    if (!stage) return;
+    const cleaned = sanitizeStageName(name);
+    if (cleaned === stage.name) return;
+    if (!isValidStageName(cleaned)) {
+      setError("Informe um nome com até 80 caracteres.");
+      return;
+    }
+    if (existingNames.some((item) => item.localeCompare(cleaned, "pt-BR", { sensitivity: "base" }) === 0)) {
+      setError("Já existe uma etapa com este nome.");
+      return;
+    }
+    setError(null);
+    try {
+      await onRename(cleaned);
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Não foi possível renomear.");
+      setName(stage.name);
+    }
+  };
+
+  const count = stage?._count?.deals ?? 0;
+  return (
+    <li
+      className={cn(
+        "flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors",
+        enabled ? "border-border bg-background" : "border-dashed border-border bg-muted/30",
+      )}
+      data-testid={`closing-stage-${kind.toLowerCase()}`}
+    >
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        style={{
+          backgroundColor: `${defaults.color}${enabled ? "1f" : "12"}`,
+          color: enabled ? defaults.color : "hsl(var(--muted-foreground))",
+        }}
+        aria-hidden
+      >
+        {kind === "WON" ? <Trophy className="h-4 w-4" /> : <CircleX className="h-4 w-4" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-medium text-muted-foreground">{defaults.label}</p>
+        {enabled ? (
+          <input
+            aria-label={`Nome da ${defaults.label.toLowerCase()}`}
+            value={name}
+            maxLength={80}
+            disabled={pending}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={() => void commit()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                (event.target as HTMLInputElement).blur();
+              }
+              if (event.key === "Escape") setName(stage?.name ?? defaults.name);
+            }}
+            className="-ml-1 w-full rounded-md bg-transparent px-1 text-sm font-medium outline-none transition hover:bg-muted/60 focus:bg-muted/60 focus:ring-2 focus:ring-primary/20"
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">Desativada — não aparece no quadro</p>
+        )}
+        {error ? <p className="mt-0.5 text-xs text-destructive">{error}</p> : null}
+      </div>
+      {enabled ? (
+        <span className="text-xs text-muted-foreground" title="Negócios nesta coluna">
+          {count}
+        </span>
+      ) : null}
+      <Switch
+        checked={enabled}
+        disabled={pending}
+        aria-label={`${enabled ? "Desativar" : "Ativar"} ${defaults.label.toLowerCase()}`}
+        onCheckedChange={onToggle}
+      />
+    </li>
+  );
+}
+
 export function ConfigurePipelineStagesDialog({
   open,
   pipelineId,
@@ -263,20 +376,28 @@ export function ConfigurePipelineStagesDialog({
     ]);
     await onChanged();
   };
+  const { working, won, lost } = splitClosingStages(stages);
+  const [confirmDisable, setConfirmDisable] = React.useState<ClosingKind | null>(null);
+
+  /** Garante que ganho e perdido fiquem por último no quadro. */
+  const keepClosingLast = async () => {
+    const fresh = await pipelineStagesApi.list(pipelineId);
+    if (needsReorder(fresh)) await pipelineStagesApi.reorder(pipelineId, orderWithClosingLast(fresh));
+  };
+
   const reorder = async (event: DragEndEvent) => {
     if (!event.over || event.active.id === event.over.id) return;
     const previous = stages;
-    const next = arrayMove(
-      stages,
-      stages.findIndex((item) => item.id === event.active.id),
-      stages.findIndex((item) => item.id === event.over!.id),
-    ).map((item, position) => ({ ...item, position }));
-    setStages(next);
+    const nextWorking = arrayMove(
+      working,
+      working.findIndex((item) => item.id === event.active.id),
+      working.findIndex((item) => item.id === event.over!.id),
+    );
+    const orderedIds = orderWithClosingLast(stages, nextWorking.map((item) => item.id));
+    const byId = new Map(stages.map((item) => [item.id, item]));
+    setStages(orderedIds.map((id, position) => ({ ...byId.get(id)!, position })));
     try {
-      await pipelineStagesApi.reorder(
-        pipelineId,
-        next.map((item) => item.id),
-      );
+      await pipelineStagesApi.reorder(pipelineId, orderedIds);
       await refresh();
       toast.success("Ordem das etapas atualizada.");
     } catch {
@@ -288,7 +409,10 @@ export function ConfigurePipelineStagesDialog({
     setPending(true);
     try {
       if (stage) await pipelineStagesApi.update(pipelineId, stage.id, draft);
-      else await pipelineStagesApi.create(pipelineId, { ...draft, type: "OPEN" });
+      else {
+        await pipelineStagesApi.create(pipelineId, { ...draft, type: "OPEN" });
+        await keepClosingLast();
+      }
       await refresh();
       setEditing(null);
       setCreating(false);
@@ -296,6 +420,64 @@ export function ConfigurePipelineStagesDialog({
     } finally {
       setPending(false);
     }
+  };
+
+  const enableClosing = async (kind: ClosingKind) => {
+    const defaults = CLOSING_DEFAULTS[kind];
+    setPending(true);
+    try {
+      const archived = await pipelineStagesApi.list(pipelineId, true);
+      const previous = findArchivedClosing(archived, kind);
+      if (previous) {
+        await pipelineStagesApi.update(pipelineId, previous.id, { archived: false });
+      } else {
+        const taken = stages.some(
+          (item) => item.name.localeCompare(defaults.name, "pt-BR", { sensitivity: "base" }) === 0,
+        );
+        await pipelineStagesApi.create(pipelineId, {
+          name: taken ? `${defaults.name} (encerramento)` : defaults.name,
+          color: defaults.color,
+          type: kind,
+        });
+      }
+      await keepClosingLast();
+      await refresh();
+      toast.success(`${defaults.label} ativada.`);
+    } catch (value) {
+      toast.error(value instanceof Error ? value.message : "Não foi possível ativar a coluna.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const disableClosing = async (kind: ClosingKind) => {
+    const stage = kind === "WON" ? won : lost;
+    if (!stage) return;
+    setPending(true);
+    try {
+      // Arquivar mantém os negócios e o histórico; a coluna só sai do quadro.
+      await pipelineStagesApi.update(pipelineId, stage.id, { archived: true });
+      await refresh();
+      setConfirmDisable(null);
+      toast.success(`${CLOSING_DEFAULTS[kind].label} desativada.`);
+    } catch (value) {
+      toast.error(value instanceof Error ? value.message : "Não foi possível desativar a coluna.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const toggleClosing = (kind: ClosingKind, enabled: boolean) => {
+    if (enabled) return void enableClosing(kind);
+    const stage = kind === "WON" ? won : lost;
+    if ((stage?._count?.deals ?? 0) > 0) setConfirmDisable(kind);
+    else void disableClosing(kind);
+  };
+
+  const renameClosing = async (stage: PipelineStage, name: string) => {
+    await pipelineStagesApi.update(pipelineId, stage.id, { name });
+    await refresh();
+    toast.success("Nome da coluna atualizado.");
   };
   const remove = async () => {
     if (!deleting) return;
@@ -337,11 +519,11 @@ export function ConfigurePipelineStagesDialog({
               onDragEnd={(event) => void reorder(event)}
             >
               <SortableContext
-                items={stages.map((stage) => stage.id)}
+                items={working.map((stage) => stage.id)}
                 strategy={verticalListSortingStrategy}
               >
                 <ul className="space-y-2">
-                  {stages.map((stage) => (
+                  {working.map((stage) => (
                     <SortableStageRow
                       key={stage.id}
                       stage={stage}
@@ -365,6 +547,40 @@ export function ConfigurePipelineStagesDialog({
             <Plus className="mr-1 h-4 w-4" />
             Adicionar etapa
           </Button>
+
+          <div className="space-y-3 border-t border-border/70 pt-4">
+            <div>
+              <h3 className="text-sm font-semibold">Encerramento</h3>
+              <p className="text-xs text-muted-foreground">
+                Opcional. Ative as colunas de ganho e perdido se este pipeline usar e dê o nome que quiser.
+                Elas ficam sempre no fim do quadro.
+              </p>
+            </div>
+            {query.isLoading ? (
+              <div className="space-y-2" aria-hidden>
+                <div className="h-[58px] animate-pulse rounded-xl bg-muted/60" />
+                <div className="h-[58px] animate-pulse rounded-xl bg-muted/60" />
+              </div>
+            ) : (
+            <ul className="space-y-2">
+              {(["WON", "LOST"] as const).map((kind) => {
+                const stage = kind === "WON" ? won : lost;
+                return (
+                  <ClosingStageRow
+                    key={kind}
+                    kind={kind}
+                    stage={stage}
+                    pending={pending}
+                    existingNames={stages.filter((item) => item.id !== stage?.id).map((item) => item.name)}
+                    onToggle={(enabled) => toggleClosing(kind, enabled)}
+                    onRename={(name) => (stage ? renameClosing(stage, name) : Promise.resolve())}
+                  />
+                );
+              })}
+            </ul>
+            )}
+          </div>
+
           <div className="flex justify-end">
             <Button type="button" onClick={() => onOpenChange(false)}>
               Concluído
@@ -393,6 +609,30 @@ export function ConfigurePipelineStagesDialog({
         }}
         onSubmit={(draft) => save(draft, editing)}
       />
+      <Dialog
+        open={Boolean(confirmDisable)}
+        onOpenChange={(value) => {
+          if (!value) setConfirmDisable(null);
+        }}
+        title={confirmDisable ? `Desativar ${CLOSING_DEFAULTS[confirmDisable].label.toLowerCase()}?` : ""}
+        description={(confirmDisable === "WON" ? won : lost)?.name}
+      >
+        <div className="space-y-4">
+          <p className="text-sm">
+            Esta coluna tem {(confirmDisable === "WON" ? won : lost)?._count?.deals ?? 0} negócio(s). Eles
+            continuam salvos, com status e histórico, mas a coluna sai do quadro. Se você ativar de novo, eles
+            voltam a aparecer.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" disabled={pending} onClick={() => setConfirmDisable(null)}>
+              Cancelar
+            </Button>
+            <Button disabled={pending} onClick={() => confirmDisable && void disableClosing(confirmDisable)}>
+              {pending ? "Desativando…" : "Desativar coluna"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
       <Dialog
         open={Boolean(deleting)}
         onOpenChange={(value) => {

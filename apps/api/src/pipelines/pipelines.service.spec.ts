@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { PipelinesService } from "./pipelines.service";
 
@@ -193,6 +193,56 @@ describe("PipelinesService stage management", () => {
         probability: 40,
       }),
     });
+  });
+
+  it("restores an archived won stage when archived is false", async () => {
+    const archived = stage("stage-won", { name: "Ganho", type: "WON", position: 5, archived: true });
+    const restored = { ...archived, archived: false };
+    prisma.pipelineStage.findFirst.mockImplementation(
+      async ({ where }: { where: { id?: string; archived?: boolean; name?: unknown } }) => {
+        if (where.name) return null; // unique-name check: no active stage named "Ganho"
+        if (where.id === "stage-won" && where.archived === undefined) return archived;
+        return null;
+      },
+    );
+    prisma.pipelineStage.update.mockResolvedValue(restored);
+    prisma.auditLog.create.mockResolvedValue({});
+
+    await expect(
+      service.updateStage(organizationId, pipelineId, "stage-won", { archived: false }, userId),
+    ).resolves.toEqual(restored);
+
+    expect(prisma.pipelineStage.update).toHaveBeenCalledWith({
+      where: { id: "stage-won" },
+      data: expect.objectContaining({ archived: false, type: "WON", isWon: true, isInitial: false }),
+    });
+  });
+
+  it("refuses to restore an archived stage whose name clashes with an active stage", async () => {
+    const archived = stage("stage-won", { name: "Ganho", type: "WON", archived: true });
+    prisma.pipelineStage.findFirst.mockImplementation(
+      async ({ where }: { where: { id?: string; archived?: boolean; name?: unknown } }) => {
+        if (where.name) return { id: "stage-other" };
+        if (where.id === "stage-won" && where.archived === undefined) return archived;
+        return null;
+      },
+    );
+
+    await expect(
+      service.updateStage(organizationId, pipelineId, "stage-won", { archived: false }, userId),
+    ).rejects.toThrow(ConflictException);
+    expect(prisma.pipelineStage.update).not.toHaveBeenCalled();
+  });
+
+  it("still treats archived stages as missing for any other update", async () => {
+    prisma.pipelineStage.findFirst.mockImplementation(
+      async ({ where }: { where: { id?: string; archived?: boolean } }) =>
+        where.archived === false ? null : stage("stage-won", { archived: true }),
+    );
+
+    await expect(
+      service.updateStage(organizationId, pipelineId, "stage-won", { name: "Novo nome" }, userId),
+    ).rejects.toThrow(NotFoundException);
   });
 
   it("rejects a won or lost stage marked as initial", async () => {

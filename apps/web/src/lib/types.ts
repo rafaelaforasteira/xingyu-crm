@@ -505,6 +505,7 @@ export interface PipelineStage {
   isWon?: boolean;
   isLost?: boolean;
   maxDaysInStage?: number | null;
+  updatedAt?: string;
   _count?: {
     deals: number;
   };

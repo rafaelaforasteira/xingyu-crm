@@ -662,7 +662,12 @@ export class PipelinesService {
     userId: string,
   ) {
     await this.findOne(organizationId, pipelineId);
-    const existing = await this.requireStage(organizationId, pipelineId, stageId);
+    // Archived stages are only reachable to restore them (archived: false),
+    // e.g. re-enabling an optional won/lost column with its deals.
+    const restoring = dto.archived === false;
+    const existing = await this.requireStage(organizationId, pipelineId, stageId, {
+      includeArchived: restoring,
+    });
     if (dto.name !== undefined) {
       await this.ensureUniqueStageName(
         organizationId,
@@ -670,6 +675,8 @@ export class PipelinesService {
         this.normalizeName(dto.name),
         stageId,
       );
+    } else if (restoring && existing.archived) {
+      await this.ensureUniqueStageName(organizationId, pipelineId, existing.name, stageId);
     }
     const type = this.resolveStageType(dto, existing.type);
     const isInitial =
@@ -1002,14 +1009,19 @@ export class PipelinesService {
     return fallback;
   }
 
-  private async requireStage(organizationId: string, pipelineId: string, stageId: string) {
+  private async requireStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    options: { includeArchived?: boolean } = {},
+  ) {
     const stage = await this.prisma.pipelineStage.findFirst({
       where: {
         id: stageId,
         organizationId,
         pipelineId,
         deletedAt: null,
-        archived: false,
+        ...(options.includeArchived ? {} : { archived: false }),
       },
     });
     if (!stage) throw new NotFoundException(`Stage ${stageId} not found`);
