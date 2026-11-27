@@ -165,6 +165,7 @@ export function Popover({
         aria-modal={mobileSheet && isMobile}
         aria-label={ariaLabel ?? "Filtrar conversas"}
         data-testid="conversation-filters-popover"
+        data-floating-popover=""
         className={cn(
           "fixed z-[70] flex max-h-[min(680px,calc(100vh-96px))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl",
           contentClassName,

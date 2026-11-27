@@ -70,8 +70,8 @@ test.describe("Beta header and new lead", () => {
       fullPage: false,
     });
 
-    await page.getByLabel("Telefone *").fill(`3499${String(stamp).slice(-6)}`);
-    await expect(page.getByText(/Nenhum contato encontrado/)).toBeVisible({ timeout: 15_000 });
+    await page.getByLabel("Telefone *").fill(`34999${String(stamp).slice(-6)}`);
+    await expect(page.getByText(/Nenhum contato com esse número/)).toBeVisible({ timeout: 15_000 });
     await page.getByLabel("Nome *").fill(leadName);
     await page.getByLabel("Valor estimado").fill("150");
     await page.getByTestId("create-lead-form").getByRole("button", { name: "Criar lead" }).click();

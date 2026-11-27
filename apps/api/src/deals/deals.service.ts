@@ -20,7 +20,7 @@ import {
   WinLoseDto,
 } from "./dto/deal.dto";
 import { allocateLeadSequence, formatLeadCode } from "../common/lead-sequence";
-import { normalizePhone } from "../common/phone-normalization";
+import { normalizePhone, normalizeRealPhone } from "../common/phone-normalization";
 import { toDealResponse } from "../common/mappers";
 import { DomainEventsService } from "../automations/runtime/domain-events.service";
 import { DOMAIN_EVENT_TYPES } from "../automations/domain/constants";
@@ -279,7 +279,7 @@ export class DealsService {
   }
 
   async createManualLead(organizationId: string, dto: CreateManualLeadDto, userId: string) {
-    const phone = normalizePhone(dto.phone);
+    const phone = normalizeRealPhone(dto.phone);
     const contactName = dto.contactName.trim().replace(/\s+/g, " ");
     if (!contactName) throw new BadRequestException("Informe o nome do contato");
     const taskDueAt = dto.taskDueAt ? new Date(dto.taskDueAt) : null;

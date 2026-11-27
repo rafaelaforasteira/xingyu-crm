@@ -30,7 +30,10 @@ export function Dialog({
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
+      if (e.key !== "Escape") return;
+      // Com uma lista/popover aberto por cima, o Esc fecha só ele, não a janela.
+      if (document.querySelector("[data-floating-popover]")) return;
+      onOpenChange(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

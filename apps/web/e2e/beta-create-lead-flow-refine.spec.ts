@@ -9,8 +9,9 @@ test.describe("Refined manual lead creation", () => {
 
   test("creates and reuses a contact, then blocks an active duplicate", async ({ page }) => {
     await fs.promises.mkdir(SCREENSHOT_DIR, { recursive: true });
-    const suffix = String(Date.now()).slice(-8);
-    const phone = `47${suffix}`;
+    const suffix = String(Date.now()).slice(-7);
+    // Celular real de Joinville (DDD 47, começa com 9): o campo só aceita números válidos.
+    const phone = `4799${suffix}`;
     const contactName = `Contato E2E ${suffix}`;
 
     await page.setViewportSize({ width: 1920, height: 1080 });
@@ -19,15 +20,23 @@ test.describe("Refined manual lead creation", () => {
     const form = page.getByTestId("create-lead-form");
     await expect(form).toBeVisible();
     await expect(form.getByLabel("Nome *")).toBeVisible();
-    await expect(form.getByLabel("Etapa")).not.toHaveValue("");
+    await expect(form.getByRole("button", { name: "Etapa" })).not.toHaveText(/Selecionar/);
+
+    // Número inventado é recusado antes de criar.
+    await form.getByLabel("Telefone *").fill("12345678901");
+    await form.getByLabel("Nome *").click();
+    await expect(form.getByText(/Esse número não existe/)).toBeVisible();
+
     await form.getByLabel("Telefone *").fill(phone);
-    await expect(form.getByText(/Nenhum contato encontrado/)).toBeVisible({ timeout: 15_000 });
+    await expect(form.getByText(/Nenhum contato com esse número/)).toBeVisible({ timeout: 15_000 });
     await form.getByLabel("Nome *").fill(contactName);
-    await form.getByLabel("Valor estimado").fill("275.50");
-    await form.getByLabel("Origem informada").selectOption({ label: "Indicação" });
-    await form.getByRole("button", { name: /Adicionar anotação/ }).click();
+    await form.getByLabel("Valor estimado").fill("27550");
+    await expect(form.getByLabel("Valor estimado")).toHaveValue("R$ 275,50");
+    await form.getByRole("button", { name: "Origem informada" }).click();
+    await page.getByRole("option", { name: "Indicação" }).click();
+    await form.getByRole("button", { name: /Anotação/ }).click();
     await form.getByLabel("Anotação inicial").fill("Nota inicial criada pelo fluxo E2E.");
-    await form.getByRole("button", { name: /Adicionar tarefa/ }).click();
+    await form.getByRole("button", { name: /Tarefa/ }).click();
     await form.getByLabel("Título da tarefa").fill("Retornar contato E2E");
     await page.screenshot({
       path: path.join(SCREENSHOT_DIR, "new-contact-both-expanded-1920.png"),
