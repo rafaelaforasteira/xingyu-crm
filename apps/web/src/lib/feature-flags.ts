@@ -13,11 +13,12 @@ export const DEFAULT_APP_HOME =
  */
 /**
  * Telas onde a barra superior (busca global, Hoje, Novo…) fica escondida, mas
- * o conteúdo mantém o espaçamento normal. Etapa atual: área de Pipelines.
+ * o conteúdo mantém o espaçamento normal. Só a lista de pipelines: dentro de
+ * um pipeline a barra volta, para a pessoa poder pesquisar.
  */
 export function shouldHideTopBar(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  return pathname === "/pipelines" || pathname.startsWith("/pipelines/");
+  return pathname.replace(/\/+$/, "") === "/pipelines";
 }
 
 export function shouldHideGlobalHeader(

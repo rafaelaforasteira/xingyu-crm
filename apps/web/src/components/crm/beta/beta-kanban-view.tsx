@@ -111,7 +111,7 @@ export function BetaKanbanView({ pipelineId }: { pipelineId: string }) {
           title={data?.name ?? "Pipeline"}
           description={data?.description ?? "Quadro Kanban"}
           actions={
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <PipelineViewSwitcher
                 pipelineId={pipelineId}
                 active="kanban"
@@ -122,11 +122,14 @@ export function BetaKanbanView({ pipelineId }: { pipelineId: string }) {
               />
               <Button
                 type="button"
+                size="icon"
+                aria-label="Criar lead"
+                title="Criar lead"
+                className="h-10 w-10 shrink-0 rounded-xl"
                 disabled={!data?.stages?.length}
                 onClick={() => setCreateDealOpen(true)}
               >
-                <Plus className="h-4 w-4" />
-                Criar lead
+                <Plus className="h-5 w-5" />
               </Button>
               <PipelineStageSettingsButton
                 pipelineId={pipelineId}
@@ -149,11 +152,15 @@ export function BetaKanbanView({ pipelineId }: { pipelineId: string }) {
               Nenhum lead encontrado.
             </p>
           ) : null}
-          <KanbanBoard
-            pipeline={filteredBoard}
-            onOpenDeal={onOpenDeal}
-            selectedDealId={dealParam}
-          />
+          {/* Colunas ocupam a altura até o fim da tela (descontando topo, cabeçalho e margens). */}
+          <div className="h-[calc(100dvh-12.5rem)] min-h-[420px]" data-testid="beta-kanban-fill">
+            <KanbanBoard
+              pipeline={filteredBoard}
+              onOpenDeal={onOpenDeal}
+              selectedDealId={dealParam}
+              fillColumns
+            />
+          </div>
         </>
       ) : null}
       {data ? (

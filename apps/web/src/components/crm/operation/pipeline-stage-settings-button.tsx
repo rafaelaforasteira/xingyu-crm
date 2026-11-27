@@ -25,14 +25,13 @@ export function PipelineStageSettingsButton({
       <Button
         type="button"
         size="icon"
-        variant="outline"
-        className="h-9 w-9 shrink-0 rounded-lg"
+        className="h-10 w-10 shrink-0 rounded-xl"
         aria-label="Configurar esteira"
         title="Configurar esteira"
         data-testid="operation-configure-stages"
         onClick={() => setOpen(true)}
       >
-        <Settings className="h-4 w-4" />
+        <Settings className="h-[18px] w-[18px]" />
       </Button>
       <ConfigurePipelineStagesDialog
         open={open}

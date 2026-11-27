@@ -84,7 +84,7 @@ export function BetaConversationsView({ pipelineId }: { pipelineId: string }) {
                 title={data?.name ?? "Pipeline"}
                 description="Conversas vinculadas ao funil"
                 actions={
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <PipelineViewSwitcher
                       pipelineId={pipelineId}
                       active="conversations"
