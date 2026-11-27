@@ -67,3 +67,7 @@ Não inventamos READ/DELIVERED sem o valor no registro. Fallback sem status + me
 - Sem grupos reais (flag `shouldShowInboundSender` pronta)
 - Player de áudio ainda nativo; coordenação “um áudio por vez” documentada para evolução
 - Lightbox de imagem reutiliza Dialog existente
+
+# Ações de mídia
+
+Attachments elegíveis agora oferecem o menu **Guardar em Arquivos**. A ação cria apenas uma referência curada no deal atual, sem copiar o binário nem alterar caption, status, direção ou renderização da mensagem. Cada attachment de uma mensagem múltipla possui estado independente; texto e sticker não oferecem essa ação.

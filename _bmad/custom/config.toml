@@ -1,0 +1,11 @@
+[core]
+project_name = "BRAINX"
+user_name = "BRAINX"
+communication_language = "Portuguese"
+document_output_language = "Portuguese"
+output_folder = "_bmad-output"
+
+[modules.bmm]
+project_knowledge = "docs"
+planning_artifacts = "{project-root}/_bmad-output/planning-artifacts"
+implementation_artifacts = "{project-root}/_bmad-output/implementation-artifacts"

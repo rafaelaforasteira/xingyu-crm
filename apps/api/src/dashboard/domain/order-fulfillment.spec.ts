@@ -39,7 +39,9 @@ describe("order fulfillment metrics", () => {
   });
 
   it("aggregates delayed count as null when no expected dates exist", () => {
-    expect(aggregateDelayedCount([{ expectedAt: null }, { expectedAt: undefined }], now)).toBeNull();
+    expect(
+      aggregateDelayedCount([{ expectedAt: null }, { expectedAt: undefined }], now),
+    ).toBeNull();
   });
 
   it("counts only evaluable delayed orders", () => {

@@ -3,18 +3,17 @@
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
-import {
-  BETA_SEARCH_ARIA_LABEL,
-  BETA_SEARCH_PLACEHOLDER,
-} from "@/lib/beta-config";
+import { BETA_SEARCH_ARIA_LABEL, BETA_SEARCH_PLACEHOLDER } from "@/lib/beta-config";
 import { cn } from "@/lib/utils";
 
 const DEBOUNCE_MS = 250;
 
 export function HeaderSearch({
+  disabled = false,
   inputRef,
   className,
 }: {
+  disabled?: boolean;
   inputRef?: React.RefObject<HTMLInputElement | null>;
   className?: string;
 }) {
@@ -57,6 +56,7 @@ export function HeaderSearch({
         className,
       )}
       data-testid="beta-header-search"
+      data-header-control="search"
     >
       <label htmlFor="beta-header-search-input" className="sr-only">
         {BETA_SEARCH_ARIA_LABEL}
@@ -65,6 +65,7 @@ export function HeaderSearch({
         ref={inputRef}
         id="beta-header-search-input"
         type="search"
+        disabled={disabled}
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onFocus={() => setFocused(true)}

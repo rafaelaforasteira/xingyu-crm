@@ -30,6 +30,8 @@ coverage
 playwright-report
 test-results
 blob-report
+load-results
+*.har
 apps/web/e2e/.auth/
 
 # Database / local data
@@ -84,3 +86,10 @@ secrets
 
 apps/web/e2e/.beta-screenshots/
 apps/web/.nav-perf/
+
+# BRAINX agent-system generated/personal files
+_bmad/render/
+_bmad/config.user.toml
+_bmad/custom/*.user.toml
+__pycache__/
+*.pyc

@@ -45,9 +45,7 @@ export function KpiCard({
       {loading ? (
         <Skeleton className="mt-3 h-8 w-28" />
       ) : (
-        <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-          {value}
-        </p>
+        <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
       )}
       <div className="mt-auto space-y-1 pt-2 text-xs text-muted-foreground">
         {deltaLabel ? (
@@ -87,12 +85,7 @@ export function KpiCard({
         href={href}
         className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Card
-          className={cn(
-            cardClass,
-            "transition hover:border-primary/25 hover:shadow-card",
-          )}
-        >
+        <Card className={cn(cardClass, "transition hover:border-primary/25 hover:shadow-card")}>
           {body}
         </Card>
       </Link>

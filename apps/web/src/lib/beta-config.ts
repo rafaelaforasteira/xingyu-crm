@@ -1,5 +1,5 @@
 /**
- * Beta single-pipeline mode — one pipeline, Operação-only navigation,
+ * Legacy beta compatibility helpers. Official navigation is multi-pipeline,
  * classic pipeline UI on /operacao.
  */
 export const BETA_SINGLE_PIPELINE_MODE =

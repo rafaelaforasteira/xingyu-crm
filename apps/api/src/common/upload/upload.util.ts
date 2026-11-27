@@ -15,142 +15,142 @@ export type SavedUpload = {
   url: string;
 };
 
-const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]);
-const VIDEO_EXT = new Set([".mp4", ".webm", ".mov", ".m4v"]);
-const AUDIO_EXT = new Set([".webm", ".ogg", ".mp3", ".wav", ".m4a", ".aac"]);
-const DOC_EXT = new Set([
-  ".pdf",
-  ".doc",
-  ".docx",
-  ".xls",
-  ".xlsx",
-  ".csv",
-  ".txt",
-  ".rtf",
-]);
-
-const IMAGE_MIME = /^image\//i;
-const VIDEO_MIME = /^video\//i;
-const AUDIO_MIME = /^audio\//i;
-const DOC_MIME = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "text/csv",
-  "text/plain",
-  "application/rtf",
-  "text/rtf",
-]);
-
 export function uploadMaxBytes(): number {
   const fromEnv = Number(process.env.UPLOAD_MAX_SIZE_MB);
   const mb = Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : MAX_UPLOAD_MB;
   return mb * 1024 * 1024;
 }
 
+export function uploadLimits(files: number, fileSize = uploadMaxBytes()) {
+  return { fileSize, files, fields: 20, parts: files + 20, fieldSize: 64 * 1024 };
+}
+
 export function resolveUploadDir(): string {
   const configured = process.env.UPLOAD_DIR?.trim() || "./uploads";
-  return path.isAbsolute(configured)
-    ? configured
-    : path.resolve(process.cwd(), configured);
+  return path.isAbsolute(configured) ? configured : path.resolve(process.cwd(), configured);
 }
 
 export function ensureUploadDir(): string {
   const dir = resolveUploadDir();
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
 }
 
-function sanitizeExtension(originalName: string): string {
-  const ext = path.extname(originalName || "").toLowerCase();
-  if (!ext || ext.includes("/") || ext.includes("\\") || ext.length > 10) {
-    return "";
+type UploadType = { mime: string; kind: AttachmentKind; matches: (data: Buffer) => boolean };
+const starts = (data: Buffer, bytes: number[]) =>
+  data.subarray(0, bytes.length).equals(Buffer.from(bytes));
+const ascii = (data: Buffer, text: string, offset = 0) =>
+  data.subarray(offset, offset + text.length).toString("ascii") === text;
+const text = (data: Buffer) => {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(data);
+  } catch {
+    return false;
   }
-  return ext;
-}
+  return !data.some((byte) => byte === 0 || (byte < 32 && ![9, 10, 13].includes(byte)));
+};
+const zip = (data: Buffer) => starts(data, [0x50, 0x4b, 3, 4]);
+const compound = (data: Buffer) => starts(data, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+const mp4 = (data: Buffer) => ascii(data, "ftyp", 4);
+const ebml = (data: Buffer) => starts(data, [0x1a, 0x45, 0xdf, 0xa3]);
+const types: Record<string, UploadType> = {
+  ".png": {
+    mime: "image/png",
+    kind: "image",
+    matches: (d) => starts(d, [137, 80, 78, 71, 13, 10, 26, 10]),
+  },
+  ".jpg": { mime: "image/jpeg", kind: "image", matches: (d) => starts(d, [255, 216, 255]) },
+  ".jpeg": { mime: "image/jpeg", kind: "image", matches: (d) => starts(d, [255, 216, 255]) },
+  ".gif": {
+    mime: "image/gif",
+    kind: "image",
+    matches: (d) => ascii(d, "GIF87a") || ascii(d, "GIF89a"),
+  },
+  ".webp": {
+    mime: "image/webp",
+    kind: "image",
+    matches: (d) => ascii(d, "RIFF") && ascii(d, "WEBP", 8),
+  },
+  ".bmp": { mime: "image/bmp", kind: "image", matches: (d) => ascii(d, "BM") },
+  ".pdf": { mime: "application/pdf", kind: "document", matches: (d) => ascii(d, "%PDF-") },
+  ".txt": { mime: "text/plain", kind: "document", matches: text },
+  ".csv": { mime: "text/csv", kind: "document", matches: text },
+  ".rtf": {
+    mime: "application/rtf",
+    kind: "document",
+    matches: (d) => ascii(d, "{" + String.fromCharCode(92) + "rtf"),
+  },
+  ".doc": { mime: "application/msword", kind: "document", matches: compound },
+  ".xls": { mime: "application/vnd.ms-excel", kind: "document", matches: compound },
+  ".docx": {
+    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    kind: "document",
+    matches: zip,
+  },
+  ".xlsx": {
+    mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    kind: "document",
+    matches: zip,
+  },
+  ".mp4": { mime: "video/mp4", kind: "video", matches: mp4 },
+  ".mov": { mime: "video/quicktime", kind: "video", matches: (d) => mp4(d) || ascii(d, "moov", 4) },
+  ".m4v": { mime: "video/mp4", kind: "video", matches: mp4 },
+  ".webm": { mime: "video/webm", kind: "video", matches: ebml },
+  ".ogg": { mime: "audio/ogg", kind: "audio", matches: (d) => ascii(d, "OggS") },
+  ".wav": {
+    mime: "audio/wav",
+    kind: "audio",
+    matches: (d) => ascii(d, "RIFF") && ascii(d, "WAVE", 8),
+  },
+  ".mp3": {
+    mime: "audio/mpeg",
+    kind: "audio",
+    matches: (d) => ascii(d, "ID3") || (d[0] === 255 && (d[1] & 0xe0) === 0xe0),
+  },
+  ".m4a": { mime: "audio/mp4", kind: "audio", matches: mp4 },
+  ".aac": {
+    mime: "audio/aac",
+    kind: "audio",
+    matches: (d) => d[0] === 255 && (d[1] & 0xf6) === 0xf0,
+  },
+};
 
-function detectKind(mimeType: string, ext: string): AttachmentKind | null {
-  if (IMAGE_MIME.test(mimeType) || IMAGE_EXT.has(ext)) return "image";
-  if (VIDEO_MIME.test(mimeType) || VIDEO_EXT.has(ext)) return "video";
-  if (AUDIO_MIME.test(mimeType) || (AUDIO_EXT.has(ext) && !VIDEO_EXT.has(ext))) {
-    return "audio";
-  }
-  if (DOC_MIME.has(mimeType) || DOC_EXT.has(ext)) return "document";
-  return null;
-}
-
-function isAllowed(mimeType: string, ext: string, kind: AttachmentKind): boolean {
-  switch (kind) {
-    case "image":
-      return IMAGE_MIME.test(mimeType) && (IMAGE_EXT.has(ext) || !ext);
-    case "video":
-      return VIDEO_MIME.test(mimeType) && (VIDEO_EXT.has(ext) || !ext);
-    case "audio":
-      return AUDIO_MIME.test(mimeType) && (AUDIO_EXT.has(ext) || !ext);
-    case "document":
-      return DOC_MIME.has(mimeType) || DOC_EXT.has(ext);
-    default:
-      return false;
-  }
-}
-
-function safeDisplayName(originalName: string): string {
-  const base = path.basename(originalName || "arquivo").replace(/[^\w.\- ()[\]]+/g, "_");
-  return base.slice(0, 180) || "arquivo";
+export function validateUpload(
+  file: Express.Multer.File,
+): Omit<SavedUpload, "storedName" | "url"> & { extension: string } {
+  if (!Buffer.isBuffer(file?.buffer) || file.buffer.length === 0)
+    throw new BadRequestException("Arquivo inválido.");
+  if (Math.max(file.size || 0, file.buffer.length) > uploadMaxBytes())
+    throw new BadRequestException("Arquivo excede o limite permitido.");
+  const extension = path.extname(file.originalname || "").toLowerCase();
+  let type = types[extension];
+  let declared = (file.mimetype || "").toLowerCase();
+  if (declared === "image/jpg") declared = "image/jpeg";
+  if (declared === "text/rtf") declared = "application/rtf";
+  if (declared === "audio/x-wav") declared = "audio/wav";
+  if (extension === ".webm" && declared === "audio/webm")
+    type = { mime: "audio/webm", kind: "audio", matches: ebml };
+  if (!type || type.mime !== declared || !type.matches(file.buffer))
+    throw new BadRequestException("Tipo ou conteúdo de arquivo não permitido.");
+  const originalName = path
+    .basename((file.originalname || "arquivo").replace(/\\/g, "/"))
+    .replace(/[^\w.\- ()[\]]+/g, "_")
+    .slice(0, 180);
+  return {
+    originalName,
+    mimeType: type.mime,
+    fileSize: file.buffer.length,
+    kind: type.kind,
+    extension,
+  };
 }
 
 export function validateAndSaveUpload(file: Express.Multer.File): SavedUpload {
-  if (!file?.buffer?.length && !file?.path) {
-    throw new BadRequestException("Arquivo inválido.");
-  }
-
-  const maxBytes = uploadMaxBytes();
-  if (file.size > maxBytes) {
-    throw new BadRequestException(
-      `Arquivo excede o limite de ${Math.round(maxBytes / (1024 * 1024))} MB.`,
-    );
-  }
-
-  const mimeType = (file.mimetype || "application/octet-stream").toLowerCase();
-  const ext = sanitizeExtension(file.originalname);
-  const kind = detectKind(mimeType, ext);
-  if (!kind || !isAllowed(mimeType, ext, kind)) {
-    throw new BadRequestException("Tipo de arquivo não permitido.");
-  }
-
-  const safeExt =
-    ext ||
-    (kind === "image"
-      ? ".png"
-      : kind === "video"
-        ? ".mp4"
-        : kind === "audio"
-          ? ".webm"
-          : ".bin");
-
-  const storedName = `${randomUUID()}${safeExt}`;
+  const { extension, ...metadata } = validateUpload(file);
+  const storedName = randomUUID() + extension;
   const dir = ensureUploadDir();
-  const absolute = path.join(dir, storedName);
-  if (!absolute.startsWith(dir)) {
-    throw new BadRequestException("Caminho de arquivo inválido.");
-  }
-
-  if (file.buffer?.length) {
-    fs.writeFileSync(absolute, file.buffer);
-  } else if (file.path) {
-    fs.renameSync(file.path, absolute);
-  }
-
-  return {
-    storedName,
-    originalName: safeDisplayName(file.originalname),
-    mimeType,
-    fileSize: file.size,
-    kind,
-    url: `/api/uploads/files/${storedName}`,
-  };
+  fs.writeFileSync(path.join(dir, storedName), file.buffer, { flag: "wx", mode: 0o600 });
+  return { ...metadata, storedName, url: "/api/uploads/files/" + storedName };
 }
 
 export function formatFileSize(bytes: number | null | undefined): string {

@@ -81,7 +81,7 @@ test.describe("Beta single-pipeline UI", () => {
     await expect(page.getByText(/Contexto do lead/i).first()).toBeVisible();
     await expect(page.getByText(/^Resumo$/).first()).toBeVisible();
     await expect(page.getByText(/^Negociação$/).first()).toBeVisible();
-    await expect(page.getByText(/^Canal$/).first()).toBeVisible();
+    await expect(page.getByText(/^Rastreamento$/).first()).toBeVisible();
     await expect(page.getByText(/^Tarefas$/).first()).toBeVisible();
     await expect(page.getByText(/^Pedidos$/).first()).toBeVisible();
     await expect(page.getByText(/^Notas$/).first()).toBeVisible();

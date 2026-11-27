@@ -1,8 +1,24 @@
 import {
   buildBoardConversationSummary,
+  summarizeBoardTasks,
   normalizeBoardDealCard,
   selectRelevantConversation,
 } from "./board-deal.mapper";
+
+describe("summarizeBoardTasks", () => {
+  it("aggregates open tasks into overdue, today, future and undated without extra queries", () => {
+    const result = summarizeBoardTasks(
+      [
+        { dealId: "deal-1", dueAt: new Date("2026-08-10T12:00:00-03:00") },
+        { dealId: "deal-1", dueAt: new Date("2026-08-11T18:00:00-03:00") },
+        { dealId: "deal-1", dueAt: new Date("2026-08-20T12:00:00-03:00") },
+        { dealId: "deal-1", dueAt: null },
+      ],
+      new Date("2026-08-11T10:00:00-03:00"),
+    );
+    expect(result.get("deal-1")).toEqual({ open: 4, today: 1, overdue: 1 });
+  });
+});
 
 describe("board-deal.mapper", () => {
   it("prefers OPEN conversation then most recent lastMessageAt", () => {

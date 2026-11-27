@@ -3,7 +3,7 @@ export const DEMO_USER_ID = "demo-admin";
 export const DEMO_USER_NAME = "Raffaela";
 export const DEMO_TEAM_ID = "team-gestao";
 
-export const APP_NAME = "Xingyu CRM";
+export const APP_NAME = "BRAINX";
 export const APP_VERSION = "0.1.0";
 
 export const DEFAULT_PAGE_SIZE = 20;
@@ -42,3 +42,38 @@ export const TASK_TYPES = [
   "REPURCHASE",
   "INTERNAL",
 ] as const;
+
+/**
+ * Product access policy; roles come from the authenticated session.
+ * Non-admin users only reach their own profile page (the Tracking area that
+ * used to be their landing page was removed).
+ */
+export const NON_ADMIN_HOME_PATH = "/settings/general";
+export function isCrmAdministrator(role: string | null | undefined): boolean {
+  return role === "ADMIN";
+}
+export function canAccessCrmRoute(role: string | null | undefined, href: string): boolean {
+  if (!role) return false;
+  if (isCrmAdministrator(role)) return true;
+  const path = href.split(/[?#]/)[0]?.replace(/\/+$/, "") || "/";
+  return path === NON_ADMIN_HOME_PATH;
+}
+export function canAccessCrmApi(
+  role: string | null | undefined,
+  method: string,
+  path: string,
+): boolean {
+  if (isCrmAdministrator(role)) return true;
+  if (!role) return false;
+  const route = path
+    .split("?")[0]
+    ?.replace(/^\/api(?=\/|$)/, "")
+    .replace(/\/+$/, "");
+  return (
+    (["GET", "HEAD"].includes(method) && route?.startsWith("/uploads/files/")) ||
+    (method === "GET" && route === "/auth/me") ||
+    (method === "POST" && route === "/auth/change-password") ||
+    (["GET", "PATCH"].includes(method) && route === "/settings/profile") ||
+    (method === "POST" && route === "/settings/profile/avatar")
+  );
+}

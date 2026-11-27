@@ -1,4 +1,4 @@
-import { UnauthorizedException } from "@nestjs/common";
+import { UnauthorizedException, BadRequestException } from "@nestjs/common";
 import { AuthRole, UserStatus } from "@xingyu/database";
 import { AuthService } from "./auth.service";
 
@@ -19,9 +19,14 @@ function createService(overrides?: {
       update: jest.fn(),
       updateMany: jest.fn(),
     },
-    $transaction: jest.fn(async (ops: unknown[]) => ops),
+    $transaction: jest.fn(),
     ...(overrides?.prisma ?? {}),
   };
+
+  prisma.$transaction.mockImplementation(async (operation) =>
+    typeof operation === "function" ? operation(prisma) : Promise.all(operation),
+  );
+  prisma.userSession.updateMany.mockResolvedValue({ count: 1 });
 
   const jwt = {
     signAsync: jest.fn().mockResolvedValue("access.jwt"),
@@ -73,14 +78,19 @@ describe("AuthService", () => {
       authRole: AuthRole.ADMIN,
       status: UserStatus.ACTIVE,
     });
-    expect(publicUser).toEqual({
-      id: "u1",
-      name: "Admin",
-      email: "admin@xingyu.local",
-      role: AuthRole.ADMIN,
-      status: UserStatus.ACTIVE,
-    });
+    expect(publicUser).toEqual(
+      expect.objectContaining({
+        id: "u1",
+        name: "Admin",
+        email: "admin@xingyu.local",
+        role: AuthRole.ADMIN,
+        status: UserStatus.ACTIVE,
+        permissions: expect.arrayContaining(["users.manage", "dashboard.view"]),
+        scopes: { deals: "ALL", orders: "ALL" },
+      }),
+    );
     expect(publicUser).not.toHaveProperty("passwordHash");
+    expect(JSON.stringify(publicUser)).not.toContain("passwordHash");
   });
 
   it("login succeeds and creates session", async () => {
@@ -218,13 +228,40 @@ describe("AuthService", () => {
     );
 
     expect(result.user.role).toBe(AuthRole.ADMIN);
-    expect(prisma.userSession.update).toHaveBeenCalledWith(
+    expect(prisma.userSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "s-old" },
+        where: { id: "s-old", revokedAt: null, expiresAt: { gt: expect.any(Date) } },
         data: { revokedAt: expect.any(Date) },
       }),
     );
     expect(res.cookie).toHaveBeenCalled();
+  });
+
+  it("does not create a successor when another request already consumed the refresh token", async () => {
+    const { service, prisma } = createService();
+    prisma.userSession.findFirst.mockResolvedValue({
+      id: "old",
+      userId: "u1",
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60000),
+      user: {
+        id: "u1",
+        name: "Test",
+        email: "test@example.invalid",
+        authRole: AuthRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    prisma.userSession.updateMany.mockResolvedValue({ count: 0 });
+    const res = mockRes();
+    await expect(
+      service.refresh(
+        mockReq({ cookies: { xingyu_refresh_token: "test" } }) as never,
+        res as never,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(res.cookie).not.toHaveBeenCalled();
   });
 
   it("refresh rejects revoked token and revokes all sessions", async () => {
@@ -249,10 +286,7 @@ describe("AuthService", () => {
 
     const res = mockRes();
     await expect(
-      service.refresh(
-        mockReq({ cookies: { xingyu_refresh_token: raw } }) as never,
-        res as never,
-      ),
+      service.refresh(mockReq({ cookies: { xingyu_refresh_token: raw } }) as never, res as never),
     ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(prisma.userSession.updateMany).toHaveBeenCalled();
     expect(res.clearCookie).toHaveBeenCalled();
@@ -293,15 +327,12 @@ describe("AuthService", () => {
     const res = mockRes();
 
     await expect(
-      service.logout(
-        mockReq({ cookies: { xingyu_refresh_token: raw } }) as never,
-        res as never,
-      ),
+      service.logout(mockReq({ cookies: { xingyu_refresh_token: raw } }) as never, res as never),
     ).resolves.toEqual({ ok: true });
 
-    await expect(
-      service.logout(mockReq({ cookies: {} }) as never, res as never),
-    ).resolves.toEqual({ ok: true });
+    await expect(service.logout(mockReq({ cookies: {} }) as never, res as never)).resolves.toEqual({
+      ok: true,
+    });
   });
 
   it("me returns public user", async () => {
@@ -316,5 +347,106 @@ describe("AuthService", () => {
     const me = await service.me("u1");
     expect(me.role).toBe(AuthRole.MANAGER);
     expect(me).not.toHaveProperty("passwordHash");
+  });
+
+  it("changePassword rejects wrong current password", async () => {
+    const { service, prisma } = createService();
+    const hash = await service.hashPassword("right-password-12");
+    prisma.user.findFirst.mockResolvedValue({
+      id: "u1",
+      status: UserStatus.ACTIVE,
+      passwordHash: hash,
+    });
+    await expect(
+      service.changePassword(
+        {
+          id: "u1",
+          name: "A",
+          email: "a@x.local",
+          role: AuthRole.ADMIN,
+          status: UserStatus.ACTIVE,
+          organizationId: "o1",
+          teamId: null,
+          sessionId: "s1",
+        },
+        {
+          currentPassword: "wrong-password",
+          newPassword: "ChangeMeNow123!",
+          confirmPassword: "ChangeMeNow123!",
+        },
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("changePassword updates hash and revokes other sessions", async () => {
+    const { service, prisma } = createService();
+    const hash = await service.hashPassword("ChangeMeNow123!");
+    prisma.user.findFirst.mockResolvedValue({
+      id: "u1",
+      status: UserStatus.ACTIVE,
+      passwordHash: hash,
+    });
+    prisma.user.update.mockResolvedValue({ id: "u1" });
+    prisma.userSession.updateMany.mockResolvedValue({ count: 1 });
+    prisma.$transaction.mockImplementation(async (ops: unknown[]) => ops);
+
+    await expect(
+      service.changePassword(
+        {
+          id: "u1",
+          name: "A",
+          email: "a@x.local",
+          role: AuthRole.CONSULTANT,
+          status: UserStatus.ACTIVE,
+          organizationId: "o1",
+          teamId: null,
+          sessionId: "s-current",
+        },
+        {
+          currentPassword: "ChangeMeNow123!",
+          newPassword: "BrandNewPass123!",
+          confirmPassword: "BrandNewPass123!",
+        },
+      ),
+    ).resolves.toEqual({ ok: true });
+
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "u1" },
+        data: expect.objectContaining({ passwordHash: expect.any(String) }),
+      }),
+    );
+    expect(prisma.userSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: "u1",
+          id: { not: "s-current" },
+        }),
+      }),
+    );
+  });
+
+  it("changePassword rejects mismatched confirmation", async () => {
+    const { service } = createService();
+    await expect(
+      service.changePassword(
+        {
+          id: "u1",
+          name: "A",
+          email: "a@x.local",
+          role: AuthRole.ADMIN,
+          status: UserStatus.ACTIVE,
+          organizationId: "o1",
+          teamId: null,
+          sessionId: "s1",
+        },
+        {
+          currentPassword: "ChangeMeNow123!",
+          newPassword: "BrandNewPass123!",
+          confirmPassword: "DifferentPass12!",
+        },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

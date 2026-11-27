@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { IntegrationsController } from "./integrations.controller";
 import { IntegrationsService } from "./integrations.service";
 import { ShopifyAdapter } from "./shopify.adapter";
+import { ShopifyAdminClient } from "./shopify-admin.client";
 import { WhatsAppAdapter } from "./whatsapp.adapter";
 import { InstagramAdapter } from "./instagram.adapter";
 import { MetaAdsAdapter } from "./meta-ads.adapter";
@@ -13,6 +14,7 @@ import { WebhooksAdapter } from "./webhooks.adapter";
   providers: [
     IntegrationsService,
     ShopifyAdapter,
+    ShopifyAdminClient,
     WhatsAppAdapter,
     InstagramAdapter,
     MetaAdsAdapter,

@@ -1,7 +1,7 @@
 "use client";
 
-import { SettingsUsersPage } from "@/components/crm/settings-pages";
+import { SettingsCenter } from "@/components/crm/settings/settings-center";
 
 export default function Page() {
-  return <SettingsUsersPage />;
+  return <SettingsCenter />;
 }

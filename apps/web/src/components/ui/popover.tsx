@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 type PopoverAlign = "start" | "end";
+type PopoverSide = "bottom" | "top";
 
 export function Popover({
   open,
@@ -12,9 +13,13 @@ export function Popover({
   trigger,
   children,
   align = "end",
+  side = "bottom",
   sideOffset = 8,
+  collisionPadding = 12,
+  contentWidth = 340,
   className,
   contentClassName,
+  mobileSheet = false,
   "aria-label": ariaLabel,
 }: {
   open: boolean;
@@ -22,12 +27,17 @@ export function Popover({
   trigger: React.ReactElement;
   children: React.ReactNode;
   align?: PopoverAlign;
+  side?: PopoverSide;
   sideOffset?: number;
+  collisionPadding?: number;
+  contentWidth?: number;
   className?: string;
   contentClassName?: string;
+  mobileSheet?: boolean;
   "aria-label"?: string;
 }) {
   const triggerWrapRef = React.useRef<HTMLSpanElement | null>(null);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
   const [coords, setCoords] = React.useState<{
     top: number;
     left: number;
@@ -35,12 +45,39 @@ export function Popover({
   } | null>(null);
   const [mounted, setMounted] = React.useState(false);
   const [closeEnabled, setCloseEnabled] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!mobileSheet) return;
+    const media = window.matchMedia("(max-width: 639px)");
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [mobileSheet]);
+
+  const positioned = !!coords;
+  React.useEffect(() => {
+    if (!open || !mobileSheet || !positioned) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const frame = requestAnimationFrame(() =>
+      contentRef.current?.querySelector<HTMLElement>("button, select, [tabindex='0']")?.focus(),
+    );
+    const overflow = document.body.style.overflow;
+    if (isMobile) document.body.style.overflow = "hidden";
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
+  }, [open, mobileSheet, isMobile, positioned]);
 
   React.useEffect(() => setMounted(true), []);
 
   React.useEffect(() => {
     if (!open) {
       setCloseEnabled(false);
+      setCoords(null);
       return;
     }
     const timer = window.setTimeout(() => setCloseEnabled(true), 50);
@@ -51,16 +88,29 @@ export function Popover({
     const triggerEl = triggerWrapRef.current;
     if (!triggerEl) return;
     const rect = triggerEl.getBoundingClientRect();
-    const width = Math.min(340, Math.max(280, window.innerWidth - 24));
+    const width = Math.min(contentWidth, window.innerWidth - collisionPadding * 2);
     let left = align === "end" ? rect.right - width : rect.left;
-    left = Math.max(12, Math.min(left, window.innerWidth - width - 12));
-    let top = rect.bottom + sideOffset;
-    const maxHeight = Math.min(680, window.innerHeight - 96);
-    if (top + Math.min(maxHeight, 420) > window.innerHeight - 12) {
-      top = Math.max(12, rect.top - sideOffset - Math.min(maxHeight, 420));
+    left = Math.max(collisionPadding, Math.min(left, window.innerWidth - width - collisionPadding));
+
+    const contentHeight = contentRef.current?.getBoundingClientRect().height ?? 0;
+    const belowTop = rect.bottom + sideOffset;
+    const aboveTop = rect.top - sideOffset - contentHeight;
+    const fitsBelow = belowTop + contentHeight <= window.innerHeight - collisionPadding;
+    const fitsAbove = aboveTop >= collisionPadding;
+    let resolvedSide = side;
+    if (side === "bottom" && !fitsBelow && fitsAbove) resolvedSide = "top";
+    if (side === "top" && !fitsAbove && fitsBelow) resolvedSide = "bottom";
+
+    let top = resolvedSide === "bottom" ? belowTop : aboveTop;
+    top = Math.max(
+      collisionPadding,
+      Math.min(top, window.innerHeight - contentHeight - collisionPadding),
+    );
+    if (!contentHeight) {
+      top = resolvedSide === "bottom" ? belowTop : rect.top - sideOffset;
     }
     setCoords({ top, left, width });
-  }, [align, sideOffset]);
+  }, [align, collisionPadding, contentWidth, side, sideOffset]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -77,9 +127,21 @@ export function Popover({
   }, [open, updatePosition]);
 
   React.useEffect(() => {
+    if (!open || !contentRef.current || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => updatePosition());
+    observer.observe(contentRef.current);
+    return () => observer.disconnect();
+  }, [open, updatePosition]);
+
+  React.useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
+      if (event.key === "Escape") {
+        onOpenChange(false);
+        requestAnimationFrame(() =>
+          triggerWrapRef.current?.querySelector<HTMLElement>("button")?.focus(),
+        );
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -88,7 +150,7 @@ export function Popover({
   const content = open ? (
     <>
       <div
-        className="fixed inset-0 z-[60]"
+        className={cn("fixed inset-0 z-[60]", mobileSheet && isMobile && "bg-foreground/20")}
         aria-hidden
         data-testid="conversation-filters-backdrop"
         onMouseDown={(event) => {
@@ -98,30 +160,53 @@ export function Popover({
         }}
       />
       <div
+        ref={contentRef}
         role="dialog"
-        aria-modal="false"
+        aria-modal={mobileSheet && isMobile}
         aria-label={ariaLabel ?? "Filtrar conversas"}
         data-testid="conversation-filters-popover"
+        data-floating-popover=""
         className={cn(
           "fixed z-[70] flex max-h-[min(680px,calc(100vh-96px))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl",
           contentClassName,
+          mobileSheet && isMobile && "rounded-b-none",
         )}
         style={
-          coords
-            ? {
-                top: coords.top,
-                left: coords.left,
-                width: coords.width,
-                maxWidth: "calc(100vw - 24px)",
-              }
-            : {
-                top: 72,
-                right: 16,
-                width: 340,
-                maxWidth: "calc(100vw - 24px)",
-              }
+          mobileSheet && isMobile
+            ? { bottom: 0, left: 0, width: "100%", maxHeight: "calc(100dvh - 24px)" }
+            : coords
+              ? {
+                  top: coords.top,
+                  left: coords.left,
+                  width: coords.width,
+                  maxWidth: "calc(100vw - 24px)",
+                }
+              : {
+                  top: 72,
+                  right: 16,
+                  width: contentWidth,
+                  maxWidth: "calc(100vw - 24px)",
+                  visibility: "hidden",
+                }
         }
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (!mobileSheet || event.key !== "Tab") return;
+          const focusable = Array.from(
+            contentRef.current?.querySelectorAll<HTMLElement>(
+              "button:not(:disabled), select:not(:disabled), [tabindex='0']",
+            ) ?? [],
+          );
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
       >
         {children}
       </div>

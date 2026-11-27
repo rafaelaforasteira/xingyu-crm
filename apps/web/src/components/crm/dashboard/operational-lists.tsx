@@ -135,7 +135,10 @@ export function TodayTasks({
           <CardTitle>Trabalho de hoje</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">Tarefas do dia e atrasadas</p>
         </div>
-        <Link href="/tasks?view=today" className="text-sm font-semibold text-primary hover:underline">
+        <Link
+          href="/tasks?view=today"
+          className="text-sm font-semibold text-primary hover:underline"
+        >
           Abrir tarefas
         </Link>
       </CardHeader>
@@ -238,7 +241,7 @@ export function WaitingConversations({
             const channelName =
               typeof conversation.channel === "string"
                 ? conversation.channel
-                : conversation.channel?.name ?? "Canal";
+                : (conversation.channel?.name ?? "Canal");
             const preview =
               conversation.lastMessagePreview ??
               conversation.messages?.[0]?.body ??

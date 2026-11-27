@@ -11,11 +11,22 @@ export const DEFAULT_APP_HOME =
  * Hide the global top bar on the operational workspace only.
  * Beta single-pipeline restores the classic Header on /operacao.
  */
+/**
+ * Telas onde a barra superior (busca global, Hoje, Novo…) fica escondida, mas
+ * o conteúdo mantém o espaçamento normal. Só a lista de pipelines: dentro de
+ * um pipeline a barra volta, para a pessoa poder pesquisar.
+ */
+export function shouldHideTopBar(pathname: string | null | undefined): boolean {
+  if (!pathname) return false;
+  return pathname.replace(/\/+$/, "") === "/pipelines";
+}
+
 export function shouldHideGlobalHeader(
   pathname: string | null | undefined,
   coreMode = CORE_OPERATION_MODE,
   betaMode = BETA_SINGLE_PIPELINE_MODE,
 ): boolean {
+  if (pathname && /^\/automations\/(?!new(?:\/|$))[^/]+/.test(pathname)) return true;
   if (betaMode) return false;
   if (!coreMode || !pathname) return false;
   return pathname === "/operacao" || pathname.startsWith("/operacao/");

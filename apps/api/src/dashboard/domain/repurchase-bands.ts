@@ -4,12 +4,7 @@
  * Reactivation (typically >120 days / inactive status) must stay separate.
  */
 
-export type RepurchaseBandId =
-  | "0_30"
-  | "31_60"
-  | "61_90"
-  | "91_120"
-  | "120_plus";
+export type RepurchaseBandId = "0_30" | "31_60" | "61_90" | "91_120" | "120_plus";
 
 export interface RepurchaseBand {
   id: RepurchaseBandId;
@@ -78,5 +73,7 @@ export function repurchaseReadyDescription(): string {
   return `Faixas incluídas: ${DASHBOARD_REPURCHASE_READY_BAND_IDS.map((id) => {
     const band = REPURCHASE_BANDS.find((item) => item.id === id);
     return band?.label ?? id;
-  }).join(", ")} (somente a partir de ${DASHBOARD_REPURCHASE_READY_MIN_DAYS} dias), com pelo menos um pedido.`;
+  }).join(
+    ", ",
+  )} (somente a partir de ${DASHBOARD_REPURCHASE_READY_MIN_DAYS} dias), com pelo menos um pedido.`;
 }

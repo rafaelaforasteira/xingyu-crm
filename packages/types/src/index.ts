@@ -1,3 +1,5 @@
+export type * from "./recovery";
+
 export type Paginated<T> = {
   data: T[];
   meta: {

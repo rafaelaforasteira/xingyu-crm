@@ -18,6 +18,7 @@ import { Transform, Type } from "class-transformer";
 
 export const PIPELINE_DUPLICATE_STRATEGIES = ["MERGE", "CREATE_NEW", "REJECT"] as const;
 export const PIPELINE_ROUTING_MODES = ["PIPELINE_DEFAULTS", "FIXED", "ROUND_ROBIN"] as const;
+export const CHANNEL_ACCESS_MODES = ["ORGANIZATION", "PIPELINE", "PERSONAL"] as const;
 
 export type PipelineDuplicateStrategyValue = (typeof PIPELINE_DUPLICATE_STRATEGIES)[number];
 export type PipelineRoutingModeValue = (typeof PIPELINE_ROUTING_MODES)[number];
@@ -112,6 +113,19 @@ export class ConnectPipelineChannelDto {
 export class UpdatePipelineChannelDto extends PartialType(
   OmitType(ConnectPipelineChannelDto, ["channelId"] as const),
 ) {}
+
+export class UpdateChannelOwnershipDto {
+  @ApiProperty({ enum: CHANNEL_ACCESS_MODES })
+  @IsIn(CHANNEL_ACCESS_MODES)
+  accessMode!: (typeof CHANNEL_ACCESS_MODES)[number];
+
+  @ApiPropertyOptional({ nullable: true, description: "Required for PERSONAL channels" })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(191)
+  ownerUserId?: string | null;
+}
 
 function trimmedString({ value }: { value: unknown }) {
   return typeof value === "string" ? value.trim() : value;

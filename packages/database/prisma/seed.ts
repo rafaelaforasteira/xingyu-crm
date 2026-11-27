@@ -688,6 +688,7 @@ async function main() {
     description: string;
     color: string;
     isDefault?: boolean;
+    archived?: boolean;
     position: number;
     stages: StageDef[];
   }> = [
@@ -696,7 +697,7 @@ async function main() {
       name: "Novos leads",
       description: "Entrada de leads WhatsApp, Instagram e site",
       color: "#16A34A",
-      isDefault: true,
+      archived: true,
       position: 0,
       stages: [
         { id: "st-novos-novo", name: "Novo", position: 0, color: "#86EFAC", maxDaysInStage: 1 },
@@ -707,10 +708,11 @@ async function main() {
     },
     {
       id: "pipe-comercial",
-      name: "Comercial principal",
+      name: "COMERCIAL PRINCIPAL",
       description: "Funil principal de vendas B2B",
       color: "#7C3AED",
-      position: 1,
+      isDefault: true,
+      position: 0,
       stages: [
         { id: "st-com-qualificacao", name: "Qualificação", position: 0, color: "#C4B5FD", maxDaysInStage: 5 },
         { id: "st-com-negociacao", name: "Negociação", position: 1, color: "#A78BFA", maxDaysInStage: 7 },
@@ -725,6 +727,7 @@ async function main() {
       name: "Compras do site",
       description: "Pedidos e checkouts Shopify",
       color: "#0891B2",
+      archived: true,
       position: 2,
       stages: [
         { id: "st-site-carrinho", name: "Carrinho", position: 0, color: "#67E8F9", maxDaysInStage: 2 },
@@ -739,6 +742,7 @@ async function main() {
       name: "Aguardando pagamento",
       description: "Links PIX, boleto e cartão pendentes",
       color: "#CA8A04",
+      archived: true,
       position: 3,
       stages: [
         { id: "st-pag-link", name: "Link enviado", position: 0, color: "#FDE047", maxDaysInStage: 2 },
@@ -749,10 +753,10 @@ async function main() {
     },
     {
       id: "pipe-posvenda",
-      name: "Pós-venda",
+      name: "PÓS-VENDA",
       description: "Acompanhamento pós-entrega",
       color: "#2563EB",
-      position: 4,
+      position: 1,
       stages: [
         { id: "st-pv-entregue", name: "Entregue", position: 0, color: "#93C5FD" },
         { id: "st-pv-followup", name: "Follow-up", position: 1, color: "#60A5FA", maxDaysInStage: 7 },
@@ -765,6 +769,7 @@ async function main() {
       name: "Recompra",
       description: "Clientes prontos para novo pedido",
       color: "#059669",
+      archived: true,
       position: 5,
       stages: [
         { id: "st-rc-candidato", name: "Candidato", position: 0, color: "#6EE7B7" },
@@ -779,6 +784,7 @@ async function main() {
       name: "Reativação",
       description: "Clientes inativos 60+ dias",
       color: "#EA580C",
+      archived: true,
       position: 6,
       stages: [
         { id: "st-ra-inativo", name: "Inativo", position: 0, color: "#FDBA74" },
@@ -793,6 +799,7 @@ async function main() {
       name: "Garantias e ocorrências",
       description: "Defeitos, faltas e reclamações",
       color: "#DC2626",
+      archived: true,
       position: 7,
       stages: [
         { id: "st-gar-aberto", name: "Aberto", position: 0, color: "#FCA5A5", maxDaysInStage: 2 },
@@ -813,6 +820,7 @@ async function main() {
         description: p.description,
         color: p.color,
         isDefault: p.isDefault ?? false,
+        archived: p.archived ?? false,
         position: p.position,
         createdById: "demo-admin",
         stages: {

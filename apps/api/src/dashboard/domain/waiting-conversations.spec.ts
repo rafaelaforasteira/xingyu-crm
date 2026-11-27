@@ -8,27 +8,27 @@ import {
 
 describe("isConversationAwaitingReply", () => {
   it("marks open conversations whose last message is from the client", () => {
-    expect(
-      isConversationAwaitingReply({ status: "OPEN", lastMessageDirection: "INBOUND" }),
-    ).toBe(true);
+    expect(isConversationAwaitingReply({ status: "OPEN", lastMessageDirection: "INBOUND" })).toBe(
+      true,
+    );
   });
 
   it("does not mark conversations already answered by the team", () => {
-    expect(
-      isConversationAwaitingReply({ status: "OPEN", lastMessageDirection: "OUTBOUND" }),
-    ).toBe(false);
+    expect(isConversationAwaitingReply({ status: "OPEN", lastMessageDirection: "OUTBOUND" })).toBe(
+      false,
+    );
   });
 
   it("still awaits reply when the conversation is read (unread is irrelevant)", () => {
-    expect(
-      isConversationAwaitingReply({ status: "OPEN", lastMessageDirection: "INBOUND" }),
-    ).toBe(true);
+    expect(isConversationAwaitingReply({ status: "OPEN", lastMessageDirection: "INBOUND" })).toBe(
+      true,
+    );
   });
 
   it("ignores closed conversations", () => {
-    expect(
-      isConversationAwaitingReply({ status: "CLOSED", lastMessageDirection: "INBOUND" }),
-    ).toBe(false);
+    expect(isConversationAwaitingReply({ status: "CLOSED", lastMessageDirection: "INBOUND" })).toBe(
+      false,
+    );
   });
 });
 

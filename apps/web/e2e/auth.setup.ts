@@ -16,9 +16,9 @@ setup("authenticate as admin", async ({ page }) => {
   });
   expect(login.ok(), `login failed: ${login.status()} ${await login.text()}`).toBeTruthy();
 
-  await page.goto("/operacao");
-  await expect(page).toHaveURL(/\/operacao/, { timeout: 60_000 });
-  await expect(page.getByTestId("beta-operation-page")).toBeVisible({
+  await page.goto("/pipelines");
+  await expect(page).toHaveURL(/\/pipelines$/, { timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Pipelines", exact: true })).toBeVisible({
     timeout: 30_000,
   });
 

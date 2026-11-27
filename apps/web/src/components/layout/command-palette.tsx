@@ -4,20 +4,18 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
-import {
-  Building2,
-  CheckSquare,
-  Kanban,
-  Search,
-  ShoppingCart,
-  Users,
-} from "lucide-react";
+import { Building2, CheckSquare, Kanban, Search, ShoppingCart, Users } from "lucide-react";
 import { searchApi } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { useUiStore } from "@/stores/ui";
 import { cn } from "@/lib/utils";
 
+import { useAuth } from "@/components/auth/auth-provider";
+import { canOpenPath } from "@/lib/access-policy";
+
 export function CommandPalette() {
+  const { user } = useAuth();
+  const allowed = canOpenPath(user, "/operacao");
   const open = useUiStore((s) => s.commandOpen);
   const setOpen = useUiStore((s) => s.setCommandOpen);
   const router = useRouter();
@@ -27,7 +25,7 @@ export function CommandPalette() {
   const { data, isFetching } = useQuery({
     queryKey: queryKeys.search(q),
     queryFn: () => searchApi.search(q),
-    enabled: open && q.trim().length >= 2,
+    enabled: allowed && open && q.trim().length >= 2,
     retry: false,
   });
 
@@ -66,7 +64,7 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, setOpen]);
 
-  if (!open) return null;
+  if (!open || !allowed) return null;
 
   const go = (href: string) => {
     setOpen(false);

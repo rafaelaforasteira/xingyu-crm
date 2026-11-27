@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  Logger,
-} from "@nestjs/common";
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { AuthRole, UserStatus } from "@xingyu/database";
@@ -19,10 +15,13 @@ import {
   refreshTokenExpiresIn,
   refreshTokenMaxAgeMs,
 } from "./cookie.config";
-import type { AccessTokenPayload, PublicUser } from "./types";
+import type { AccessTokenPayload, AuthenticatedUser, PublicUser } from "./types";
 import type { LoginDto } from "./dto/login.dto";
+import type { ChangePasswordDto } from "./dto/change-password.dto";
+import { accessManifest } from "./access-policy";
 
 const INVALID_CREDENTIALS = "E-mail ou senha inválidos.";
+const WRONG_CURRENT_PASSWORD = "Senha atual incorreta.";
 
 const ARGON2_OPTIONS = {
   type: argon2.argon2id as 0 | 1 | 2,
@@ -51,13 +50,26 @@ export class AuthService {
     email: string;
     authRole: AuthRole;
     status: UserStatus;
+    phone?: string | null;
+    avatarUrl?: string | null;
+    title?: string | null;
+    locale?: string;
+    timezone?: string;
   }): PublicUser {
+    const access = accessManifest(user.authRole);
     return {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.authRole,
       status: user.status,
+      phone: user.phone ?? null,
+      avatarUrl: user.avatarUrl ?? null,
+      title: user.title ?? null,
+      locale: user.locale ?? "pt-BR",
+      timezone: user.timezone ?? "America/Sao_Paulo",
+      permissions: access.permissions,
+      scopes: access.scopes,
     };
   }
 
@@ -103,15 +115,8 @@ export class AuthService {
     };
   }
 
-  setAuthCookies(
-    res: Response,
-    tokens: { accessToken: string; refreshToken: string },
-  ): void {
-    res.cookie(
-      AUTH_COOKIE.access,
-      tokens.accessToken,
-      this.cookieOptions(accessTokenMaxAgeMs()),
-    );
+  setAuthCookies(res: Response, tokens: { accessToken: string; refreshToken: string }): void {
+    res.cookie(AUTH_COOKIE.access, tokens.accessToken, this.cookieOptions(accessTokenMaxAgeMs()));
     res.cookie(
       AUTH_COOKIE.refresh,
       tokens.refreshToken,
@@ -144,11 +149,7 @@ export class AuthService {
     return { userAgent, ipAddress: ipAddress?.slice(0, 128) };
   }
 
-  async login(
-    dto: LoginDto,
-    req: Request,
-    res: Response,
-  ): Promise<{ user: PublicUser }> {
+  async login(dto: LoginDto, req: Request, res: Response): Promise<{ user: PublicUser }> {
     const email = this.normalizeEmail(dto.email);
     const user = await this.prisma.user.findFirst({
       where: { email, deletedAt: null },
@@ -158,6 +159,11 @@ export class AuthService {
         email: true,
         authRole: true,
         status: true,
+        phone: true,
+        avatarUrl: true,
+        title: true,
+        locale: true,
+        timezone: true,
         passwordHash: true,
       },
     });
@@ -211,8 +217,9 @@ export class AuthService {
   }
 
   async refresh(req: Request, res: Response): Promise<{ user: PublicUser }> {
-    const rawRefresh = (req as Request & { cookies?: Record<string, string> })
-      .cookies?.[AUTH_COOKIE.refresh];
+    const rawRefresh = (req as Request & { cookies?: Record<string, string> }).cookies?.[
+      AUTH_COOKIE.refresh
+    ];
     if (!rawRefresh) {
       throw new UnauthorizedException("Sessão não autenticada.");
     }
@@ -275,12 +282,19 @@ export class AuthService {
     const meta = this.clientMeta(req);
     const expiresAt = new Date(Date.now() + refreshTokenMaxAgeMs());
 
-    await this.prisma.$transaction([
-      this.prisma.userSession.update({
-        where: { id: session.id },
+    // Compare-and-swap inside the same transaction as successor creation. Only one
+    // concurrent request can consume this refresh token, including across processes.
+    const newSession = await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.userSession.updateMany({
+        where: { id: session.id, revokedAt: null, expiresAt: { gt: new Date() } },
         data: { revokedAt: new Date() },
-      }),
-      this.prisma.userSession.create({
+      });
+      if (consumed.count !== 1) {
+        // Do not clear cookies here: a successful concurrent response may already
+        // have installed its successor in the same browser.
+        throw new UnauthorizedException("Sessão já renovada ou revogada.");
+      }
+      return tx.userSession.create({
         data: {
           userId: user.id,
           refreshTokenHash: nextHash,
@@ -288,12 +302,7 @@ export class AuthService {
           ipAddress: meta.ipAddress ?? session.ipAddress,
           expiresAt,
         },
-      }),
-    ]);
-
-    const newSession = await this.prisma.userSession.findFirstOrThrow({
-      where: { userId: user.id, refreshTokenHash: nextHash, revokedAt: null },
-      orderBy: { createdAt: "desc" },
+      });
     });
 
     const accessToken = await this.signAccessToken({
@@ -351,12 +360,63 @@ export class AuthService {
         email: true,
         authRole: true,
         status: true,
+        phone: true,
+        avatarUrl: true,
+        title: true,
+        locale: true,
+        timezone: true,
       },
     });
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException("Usuário indisponível.");
     }
     return this.toPublicUser(user);
+  }
+
+  async changePassword(user: AuthenticatedUser, dto: ChangePasswordDto) {
+    if (dto.newPassword !== dto.confirmPassword) {
+      throw new BadRequestException("A confirmação da nova senha não confere.");
+    }
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException("A nova senha deve ser diferente da atual.");
+    }
+
+    const record = await this.prisma.user.findFirst({
+      where: { id: user.id, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        passwordHash: true,
+      },
+    });
+
+    if (!record?.passwordHash || record.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException("Usuário indisponível.");
+    }
+
+    const valid = await this.verifyPassword(record.passwordHash, dto.currentPassword);
+    if (!valid) {
+      throw new UnauthorizedException(WRONG_CURRENT_PASSWORD);
+    }
+
+    const passwordHash = await this.hashPassword(dto.newPassword);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      }),
+      this.prisma.userSession.updateMany({
+        where: {
+          userId: user.id,
+          revokedAt: null,
+          ...(user.sessionId ? { id: { not: user.sessionId } } : {}),
+        },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+
+    this.logger.log(`Password changed userId=${user.id}`);
+    return { ok: true as const };
   }
 
   /** Exposes refresh TTL config for diagnostics without leaking secrets. */

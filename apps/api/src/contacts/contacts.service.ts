@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
@@ -89,31 +85,54 @@ export class ContactsService {
   }
 
   async create(organizationId: string, dto: CreateContactDto, userId: string) {
-    const { tagIds, notes, ...data } = dto as CreateContactDto & { notes?: string; tagIds?: string[] };
-    const created = await this.prisma.contact.create({
-      data: {
-        ...data,
-        observations: notes,
-        organizationId,
-        ownerId: data.ownerId ?? userId,
-        type: data.type as never,
-        status: data.status as never,
-        ...(tagIds?.length
-          ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } }
-          : {}),
-      } as never,
-      include: {
-        tags: { include: { tag: true } },
-        company: true,
-        owner: { select: { id: true, name: true } },
-      },
+    const { tagIds, notes, ...data } = dto as CreateContactDto & {
+      notes?: string;
+      tagIds?: string[];
+    };
+    const created = await this.prisma.$transaction(async (tx) => {
+      const contact = await tx.contact.create({
+        data: {
+          ...data,
+          observations: notes,
+          organizationId,
+          ownerId: data.ownerId ?? userId,
+          type: data.type as never,
+          status: data.status as never,
+          ...(tagIds?.length ? { tags: { create: tagIds.map((tagId) => ({ tagId })) } } : {}),
+        } as never,
+        include: {
+          tags: { include: { tag: true } },
+          company: true,
+          owner: { select: { id: true, name: true } },
+        },
+      });
+      await tx.automationDomainEvent.create({
+        data: {
+          organizationId,
+          eventType: "contact.created",
+          aggregateType: "contact",
+          aggregateId: contact.id,
+          origin: "USER",
+          actorId: userId,
+          payload: { contactId: contact.id, ownerId: contact.ownerId },
+          subjectType: "contact",
+          subjectId: contact.id,
+        },
+      });
+      return contact;
     });
     return toContactResponse(created);
   }
 
   async update(organizationId: string, id: string, dto: UpdateContactDto) {
-    await this.requireContact(organizationId, id);
-    const { tagIds, notes, ...data } = dto as UpdateContactDto & { notes?: string; tagIds?: string[] };
+    const previous = await this.prisma.contact.findFirst({
+      where: { id, organizationId, ...notDeleted },
+    });
+    if (!previous) throw new NotFoundException(`Contact ${id} not found`);
+    const { tagIds, notes, ...data } = dto as UpdateContactDto & {
+      notes?: string;
+      tagIds?: string[];
+    };
     const updated = await this.prisma.contact.update({
       where: { id },
       data: {
@@ -136,6 +155,27 @@ export class ContactsService {
         owner: { select: { id: true, name: true } },
       },
     });
+    const changedFields = Object.keys({ ...data, ...(notes !== undefined ? { observations: notes } : {}) })
+      .filter((field) => previous[field as keyof typeof previous] !== updated[field as keyof typeof updated]);
+    if (changedFields.length) {
+      await this.prisma.automationDomainEvent.create({
+        data: {
+          organizationId,
+          eventType: "contact.updated",
+          aggregateType: "contact",
+          aggregateId: updated.id,
+          origin: "USER",
+          payload: {
+            contactId: updated.id,
+            changedFields,
+            before: Object.fromEntries(changedFields.map((field) => [field, previous[field as keyof typeof previous]])),
+            after: Object.fromEntries(changedFields.map((field) => [field, updated[field as keyof typeof updated]])),
+          },
+          subjectType: "contact",
+          subjectId: updated.id,
+        },
+      });
+    }
     return toContactResponse(updated);
   }
 
@@ -158,21 +198,28 @@ export class ContactsService {
 
   async bulkTags(organizationId: string, dto: BulkTagsDto) {
     const mode = dto.mode ?? "add";
+    const uniqueTagIds = [...new Set(dto.tagIds)];
+    const validTags = await this.prisma.tag.count({
+      where: { id: { in: uniqueTagIds }, organizationId, ...notDeleted },
+    });
+    if (validTags !== uniqueTagIds.length) {
+      throw new BadRequestException("One or more tagIds are invalid");
+    }
     for (const contactId of dto.contactIds) {
       await this.requireContact(organizationId, contactId);
       if (mode === "set") {
         await this.prisma.contactTag.deleteMany({ where: { contactId } });
         await this.prisma.contactTag.createMany({
-          data: dto.tagIds.map((tagId) => ({ contactId, tagId })),
+          data: uniqueTagIds.map((tagId) => ({ contactId, tagId })),
           skipDuplicates: true,
         });
       } else if (mode === "remove") {
         await this.prisma.contactTag.deleteMany({
-          where: { contactId, tagId: { in: dto.tagIds } },
+          where: { contactId, tagId: { in: uniqueTagIds } },
         });
       } else {
         await this.prisma.contactTag.createMany({
-          data: dto.tagIds.map((tagId) => ({ contactId, tagId })),
+          data: uniqueTagIds.map((tagId) => ({ contactId, tagId })),
           skipDuplicates: true,
         });
       }

@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@xingyu/database";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { ConnectionLifecycleStatus, Prisma } from "@xingyu/database";
+import { ConnectionProviderRegistry } from "../connections/providers/connection-provider.registry";
 import { PrismaService } from "../prisma/prisma.service";
 import { paginate, paginationArgs } from "../common/types/paginated-response";
 import { notDeleted, softDeleteData } from "../common/utils/soft-delete";
@@ -12,7 +18,7 @@ import {
   mergeConversationTags,
 } from "../common/mappers/conversation.mapper";
 import { toPipelineResponse, toPipelineStageResponse } from "../common/mappers/pipeline.mapper";
-import { validateAndSaveUpload } from "../common/upload/upload.util";
+import { validateAndSaveUpload, validateUpload } from "../common/upload/upload.util";
 import {
   CreateConversationDto,
   UpdateConversationDto,
@@ -93,7 +99,10 @@ const DETAIL_INCLUDE = {
 
 @Injectable()
 export class ConversationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly providers: ConnectionProviderRegistry,
+  ) {}
 
   private async assertConversationExists(organizationId: string, id: string) {
     const conversation = await this.prisma.conversation.findFirst({
@@ -122,20 +131,13 @@ export class ConversationsService {
     organizationId: string,
     query: QueryConversationsDto,
   ): Prisma.ConversationWhereInput {
-    const channelIds =
-      query.channels?.length
-        ? query.channels
-        : query.channelId || query.integrationAccountId
-          ? [query.channelId ?? query.integrationAccountId!]
-          : [];
-    const stageIds =
-      query.stages?.length
-        ? query.stages
-        : query.stageId
-          ? [query.stageId]
-          : [];
-    const tagIds =
-      query.tags?.length ? query.tags : query.tagId ? [query.tagId] : [];
+    const channelIds = query.channels?.length
+      ? query.channels
+      : query.channelId || query.integrationAccountId
+        ? [query.channelId ?? query.integrationAccountId!]
+        : [];
+    const stageIds = query.stages?.length ? query.stages : query.stageId ? [query.stageId] : [];
+    const tagIds = query.tags?.length ? query.tags : query.tagId ? [query.tagId] : [];
 
     const andFilters: Prisma.ConversationWhereInput[] = [];
 
@@ -284,9 +286,7 @@ export class ConversationsService {
     return rows.map((row) => row.id);
   }
 
-  private async loadLastMessageDirections(
-    conversationIds: string[],
-  ): Promise<Map<string, string>> {
+  private async loadLastMessageDirections(conversationIds: string[]): Promise<Map<string, string>> {
     const map = new Map<string, string>();
     if (!conversationIds.length) return map;
     const messages = await this.prisma.message.findMany({
@@ -313,16 +313,9 @@ export class ConversationsService {
       lastMessageAt: Date | null;
       updatedAt: Date;
     },
-  >(
-    candidates: T[],
-    directions: Map<string, string>,
-  ): T[] {
+  >(candidates: T[], directions: Map<string, string>): T[] {
     return candidates.slice().sort((left, right) => {
-      const leftGroup = this.priorityGroup(
-        left.status,
-        left.unreadCount,
-        directions.get(left.id),
-      );
+      const leftGroup = this.priorityGroup(left.status, left.unreadCount, directions.get(left.id));
       const rightGroup = this.priorityGroup(
         right.status,
         right.unreadCount,
@@ -339,11 +332,7 @@ export class ConversationsService {
     });
   }
 
-  private priorityGroup(
-    status: string,
-    unreadCount: number,
-    direction?: string,
-  ): number {
+  private priorityGroup(status: string, unreadCount: number, direction?: string): number {
     const closed = status === "RESOLVED" || status === "ARCHIVED";
     if (closed) return 5;
     if (direction === "INBOUND" && unreadCount > 0) return 1;
@@ -401,20 +390,16 @@ export class ConversationsService {
     return { AND: [where, cursorFilter] };
   }
 
-  async findAll(organizationId: string, query: QueryConversationsDto) {
+  async findAll(organizationId: string, query: QueryConversationsDto, allowedPipelineIds?: string[] | null, accessWhere?: Prisma.ConversationWhereInput) {
     const pageSize = query.pageSize ?? 20;
     let where = this.buildListWhere(organizationId, query);
+    if (allowedPipelineIds) where = { AND: [where, { OR: [{ deal: { is: null } }, { deal: { pipelineId: { in: allowedPipelineIds } } }] }] };
+    if (accessWhere && Object.keys(accessWhere).length) where = { AND: [where, accessWhere] };
 
-    const replyStatus =
-      query.replyStatus ??
-      (query.awaitingReply ? ("mine" as const) : undefined);
+    const replyStatus = query.replyStatus ?? (query.awaitingReply ? ("mine" as const) : undefined);
     if (replyStatus === "mine" || replyStatus === "customer") {
-      const direction =
-        replyStatus === "mine" ? ("INBOUND" as const) : ("OUTBOUND" as const);
-      const ids = await this.filterIdsByLastMessageDirection(
-        organizationId,
-        direction,
-      );
+      const direction = replyStatus === "mine" ? ("INBOUND" as const) : ("OUTBOUND" as const);
+      const ids = await this.filterIdsByLastMessageDirection(organizationId, direction);
       where = {
         AND: [where, { id: { in: ids } }],
       };
@@ -464,9 +449,7 @@ export class ConversationsService {
         updatedAt: true,
       },
     });
-    const directions = await this.loadLastMessageDirections(
-      candidates.map((row) => row.id),
-    );
+    const directions = await this.loadLastMessageDirections(candidates.map((row) => row.id));
     const sorted = this.sortCandidatesByPriority(candidates, directions);
     const total = sorted.length;
     const pageIds = sorted.slice(skip, skip + take).map((row) => row.id);
@@ -606,28 +589,26 @@ export class ConversationsService {
     const noteScope = {
       organizationId,
       ...notDeleted,
-      OR: [
-        ...(contactId ? [{ contactId }] : []),
-        ...(dealId ? [{ dealId }] : []),
-      ],
+      OR: [...(contactId ? [{ contactId }] : []), ...(dealId ? [{ dealId }] : [])],
     };
 
-    const taskScope = {
+    const taskScope: Prisma.TaskWhereInput = {
       organizationId,
       ...notDeleted,
+      ...(dealId ? { dealId } : contactId ? { contactId } : { id: "__none__" }),
+    };
+    const openTaskScope: Prisma.TaskWhereInput = {
+      ...taskScope,
       OR: [
-        ...(contactId ? [{ contactId }] : []),
-        ...(dealId ? [{ dealId }] : []),
+        { statusDefinition: { category: { not: "DONE" } } },
+        { statusDefinitionId: null, status: { notIn: ["COMPLETED", "CANCELLED"] } },
       ],
     };
 
     const orderScope = {
       organizationId,
       ...notDeleted,
-      OR: [
-        ...(contactId ? [{ contactId }] : []),
-        ...(dealId ? [{ dealId }] : []),
-      ],
+      OR: [...(contactId ? [{ contactId }] : []), ...(dealId ? [{ dealId }] : [])],
     };
 
     const [
@@ -639,21 +620,20 @@ export class ConversationsService {
       filesCount,
       nextTask,
       lastOrder,
+      firstContactMessage,
+      leadAttribution,
     ] = await Promise.all([
       this.latestMessagePreview(id),
       this.prisma.note.count({ where: noteScope }),
-      this.prisma.task.count({ where: taskScope }),
+      this.prisma.task.count({ where: openTaskScope }),
       this.prisma.order.count({ where: orderScope }),
       this.prisma.activity.count({ where: { organizationId, ...entityScope } }),
-      this.prisma.messageAttachment.count({
-        where: {
-          message: { conversationId: id, ...notDeleted },
-        },
-      }),
+      dealId
+        ? this.prisma.leadFile.count({ where: { organizationId, dealId } })
+        : Promise.resolve(0),
       this.prisma.task.findFirst({
         where: {
-          ...taskScope,
-          status: "PENDING",
+          ...openTaskScope,
           dueAt: { not: null },
         },
         orderBy: { dueAt: "asc" },
@@ -677,9 +657,60 @@ export class ConversationsService {
           orderedAt: true,
         },
       }),
+      this.prisma.message.findFirst({
+        where: {
+          conversationId: id,
+          ...notDeleted,
+          direction: { in: ["INBOUND", "OUTBOUND"] },
+        },
+        orderBy: { sentAt: "asc" },
+        select: { direction: true, sentAt: true },
+      }),
+      contactId
+        ? this.prisma.attribution.findFirst({
+            where: {
+              organizationId,
+              contactId,
+              orderId: null,
+            },
+            orderBy: { createdAt: "asc" },
+            select: {
+              source: true,
+              medium: true,
+              campaign: true,
+              content: true,
+              term: true,
+              page: true,
+            },
+          })
+        : Promise.resolve(null),
     ]);
 
     const { contact, deal, channel, assignee, ...rest } = conversation;
+
+    const firstContactDirection =
+      firstContactMessage?.direction === "INBOUND" || firstContactMessage?.direction === "OUTBOUND"
+        ? firstContactMessage.direction
+        : null;
+
+    const utmFields = leadAttribution
+      ? {
+          source: leadAttribution.source?.trim() || null,
+          medium: leadAttribution.medium?.trim() || null,
+          campaign: leadAttribution.campaign?.trim() || null,
+          content: leadAttribution.content?.trim() || null,
+          term: leadAttribution.term?.trim() || null,
+        }
+      : null;
+    const hasAnyUtm = Boolean(
+      utmFields &&
+      (utmFields.source ||
+        utmFields.medium ||
+        utmFields.campaign ||
+        utmFields.content ||
+        utmFields.term),
+    );
+    const landingPage = leadAttribution?.page?.trim() || null;
 
     return {
       conversation: {
@@ -706,8 +737,20 @@ export class ConversationsService {
       team: deal?.team ?? contact?.team ?? null,
       channel: toChannelSummary(channel),
       tags: mergeConversationTags(contact, deal),
+      tagSources: {
+        contactTagIds: contact?.tags.map((item) => item.tagId) ?? [],
+        dealTagIds: deal?.tags.map((item) => item.tagId) ?? [],
+      },
       nextTask,
       lastOrder,
+      tracking: {
+        firstContactAt: firstContactMessage?.sentAt ?? null,
+        firstContactDirection,
+        leadCreatedAt: deal?.createdAt ?? null,
+        utm: hasAnyUtm ? utmFields : null,
+        landingPage,
+        referrer: null as string | null,
+      },
       counts: {
         notesCount,
         filesCount,
@@ -765,10 +808,9 @@ export class ConversationsService {
     userId: string,
     files: Express.Multer.File[] = [],
   ) {
-    const conversation = await this.assertConversationExists(organizationId, conversationId);
+    const conversation = await this.loadConversationForSend(organizationId, conversationId);
     const now = new Date();
-    const direction =
-      dto.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const);
+    const direction = dto.direction === "inbound" ? ("INBOUND" as const) : ("OUTBOUND" as const);
     const trimmedBody = dto.body?.trim() ?? "";
     const hasFiles = files.length > 0;
 
@@ -776,14 +818,171 @@ export class ConversationsService {
       throw new BadRequestException("Informe uma mensagem ou anexe um arquivo.");
     }
 
+    const usesLiveChannel = direction === "OUTBOUND" && Boolean(conversation.channelId);
+    if (usesLiveChannel) {
+      return this.sendProviderText(
+        organizationId,
+        conversation,
+        dto,
+        userId,
+        files,
+        trimmedBody,
+        now,
+      );
+    }
+
+    return this.persistCrmOnlyMessage(
+      organizationId,
+      conversation,
+      dto,
+      userId,
+      files,
+      trimmedBody,
+      direction,
+      now,
+    );
+  }
+
+  private async loadConversationForSend(organizationId: string, id: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: { id, organizationId, ...notDeleted },
+      select: {
+        id: true,
+        contactId: true,
+        channelId: true,
+        contact: { select: { id: true, whatsapp: true, phone: true } },
+        channel: {
+          select: {
+            id: true,
+            provider: true,
+            externalAccountId: true,
+            lifecycleStatus: true,
+            archivedAt: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+    if (!conversation) {
+      throw new NotFoundException(`Conversation ${id} not found`);
+    }
+    return conversation;
+  }
+
+  private async sendProviderText(
+    organizationId: string,
+    conversation: Awaited<ReturnType<ConversationsService["loadConversationForSend"]>>,
+    dto: SendMessageDto,
+    userId: string,
+    files: Express.Multer.File[],
+    trimmedBody: string,
+    now: Date,
+  ) {
+    const channel = conversation.channel;
+    if (!channel) {
+      throw new BadRequestException("Esta conversa não possui um canal de conexão.");
+    }
+    if (channel.archivedAt || channel.deletedAt) {
+      throw new ConflictException("A conexão deste canal está arquivada.");
+    }
+    if (!channel.externalAccountId?.trim()) {
+      throw new ConflictException("Connection provider instance is missing");
+    }
+    if (channel.lifecycleStatus !== ConnectionLifecycleStatus.CONNECTED) {
+      throw new ConflictException("A conexão não está conectada.");
+    }
+    if (this.requiresMediaSend(dto, files.length > 0)) {
+      throw new BadRequestException("Envio de mídia ainda não está disponível neste canal.");
+    }
+    if (!trimmedBody) {
+      throw new BadRequestException("Informe uma mensagem ou anexe um arquivo.");
+    }
+
+    const destination =
+      this.destinationDigits(conversation.contact?.whatsapp) ??
+      this.destinationDigits(conversation.contact?.phone);
+    if (!destination) {
+      throw new BadRequestException("O contato não possui WhatsApp ou telefone para envio.");
+    }
+
+    const providerName = channel.provider?.trim();
+    if (!providerName) {
+      throw new BadRequestException("Connection provider is not configured");
+    }
+    const provider = this.providers.get(providerName);
+    const sent = await provider.sendText(
+      channel.id,
+      channel.externalAccountId,
+      destination,
+      trimmedBody,
+    );
+
+    const isAutomation = dto.senderType === "automation";
+    const message = await this.prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        channelId: channel.id,
+        body: trimmedBody,
+        direction: "OUTBOUND",
+        senderId: isAutomation ? null : userId,
+        status: "SENT",
+        sentAt: now,
+        metadata: {
+          contentType: dto.contentType ?? "text",
+          provider: providerName,
+          ...(sent.externalMessageId ? { externalMessageId: sent.externalMessageId } : {}),
+          ...(sent.remoteJid ? { remoteJid: sent.remoteJid } : {}),
+          ...(isAutomation ? { senderType: "automation" } : {}),
+        },
+      },
+      include: {
+        attachments: true,
+        sender: { select: { id: true, name: true } },
+      },
+    });
+
+    await this.prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { lastMessageAt: now, unreadCount: 0 },
+    });
+    await this.prisma.channel.update({
+      where: { id: channel.id },
+      data: { lastOutboundAt: now, lastActivityAt: now },
+    });
+    await this.prisma.activity.create({
+      data: {
+        organizationId,
+        type: "MESSAGE_SENT",
+        title: "Mensagem enviada",
+        description: trimmedBody.slice(0, 200),
+        contactId: conversation.contactId,
+        conversationId: conversation.id,
+        actorId: userId,
+      },
+    });
+
+    return message;
+  }
+
+  private async persistCrmOnlyMessage(
+    organizationId: string,
+    conversation: { id: string; contactId: string | null },
+    dto: SendMessageDto,
+    userId: string,
+    files: Express.Multer.File[],
+    trimmedBody: string,
+    direction: "INBOUND" | "OUTBOUND",
+    now: Date,
+  ) {
+    const hasFiles = files.length > 0;
+    files.forEach(validateUpload);
     const savedUploads = files.map((file) => validateAndSaveUpload(file));
     const isAutomation = dto.senderType === "automation";
-    const senderId =
-      direction === "OUTBOUND" && !isAutomation ? userId : null;
+    const senderId = direction === "OUTBOUND" && !isAutomation ? userId : null;
 
     const message = await this.prisma.message.create({
       data: {
-        conversationId,
+        conversationId: conversation.id,
         body: trimmedBody || null,
         direction,
         senderId,
@@ -813,13 +1012,10 @@ export class ConversationsService {
     });
 
     const preview =
-      trimmedBody ||
-      (savedUploads[0]
-        ? `Anexo: ${savedUploads[0].originalName}`
-        : "Nova mensagem");
+      trimmedBody || (savedUploads[0] ? `Anexo: ${savedUploads[0].originalName}` : "Nova mensagem");
 
     await this.prisma.conversation.update({
-      where: { id: conversationId },
+      where: { id: conversation.id },
       data: { lastMessageAt: now, unreadCount: 0 },
     });
 
@@ -830,12 +1026,27 @@ export class ConversationsService {
         title: "Mensagem enviada",
         description: preview.slice(0, 200),
         contactId: conversation.contactId,
-        conversationId,
+        conversationId: conversation.id,
         actorId: userId,
       },
     });
 
     return message;
+  }
+
+  private destinationDigits(value?: string | null) {
+    if (!value) return null;
+    const digits = value.replace(/\D/g, "");
+    return digits.length > 0 ? digits : null;
+  }
+
+  private requiresMediaSend(dto: SendMessageDto, hasFiles: boolean) {
+    if (hasFiles) return true;
+    const contentType = dto.contentType?.trim().toLowerCase() ?? "";
+    if (!contentType) return false;
+    if (contentType === "text" || contentType === "text/plain") return false;
+    if (contentType.startsWith("text/plain;")) return false;
+    return true;
   }
 
   private async resolveMessageCursor(
@@ -855,11 +1066,7 @@ export class ConversationsService {
     return null;
   }
 
-  async listMessages(
-    organizationId: string,
-    conversationId: string,
-    query: QueryMessagesDto,
-  ) {
+  async listMessages(organizationId: string, conversationId: string, query: QueryMessagesDto) {
     await this.assertConversationExists(organizationId, conversationId);
     const pageSize = Math.min(query.pageSize ?? 50, 200);
     const baseWhere: Prisma.MessageWhereInput = {
@@ -928,7 +1135,11 @@ export class ConversationsService {
 
     const hasMore = rows.length === pageSize;
     const nextCursor =
-      rows.length && query.before !== false ? rows[0]!.id : rows.length ? rows[rows.length - 1]!.id : null;
+      rows.length && query.before !== false
+        ? rows[0]!.id
+        : rows.length
+          ? rows[rows.length - 1]!.id
+          : null;
 
     return {
       data: rows,

@@ -13,7 +13,7 @@ export function Avatar({
   name?: string | null;
   src?: string | null;
   className?: string;
-  size?: "sm" | "md" | "lg" | "list";
+  size?: "sm" | "md" | "lg" | "list" | "profile";
   alt?: string;
 }) {
   const [failed, setFailed] = React.useState(false);
@@ -22,6 +22,8 @@ export function Avatar({
       ? "h-7 w-7 text-[10px]"
       : size === "lg"
         ? "h-10 w-10 text-sm"
+        : size === "profile"
+          ? "h-16 w-16 text-lg sm:h-[4.5rem] sm:w-[4.5rem]"
         : size === "list"
           ? "h-9 w-9 text-[11px]"
           : "h-8 w-8 text-xs";

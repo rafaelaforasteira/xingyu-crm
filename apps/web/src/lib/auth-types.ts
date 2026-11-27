@@ -7,10 +7,17 @@ export type AuthUser = {
   email: string;
   role: AuthRole;
   status: UserStatus;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  title?: string | null;
+  locale: "pt-BR" | "en" | "zh-CN" | "zh-HK";
+  timezone: string;
+  permissions: string[];
+  scopes: Partial<Record<"deals" | "orders", "SELF" | "TEAM" | "ALL">>;
 };
 
 export const AUTH_ROLE_LABEL: Record<AuthRole, string> = {
   ADMIN: "Administradora",
-  MANAGER: "Gestora",
+  MANAGER: "Supervisor",
   CONSULTANT: "Consultora",
 };

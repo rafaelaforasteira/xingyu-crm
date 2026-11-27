@@ -13,9 +13,8 @@ import {
   sanitizeStageName,
 } from "./operation-utils";
 import type { Deal, Pipeline, PipelineStage } from "./types";
-import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS, BETA_SINGLE_PIPELINE_NAV_GROUPS } from "./nav";
-import { CORE_OPERATION_MODE, shouldHideGlobalHeader } from "./feature-flags";
-import { BETA_SINGLE_PIPELINE_MODE } from "./beta-config";
+import { CORE_OPERATION_NAV_GROUPS, FULL_NAV_GROUPS, NAV_GROUPS } from "./nav";
+import { shouldHideGlobalHeader } from "./feature-flags";
 
 function deal(partial: Partial<Deal> & Pick<Deal, "id" | "name" | "pipelineId" | "stageId">): Deal {
   return {
@@ -119,7 +118,10 @@ describe("operation filters and search", () => {
           name: "Novo",
           pipelineId: "pipe",
           position: 0,
-          deals: [sample, deal({ id: "d2", name: "Sem conversa", pipelineId: "pipe", stageId: "s1" })],
+          deals: [
+            sample,
+            deal({ id: "d2", name: "Sem conversa", pipelineId: "pipe", stageId: "s1" }),
+          ],
         } as PipelineStage,
       ],
     };
@@ -176,19 +178,30 @@ describe("navigation mode", () => {
     expect(FULL_NAV_GROUPS.some((g) => g.items.some((i) => i.href === "/dashboard"))).toBe(true);
     expect(CORE_OPERATION_NAV_GROUPS).toHaveLength(1);
     expect(CORE_OPERATION_NAV_GROUPS[0]?.items.map((i) => i.href)).toEqual([
-      "/operacao",
+      "/pipelines",
       "/settings",
     ]);
   });
 
-  it("uses beta or simplified menu depending on mode flags", () => {
-    if (BETA_SINGLE_PIPELINE_MODE) {
-      expect(NAV_GROUPS).toEqual(BETA_SINGLE_PIPELINE_NAV_GROUPS);
-    } else if (CORE_OPERATION_MODE) {
-      expect(NAV_GROUPS).toEqual(CORE_OPERATION_NAV_GROUPS);
-    } else {
-      expect(NAV_GROUPS).toEqual(FULL_NAV_GROUPS);
-    }
+  it("keeps the compact sidebar separated into product areas", () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual([
+      "Visão geral",
+      "Jornadas",
+      "Gestão",
+      "Infraestrutura",
+    ]);
+    expect(NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href)).toEqual([
+      "/dashboard",
+      "/tasks",
+      "/pipelines",
+      "/orders",
+      "/after-sales",
+      "/finance",
+      "/clients",
+      "/connections",
+      "/integrations",
+      "/automations",
+    ]);
   });
 });
 
@@ -204,6 +217,12 @@ describe("shouldHideGlobalHeader", () => {
     expect(shouldHideGlobalHeader("/settings", true, false)).toBe(false);
     expect(shouldHideGlobalHeader("/inbox", true, false)).toBe(false);
     expect(shouldHideGlobalHeader("/dashboard", true, false)).toBe(false);
+  });
+
+  it("hides the global header inside Automation Studio", () => {
+    expect(shouldHideGlobalHeader("/automations/abc", true, true)).toBe(true);
+    expect(shouldHideGlobalHeader("/automations", true, true)).toBe(false);
+    expect(shouldHideGlobalHeader("/automations/new", true, true)).toBe(false);
   });
 
   it("keeps header when core mode is off", () => {
@@ -223,9 +242,7 @@ describe("operation view helpers", () => {
   it("removes no-conversation filter when entering conversations view", () => {
     expect(normalizeFilterForView("no-conversation", "conversations")).toBe("all");
     expect(normalizeFilterForView("unread", "conversations")).toBe("unread");
-    expect(normalizeFilterForView("no-conversation", "kanban")).toBe(
-      "no-conversation",
-    );
+    expect(normalizeFilterForView("no-conversation", "kanban")).toBe("no-conversation");
   });
 
   it("finds deal by conversation id", () => {

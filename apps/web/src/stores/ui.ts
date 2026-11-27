@@ -16,6 +16,9 @@ interface UiState {
   setCommandOpen: (v: boolean) => void;
 }
 
+const SIDEBAR_PREFERENCE = "crm.sidebar.collapsed";
+function saveSidebarPreference(value: boolean) { try { localStorage.setItem(SIDEBAR_PREFERENCE, String(value)); } catch { /* Storage may be unavailable. */ } }
+
 export const useUiStore = create<UiState>((set) => ({
   sidebarCollapsed: false,
   sidebarMobileOpen: false,
@@ -23,8 +26,8 @@ export const useUiStore = create<UiState>((set) => ({
   selectedDealId: null,
   dealDrawerOpen: false,
   commandOpen: false,
-  setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
-  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  setSidebarCollapsed: (sidebarCollapsed) => { saveSidebarPreference(sidebarCollapsed); set({ sidebarCollapsed }); },
+  toggleSidebar: () => set((s) => { const sidebarCollapsed = !s.sidebarCollapsed; saveSidebarPreference(sidebarCollapsed); return { sidebarCollapsed }; }),
   setSidebarMobileOpen: (sidebarMobileOpen) => set({ sidebarMobileOpen }),
   setSelectedTeamId: (selectedTeamId) => set({ selectedTeamId }),
   openDealDrawer: (dealId) =>

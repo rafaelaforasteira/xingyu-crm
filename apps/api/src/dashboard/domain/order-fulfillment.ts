@@ -50,8 +50,7 @@ export function isOrderDelayed(input: {
   now?: Date;
 }): boolean | null {
   if (!input.expectedAt) return null;
-  const at =
-    typeof input.expectedAt === "string" ? new Date(input.expectedAt) : input.expectedAt;
+  const at = typeof input.expectedAt === "string" ? new Date(input.expectedAt) : input.expectedAt;
   if (Number.isNaN(at.getTime())) return null;
   const now = input.now ?? new Date();
   return now.getTime() > at.getTime();

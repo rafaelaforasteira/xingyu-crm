@@ -1,6 +1,13 @@
-import { NotFoundException } from "@nestjs/common";
+import {
+  BadGatewayException,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "@nestjs/common";
+import { ConnectionLifecycleStatus } from "@xingyu/database";
 import { PrismaService } from "../prisma/prisma.service";
 import { ConversationsService } from "./conversations.service";
+import type { ConnectionProviderRegistry } from "../connections/providers/connection-provider.registry";
 
 type MockMethod = jest.Mock<Promise<unknown>, unknown[]>;
 
@@ -17,11 +24,14 @@ type PrismaMock = {
     findMany: MockMethod;
     create: MockMethod;
   };
+  channel: { update: MockMethod };
   messageAttachment: { count: MockMethod };
+  leadFile: { count: MockMethod };
   note: { count: MockMethod };
   task: { count: MockMethod; findFirst: MockMethod };
   order: { count: MockMethod; findFirst: MockMethod };
   activity: { count: MockMethod; create: MockMethod };
+  attribution: { findFirst: MockMethod };
   $queryRaw: MockMethod;
 };
 
@@ -45,11 +55,14 @@ function createPrismaMock(): PrismaMock {
       findMany: method(),
       create: method(),
     },
+    channel: { update: method() },
     messageAttachment: { count: method() },
+    leadFile: { count: method() },
     note: { count: method() },
     task: { count: method(), findFirst: method() },
     order: { count: method(), findFirst: method() },
     activity: { count: method(), create: method() },
+    attribution: { findFirst: method() },
     $queryRaw: method(),
   };
 }
@@ -96,6 +109,7 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
       pipelineId: "pipeline-1",
       stageId: "stage-1",
       priority: "MEDIUM",
+      createdAt: new Date("2026-08-10T17:32:00.000Z"),
       stage: { id: "stage-1", name: "Qualification", pipelineId: "pipeline-1", color: "#fff" },
       pipeline: { id: "pipeline-1", name: "Sales", color: "#000" },
       owner: { id: "user-1", name: "Agent", avatarUrl: null },
@@ -105,13 +119,38 @@ function conversationRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function liveConversation(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "conv-1",
+    contactId: "contact-1",
+    channelId: "channel-live",
+    contact: { id: "contact-1", whatsapp: "+55 11 98765-4321", phone: null },
+    channel: {
+      id: "channel-live",
+      provider: "evolution",
+      externalAccountId: "xingyu-live-instance",
+      lifecycleStatus: ConnectionLifecycleStatus.CONNECTED,
+      archivedAt: null,
+      deletedAt: null,
+    },
+    ...overrides,
+  };
+}
+
 describe("ConversationsService", () => {
   let prisma: PrismaMock;
   let service: ConversationsService;
+  let sendText: jest.Mock;
+  let providers: { get: jest.Mock };
 
   beforeEach(() => {
     prisma = createPrismaMock();
-    service = new ConversationsService(prisma as unknown as PrismaService);
+    sendText = jest.fn();
+    providers = { get: jest.fn(() => ({ sendText })) };
+    service = new ConversationsService(
+      prisma as unknown as PrismaService,
+      providers as unknown as ConnectionProviderRegistry,
+    );
   });
 
   describe("findOne", () => {
@@ -331,12 +370,21 @@ describe("ConversationsService", () => {
     it("returns summary shape with counts and no message lists", async () => {
       const row = conversationRow();
       prisma.conversation.findFirst.mockResolvedValue(row);
-      prisma.message.findFirst.mockResolvedValue({ body: "Preview", sentAt: new Date() });
+      prisma.message.findFirst.mockImplementation(async (args: unknown) => {
+        const orderBy = (args as { orderBy?: { sentAt?: string } })?.orderBy;
+        if (orderBy?.sentAt === "asc") {
+          return {
+            direction: "INBOUND",
+            sentAt: new Date("2026-08-10T17:32:00.000Z"),
+          };
+        }
+        return { body: "Preview", sentAt: new Date() };
+      });
       prisma.note.count.mockResolvedValue(3);
       prisma.task.count.mockResolvedValue(2);
       prisma.order.count.mockResolvedValue(1);
       prisma.activity.count.mockResolvedValue(5);
-      prisma.messageAttachment.count.mockResolvedValue(4);
+      prisma.leadFile.count.mockResolvedValue(4);
       prisma.task.findFirst.mockResolvedValue({
         id: "task-1",
         title: "Follow up",
@@ -352,6 +400,7 @@ describe("ConversationsService", () => {
         finalValue: 100,
         orderedAt: new Date(),
       });
+      prisma.attribution.findFirst.mockResolvedValue(null);
 
       const result = await service.getContext(organizationId, "conv-1");
 
@@ -365,6 +414,14 @@ describe("ConversationsService", () => {
           channel: expect.objectContaining({ id: "channel-1" }),
           nextTask: expect.objectContaining({ id: "task-1" }),
           lastOrder: expect.objectContaining({ number: "1001" }),
+          tracking: expect.objectContaining({
+            firstContactAt: new Date("2026-08-10T17:32:00.000Z"),
+            firstContactDirection: "INBOUND",
+            leadCreatedAt: new Date("2026-08-10T17:32:00.000Z"),
+            utm: null,
+            landingPage: null,
+            referrer: null,
+          }),
           counts: {
             notesCount: 3,
             filesCount: 4,
@@ -376,6 +433,92 @@ describe("ConversationsService", () => {
       );
       expect(result).not.toHaveProperty("messages");
       expect(result).not.toHaveProperty("notes");
+      expect(prisma.message.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: { sentAt: "asc" },
+          select: { direction: true, sentAt: true },
+        }),
+      );
+    });
+
+    it("maps first OUTBOUND message and structured Attribution UTMs", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(conversationRow());
+      prisma.message.findFirst.mockImplementation(async (args: unknown) => {
+        const orderBy = (args as { orderBy?: { sentAt?: string } })?.orderBy;
+        if (orderBy?.sentAt === "asc") {
+          return {
+            direction: "OUTBOUND",
+            sentAt: new Date("2026-08-01T11:00:00.000Z"),
+          };
+        }
+        return { body: "Preview", sentAt: new Date() };
+      });
+      prisma.note.count.mockResolvedValue(0);
+      prisma.task.count.mockResolvedValue(0);
+      prisma.order.count.mockResolvedValue(0);
+      prisma.activity.count.mockResolvedValue(0);
+      prisma.leadFile.count.mockResolvedValue(0);
+      prisma.task.findFirst.mockResolvedValue(null);
+      prisma.order.findFirst.mockResolvedValue(null);
+      prisma.attribution.findFirst.mockResolvedValue({
+        source: "meta",
+        medium: "paid_social",
+        campaign: "china_no_brasil",
+        content: "video_03",
+        term: null,
+        page: "/collections/origem",
+      });
+
+      const result = await service.getContext(organizationId, "conv-1");
+
+      expect(result.tracking).toEqual(
+        expect.objectContaining({
+          firstContactDirection: "OUTBOUND",
+          utm: {
+            source: "meta",
+            medium: "paid_social",
+            campaign: "china_no_brasil",
+            content: "video_03",
+            term: null,
+          },
+          landingPage: "/collections/origem",
+        }),
+      );
+      expect(prisma.attribution.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            contactId: "contact-1",
+            orderId: null,
+          }),
+          orderBy: { createdAt: "asc" },
+        }),
+      );
+    });
+
+    it("omits invented UTMs when Attribution is empty", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        conversationRow({ deal: null }),
+      );
+      prisma.message.findFirst.mockImplementation(async (args: unknown) => {
+        const orderBy = (args as { orderBy?: { sentAt?: string } })?.orderBy;
+        if (orderBy?.sentAt === "asc") return null;
+        return { body: null, sentAt: null };
+      });
+      prisma.note.count.mockResolvedValue(0);
+      prisma.task.count.mockResolvedValue(0);
+      prisma.order.count.mockResolvedValue(0);
+      prisma.activity.count.mockResolvedValue(0);
+      prisma.messageAttachment.count.mockResolvedValue(0);
+      prisma.task.findFirst.mockResolvedValue(null);
+      prisma.order.findFirst.mockResolvedValue(null);
+      prisma.attribution.findFirst.mockResolvedValue(null);
+
+      const result = await service.getContext(organizationId, "conv-1");
+
+      expect(result.tracking.firstContactAt).toBeNull();
+      expect(result.tracking.firstContactDirection).toBeNull();
+      expect(result.tracking.leadCreatedAt).toBeNull();
+      expect(result.tracking.utm).toBeNull();
     });
   });
 
@@ -428,6 +571,7 @@ describe("ConversationsService", () => {
             body: "Olá",
             direction: "OUTBOUND",
             senderId: "auth-user",
+            metadata: expect.objectContaining({ crmOnly: true }),
           }),
           include: {
             attachments: true,
@@ -435,6 +579,7 @@ describe("ConversationsService", () => {
           },
         }),
       );
+      expect(providers.get).not.toHaveBeenCalled();
       expect(result.sender).toEqual({ id: "auth-user", name: "Vendedora" });
     });
 
@@ -443,6 +588,260 @@ describe("ConversationsService", () => {
       await expect(
         service.sendMessage(organizationId, "conv-1", { body: "   " }, "auth-user"),
       ).rejects.toThrow("Informe uma mensagem ou anexe um arquivo.");
+    });
+
+    it("sends outbound text through the conversation channel provider", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(liveConversation());
+      sendText.mockResolvedValue({
+        externalMessageId: "BAE5OUTBOUND1",
+        remoteJid: "5511987654321@s.whatsapp.net",
+        status: "PENDING",
+      });
+      prisma.message.create.mockResolvedValue({
+        id: "msg-out",
+        conversationId: "conv-1",
+        direction: "OUTBOUND",
+        status: "SENT",
+        metadata: { provider: "evolution" },
+      });
+      prisma.conversation.update.mockResolvedValue({});
+      prisma.channel.update.mockResolvedValue({});
+      prisma.activity.create.mockResolvedValue({});
+
+      await service.sendMessage(organizationId, "conv-1", { body: "Olá cliente" }, "auth-user");
+
+      expect(providers.get).toHaveBeenCalledWith("evolution");
+      expect(sendText).toHaveBeenCalledWith(
+        "channel-live",
+        "xingyu-live-instance",
+        "5511987654321",
+        "Olá cliente",
+      );
+      expect(prisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            conversationId: "conv-1",
+            channelId: "channel-live",
+            body: "Olá cliente",
+            direction: "OUTBOUND",
+            senderId: "auth-user",
+            status: "SENT",
+            metadata: expect.objectContaining({
+              provider: "evolution",
+              externalMessageId: "BAE5OUTBOUND1",
+              remoteJid: "5511987654321@s.whatsapp.net",
+            }),
+          }),
+        }),
+      );
+      const createdMetadata = (prisma.message.create.mock.calls[0][0] as { data: { metadata: Record<string, unknown> } })
+        .data.metadata;
+      expect(createdMetadata.crmOnly).toBeUndefined();
+      expect(prisma.activity.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: "MESSAGE_SENT",
+            conversationId: "conv-1",
+            contactId: "contact-1",
+          }),
+        }),
+      );
+      expect(prisma.conversation.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastMessageAt: expect.any(Date) }),
+        }),
+      );
+    });
+
+    it("prefers contact.whatsapp and falls back to contact.phone with digits only", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({
+          contact: { id: "contact-1", whatsapp: "+55 (11) 98888-7777", phone: "11 90000-0000" },
+        }),
+      );
+      sendText.mockResolvedValue({});
+      prisma.message.create.mockResolvedValue({ id: "msg-out" });
+      prisma.conversation.update.mockResolvedValue({});
+      prisma.channel.update.mockResolvedValue({});
+      prisma.activity.create.mockResolvedValue({});
+
+      await service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user");
+      expect(sendText).toHaveBeenCalledWith(
+        "channel-live",
+        "xingyu-live-instance",
+        "5511988887777",
+        "oi",
+      );
+
+      sendText.mockClear();
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({
+          contact: { id: "contact-1", whatsapp: null, phone: "+55 11 97777-6666" },
+        }),
+      );
+      await service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user");
+      expect(sendText).toHaveBeenCalledWith(
+        "channel-live",
+        "xingyu-live-instance",
+        "5511977776666",
+        "oi",
+      );
+    });
+
+    it("does not invent a country code when the stored number has none", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({
+          contact: { id: "contact-1", whatsapp: "11987654321", phone: null },
+        }),
+      );
+      sendText.mockResolvedValue({});
+      prisma.message.create.mockResolvedValue({ id: "msg-out" });
+      prisma.conversation.update.mockResolvedValue({});
+      prisma.channel.update.mockResolvedValue({});
+      prisma.activity.create.mockResolvedValue({});
+
+      await service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user");
+      expect(sendText).toHaveBeenCalledWith(
+        "channel-live",
+        "xingyu-live-instance",
+        "11987654321",
+        "oi",
+      );
+    });
+
+    it("rejects a live conversation without a destination number", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({
+          contact: { id: "contact-1", whatsapp: "abc", phone: null },
+        }),
+      );
+
+      await expect(
+        service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user"),
+      ).rejects.toThrow("O contato não possui WhatsApp ou telefone para envio.");
+      expect(sendText).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+      expect(prisma.activity.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a live conversation without a channel", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({ channelId: "channel-live", channel: null }),
+      );
+
+      await expect(
+        service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user"),
+      ).rejects.toThrow("Esta conversa não possui um canal de conexão.");
+      expect(sendText).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a live conversation without an Evolution instance name", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({
+          channel: {
+            id: "channel-live",
+            provider: "evolution",
+            externalAccountId: null,
+            lifecycleStatus: ConnectionLifecycleStatus.CONNECTED,
+            archivedAt: null,
+            deletedAt: null,
+          },
+        }),
+      );
+
+      await expect(
+        service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user"),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(sendText).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unknown connection provider", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({
+          channel: {
+            id: "channel-live",
+            provider: "unknown-vendor",
+            externalAccountId: "xingyu-live-instance",
+            lifecycleStatus: ConnectionLifecycleStatus.CONNECTED,
+            archivedAt: null,
+            deletedAt: null,
+          },
+        }),
+      );
+      providers.get.mockImplementation(() => {
+        throw new BadRequestException("Connection provider is not configured");
+      });
+
+      await expect(
+        service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user"),
+      ).rejects.toThrow("Connection provider is not configured");
+      expect(sendText).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it("does not persist SENT when the provider fails", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(liveConversation());
+      sendText.mockRejectedValue(new BadGatewayException("Evolution API is unavailable"));
+
+      await expect(
+        service.sendMessage(organizationId, "conv-1", { body: "oi" }, "auth-user"),
+      ).rejects.toBeInstanceOf(BadGatewayException);
+      expect(prisma.message.create).not.toHaveBeenCalled();
+      expect(prisma.activity.create).not.toHaveBeenCalled();
+      expect(prisma.conversation.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects media on a live Evolution channel", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(liveConversation());
+      const file = { originalname: "foto.jpg", mimetype: "image/jpeg", size: 12, buffer: Buffer.from("x") };
+
+      await expect(
+        service.sendMessage(
+          organizationId,
+          "conv-1",
+          { body: "foto" },
+          "auth-user",
+          [file as Express.Multer.File],
+        ),
+      ).rejects.toThrow("Envio de mídia ainda não está disponível neste canal.");
+      expect(sendText).not.toHaveBeenCalled();
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it("keeps the fake provider compatible for live outbound text", async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        liveConversation({
+          channel: {
+            id: "channel-live",
+            provider: "fake",
+            externalAccountId: "fake-instance-1",
+            lifecycleStatus: ConnectionLifecycleStatus.CONNECTED,
+            archivedAt: null,
+            deletedAt: null,
+          },
+        }),
+      );
+      sendText.mockResolvedValue({
+        externalMessageId: "fake-1",
+        remoteJid: "5511987654321@s.whatsapp.net",
+        status: "SENT",
+      });
+      prisma.message.create.mockResolvedValue({ id: "msg-fake" });
+      prisma.conversation.update.mockResolvedValue({});
+      prisma.channel.update.mockResolvedValue({});
+      prisma.activity.create.mockResolvedValue({});
+
+      await service.sendMessage(organizationId, "conv-1", { body: "teste fake" }, "auth-user");
+
+      expect(providers.get).toHaveBeenCalledWith("fake");
+      expect(sendText).toHaveBeenCalledWith(
+        "channel-live",
+        "fake-instance-1",
+        "5511987654321",
+        "teste fake",
+      );
     });
   });
 });

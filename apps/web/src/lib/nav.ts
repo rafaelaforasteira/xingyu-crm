@@ -14,10 +14,16 @@ import {
   HeartHandshake,
   Contact,
   Plug,
+  Landmark,
+  QrCode,
+  UsersRound,
+  ShoppingCart,
+  Truck,
+  ShieldCheck,
+  Undo2,
+  BadgeDollarSign,
   type LucideIcon,
 } from "lucide-react";
-import { CORE_OPERATION_MODE } from "@/lib/feature-flags";
-import { BETA_SINGLE_PIPELINE_MODE } from "@/lib/beta-config";
 
 export interface NavItem {
   href: string;
@@ -27,9 +33,46 @@ export interface NavItem {
   countKey?: "openDeals" | "waitingConversations" | "tasksToday";
   /** Match only exact pathname (ignore nested routes) */
   exact?: boolean;
+  lockedTooltip?: string;
   /** Render expandable pipeline children under this item */
   expandablePipelines?: boolean;
+  pipelineSpace?: "COMMERCIAL" | "ATTENDANCE";
+  pipelineBasePath?: string;
+  /** Render fixed sub-pipelines under this product area. */
+  children?: Array<{ href: string; label: string; icon?: LucideIcon; color?: string }>;
 }
+
+const ORDER_PIPELINES = [
+  { href: "/orders?pipeline=ecommerce", label: "E-commerce", icon: ShoppingCart, color: "#8B5CF6" },
+  { href: "/orders?pipeline=operation", label: "Envio", icon: Truck, color: "#06B6D4" },
+];
+
+const ATTENDANCE_PIPELINES = [
+  {
+    href: "/after-sales?pipeline=post-sale",
+    label: "Pós-venda",
+    icon: HeartHandshake,
+    color: "#10B981",
+  },
+  {
+    href: "/after-sales?pipeline=warranty",
+    label: "Garantia e assistência",
+    icon: ShieldCheck,
+    color: "#F59E0B",
+  },
+  {
+    href: "/after-sales?pipeline=returns",
+    label: "Trocas e devoluções",
+    icon: Undo2,
+    color: "#3B82F6",
+  },
+  {
+    href: "/after-sales?pipeline=refunds",
+    label: "Reembolsos",
+    icon: BadgeDollarSign,
+    color: "#EC4899",
+  },
+];
 
 export interface NavGroup {
   id: string;
@@ -43,11 +86,16 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
     id: "overview",
     label: "Visão geral",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Dados", icon: LayoutDashboard },
       { href: "/pipelines", label: "Negócios", icon: Kanban, countKey: "openDeals", exact: true },
       { href: "/inbox", label: "Conversas", icon: Inbox, countKey: "waitingConversations" },
       { href: "/tasks", label: "Tarefas", icon: CheckSquare, countKey: "tasksToday" },
     ],
+  },
+  {
+    id: "relationships",
+    label: "Relacionamento",
+    items: [{ href: "/clients", label: "Clientes", icon: UsersRound }],
   },
   {
     id: "journeys",
@@ -56,7 +104,20 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
       { href: "/pipelines", label: "Pipelines", icon: Kanban, expandablePipelines: true },
       { href: "/repurchase", label: "Recompra", icon: RefreshCw },
       { href: "/reactivation", label: "Reativação", icon: Sparkles },
-      { href: "/orders", label: "E-commerce", icon: Package },
+      {
+        href: "/orders",
+        label: "Pedidos",
+        icon: Package,
+        children: ORDER_PIPELINES,
+      },
+      {
+        href: "/after-sales",
+        label: "Atendimento",
+        icon: HeartHandshake,
+        expandablePipelines: true,
+        pipelineSpace: "ATTENDANCE",
+        pipelineBasePath: "/after-sales",
+      },
       { href: "/after-sales", label: "Pós-venda", icon: HeartHandshake },
     ],
   },
@@ -75,15 +136,15 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Simplified operational menu: Operação + Configurações. */
+/** Legacy operational menu retained for compatibility tests. */
 export const CORE_OPERATION_NAV_GROUPS: NavGroup[] = [
   {
     id: "core",
     label: "Principal",
     items: [
       {
-        href: "/operacao",
-        label: "Operação",
+        href: "/pipelines",
+        label: "Pipelines",
         icon: Kanban,
         countKey: "waitingConversations",
         exact: true,
@@ -93,29 +154,89 @@ export const CORE_OPERATION_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Beta single-pipeline: Operação only. */
+/** Official multi-pipeline navigation. */
 export const BETA_SINGLE_PIPELINE_NAV_GROUPS: NavGroup[] = [
   {
     id: "beta",
     label: "Principal",
     items: [
+      { href: "/dashboard", label: "Dados", icon: LayoutDashboard },
+      { href: "/tasks", label: "Tarefas", icon: CheckSquare },
       {
-        href: "/operacao",
-        label: "Operação",
+        href: "/pipelines",
+        label: "Pipelines",
         icon: Kanban,
-        countKey: "waitingConversations",
         exact: true,
+        expandablePipelines: true,
+      },
+      {
+        href: "/orders",
+        label: "Pedidos",
+        icon: Package,
+        children: ORDER_PIPELINES,
+      },
+      {
+        href: "/after-sales",
+        label: "Atendimento",
+        icon: HeartHandshake,
+        expandablePipelines: true,
+        pipelineSpace: "ATTENDANCE",
+        pipelineBasePath: "/after-sales",
       },
     ],
   },
 ];
 
-/** Grouped sidebar — only real routes. */
-export const NAV_GROUPS: NavGroup[] = BETA_SINGLE_PIPELINE_MODE
-  ? BETA_SINGLE_PIPELINE_NAV_GROUPS
-  : CORE_OPERATION_MODE
-    ? CORE_OPERATION_NAV_GROUPS
-    : FULL_NAV_GROUPS;
+/** Compact sidebar grouped by product area; secondary modules remain routable but hidden. */
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "overview",
+    label: "Visão geral",
+    items: [
+      { href: "/dashboard", label: "Dados", icon: LayoutDashboard },
+      { href: "/tasks", label: "Tarefas", icon: CheckSquare },
+    ],
+  },
+  {
+    id: "journeys",
+    label: "Jornadas",
+    items: [
+      // Link simples: a lista de pipelines fica na própria página /pipelines.
+      { href: "/pipelines", label: "Pipelines", icon: Kanban },
+      {
+        href: "/orders",
+        label: "Pedidos",
+        icon: Package,
+        children: ORDER_PIPELINES,
+      },
+      {
+        href: "/after-sales",
+        label: "Atendimento",
+        icon: HeartHandshake,
+        expandablePipelines: true,
+        pipelineSpace: "ATTENDANCE",
+        pipelineBasePath: "/after-sales",
+      },
+    ],
+  },
+  {
+    id: "management",
+    label: "Gestão",
+    items: [
+      { href: "/finance", label: "Financeiro", icon: Landmark },
+      { href: "/clients", label: "Clientes", icon: UsersRound },
+    ],
+  },
+  {
+    id: "infrastructure",
+    label: "Infraestrutura",
+    items: [
+      { href: "/connections", label: "Conexões", icon: QrCode },
+      { href: "/integrations", label: "Integrações", icon: Plug },
+      { href: "/automations", label: "Automações", icon: Zap },
+    ],
+  },
+];
 
 /** Flat list kept for command palette / legacy helpers. */
 export const NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items).filter(

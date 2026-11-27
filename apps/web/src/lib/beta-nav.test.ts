@@ -1,20 +1,54 @@
 import { describe, expect, it } from "vitest";
 import { BETA_SINGLE_PIPELINE_NAV_GROUPS, NAV_GROUPS } from "./nav";
-import { BETA_SINGLE_PIPELINE_MODE } from "./beta-config";
 
 describe("beta navigation", () => {
-  it("exposes only Operação in beta nav groups", () => {
+  it("exposes the expandable Pipelines module", () => {
     const items = BETA_SINGLE_PIPELINE_NAV_GROUPS.flatMap((group) => group.items);
-    expect(items).toHaveLength(1);
-    expect(items[0]?.href).toBe("/operacao");
-    expect(items[0]?.label).toBe("Operação");
+    expect(items).toHaveLength(5);
+    expect(items[0]).toMatchObject({ href: "/dashboard", label: "Dados" });
+    expect(items[1]).toMatchObject({ href: "/tasks", label: "Tarefas" });
+    expect(items[2]?.href).toBe("/pipelines");
+    expect(items[2]?.label).toBe("Pipelines");
+    expect(items[2]?.expandablePipelines).toBe(true);
+    expect(items[3]).toMatchObject({ href: "/orders", label: "Pedidos" });
+    expect(items[4]).toMatchObject({ href: "/after-sales", label: "Atendimento" });
     expect(items.some((item) => item.href === "/settings")).toBe(false);
-    expect(items.some((item) => item.href === "/dashboard")).toBe(false);
+    expect(items.some((item) => item.href === "/dashboard")).toBe(true);
   });
 
-  it("uses beta nav when beta mode is enabled", () => {
-    if (!BETA_SINGLE_PIPELINE_MODE) return;
-    const hrefs = NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href);
-    expect(hrefs).toEqual(["/operacao"]);
+  it("uses the sidebar grouped by product area", () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual([
+      "Visão geral",
+      "Jornadas",
+      "Gestão",
+      "Infraestrutura",
+    ]);
+    expect(NAV_GROUPS.flatMap((group) => group.items).map((item) => item.href)).toEqual([
+      "/dashboard",
+      "/tasks",
+      "/pipelines",
+      "/orders",
+      "/after-sales",
+      "/finance",
+      "/clients",
+      "/connections",
+      "/integrations",
+      "/automations",
+    ]);
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/orders", label: "Pedidos" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/finance", label: "Financeiro" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/connections", label: "Conexões" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/integrations", label: "Integrações" }),
+    );
+    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
+      expect.objectContaining({ href: "/automations", label: "Automações" }),
+    );
   });
 });

@@ -7,7 +7,9 @@ import { Toaster } from "sonner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { CommandPalette } from "@/components/layout/command-palette";
-import { shouldHideGlobalHeader } from "@/lib/feature-flags";
+import { LockedArea } from "@/components/layout/locked-area";
+import { shouldHideGlobalHeader, shouldHideTopBar } from "@/lib/feature-flags";
+import { isPathUnlocked, lockedAreaLabel } from "@/lib/area-locks";
 import { cn } from "@/lib/utils";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -33,9 +35,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+import { RequireAuth } from "@/components/auth/require-auth";
+
+function AuthorizedAppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const hideGlobalHeader = shouldHideGlobalHeader(pathname);
+  const hideGlobalSidebar = Boolean(
+    pathname && /^\/automations\/(?!new(?:\/|$))[^/]+/.test(pathname),
+  );
 
   return (
     <div
@@ -43,23 +50,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       data-app-shell="true"
       data-testid="beta-app-shell"
     >
-      <Sidebar />
+      {hideGlobalSidebar ? null : <Sidebar />}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {hideGlobalHeader ? null : <Header />}
+        {hideGlobalHeader ? null : shouldHideTopBar(pathname) ? (
+          // No computador some; no celular continua, pois tem o botão que abre o menu.
+          <div className="lg:hidden">
+            <Header />
+          </div>
+        ) : (
+          <Header />
+        )}
         <main
           data-testid="app-main"
           data-operation-mode={hideGlobalHeader ? "core" : "default"}
           className={cn(
             "flex min-h-0 flex-1 flex-col",
-            hideGlobalHeader
-              ? "overflow-hidden p-0"
-              : "overflow-auto p-4 sm:p-6",
+            hideGlobalHeader ? "overflow-hidden p-0" : "overflow-auto p-4 sm:p-6",
           )}
         >
-          {children}
+          {pathname && !isPathUnlocked(pathname) ? (
+            <LockedArea label={lockedAreaLabel(pathname)} />
+          ) : (
+            children
+          )}
         </main>
       </div>
       <CommandPalette />
     </div>
+  );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <RequireAuth>
+      <AuthorizedAppShell>{children}</AuthorizedAppShell>
+    </RequireAuth>
   );
 }

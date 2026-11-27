@@ -1,7 +1,5 @@
-"use client";
-
-import { AfterSalesPage } from "@/components/crm/lifecycle-pages";
+import { PipelinesListPage } from "@/components/crm/pipelines-page";
 
 export default function Page() {
-  return <AfterSalesPage />;
+  return <PipelinesListPage space="ATTENDANCE" basePath="/after-sales" />;
 }

@@ -1,0 +1,85 @@
+/*
+ * Menu lateral claro e flutuante.
+ * Os tokens abaixo sobrescrevem as cores --sidebar-* do tema só dentro do menu,
+ * então as classes Tailwind `bg-sidebar`, `text-sidebar-foreground` etc. já
+ * saem na versão clara. O roxo vem de --primary.
+ */
+.crm-sidebar {
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 250 14% 30%;
+  --sidebar-border: 250 20% 92%;
+  --sidebar-accent: 250 33% 97%;
+  --sidebar-muted: 250 8% 56%;
+  background: hsl(var(--sidebar));
+  color: hsl(var(--sidebar-foreground));
+}
+
+.crm-sidebar :is(a, button):focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+/* Tooltip do modo recolhido e dos itens bloqueados. */
+.crm-sidebar-tip-trigger { display: block; }
+.crm-sidebar-tip {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  transform: translateY(-50%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--popover, 0 0% 100%));
+  color: hsl(var(--popover-foreground, var(--foreground)));
+  padding: 7px 10px;
+  font-size: 12px;
+  box-shadow: 0 6px 16px rgb(24 16 48 / 0.08);
+  white-space: nowrap;
+}
+
+/* Linha da marca: logo + nome à esquerda, botão « à direita. */
+.crm-sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 72px;
+  padding: 16px 16px 16px 20px;
+}
+.crm-sidebar[data-collapsed="true"] .crm-sidebar-brand {
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 0;
+}
+
+/* Botão de recolher no estilo "caixinha" da referência. */
+.crm-sidebar-toggle {
+  width: 36px;
+  height: 36px;
+  border: 1px solid hsl(var(--sidebar-border));
+  border-radius: 10px;
+  background: hsl(var(--sidebar-accent));
+  color: hsl(var(--foreground));
+}
+.crm-sidebar-toggle:hover {
+  border-color: hsl(var(--primary) / 0.35);
+  background: hsl(var(--primary) / 0.06);
+  color: hsl(var(--primary));
+}
+
+/* Fixo na lateral, de cima a baixo, separado do conteúdo só por uma linha. */
+.crm-sidebar-frame .crm-sidebar {
+  height: 100dvh;
+  border-right: 1px solid hsl(var(--sidebar-border));
+}
+
+/* Gaveta do celular: ocupa a altura toda, encostada na esquerda. */
+.crm-sidebar-drawer .crm-sidebar {
+  height: 100dvh;
+  border-right: 1px solid hsl(var(--sidebar-border));
+  box-shadow: 0 10px 30px rgb(24 16 48 / 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-sidebar, .crm-sidebar * { transition: none !important; }
+}

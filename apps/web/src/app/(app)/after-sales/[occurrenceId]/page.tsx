@@ -1,9 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { OccurrenceDetailPage } from "@/components/crm/lifecycle-pages";
+import { PipelineBoardPage } from "@/components/crm/pipelines-page";
 
 export default function Page() {
   const params = useParams<{ occurrenceId: string }>();
-  return <OccurrenceDetailPage occurrenceId={params.occurrenceId} />;
+  return <PipelineBoardPage pipelineId={params.occurrenceId} basePath="/after-sales" />;
 }

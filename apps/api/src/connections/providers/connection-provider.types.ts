@@ -1,0 +1,59 @@
+import type { ConnectionLifecycleStatus } from "@xingyu/database";
+
+export type ProviderConnection = {
+  externalInstanceId: string;
+  status: ConnectionLifecycleStatus;
+};
+
+export type ProviderQr = {
+  qrPayload: string;
+  expiresAt: Date;
+  status: ConnectionLifecycleStatus;
+};
+
+export type NormalizedProviderEvent =
+  | {
+      kind: "ignored";
+      reason: string;
+    }
+  | {
+      kind: "inbound_message";
+      externalEventId: string;
+      externalMessageId?: string;
+      phone: string;
+      contactName?: string;
+      body: string;
+      occurredAt: Date;
+    }
+  | {
+      kind: "connection_status";
+      externalEventId: string;
+      status: string;
+      displayAccount?: string;
+      errorCode?: string;
+      occurredAt: Date;
+    };
+
+export type ProviderOutboundTextResult = {
+  externalMessageId?: string;
+  remoteJid?: string;
+  status?: string;
+};
+
+export interface ConnectionProvider {
+  readonly name: string;
+  create(channelId: string): Promise<ProviderConnection>;
+  connect(channelId: string, externalInstanceId: string): Promise<ProviderQr>;
+  getQr(channelId: string, externalInstanceId: string): Promise<ProviderQr | null>;
+  disconnect(channelId: string, externalInstanceId: string): Promise<void>;
+  /** Permanently remove the remote provider instance. Must be idempotent when already gone. */
+  deleteInstance(channelId: string, externalInstanceId: string): Promise<void>;
+  sendText(
+    channelId: string,
+    externalInstanceId: string,
+    destination: string,
+    text: string,
+  ): Promise<ProviderOutboundTextResult>;
+  validateWebhook(payload: unknown, signature?: string): boolean;
+  normalizeWebhook(payload: unknown): NormalizedProviderEvent;
+}

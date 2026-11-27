@@ -4,6 +4,37 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes task-bell-wiggle {
+  0%,
+  94%,
+  100% {
+    transform: rotate(0deg);
+  }
+  95% {
+    transform: rotate(-10deg);
+  }
+  96% {
+    transform: rotate(9deg);
+  }
+  97% {
+    transform: rotate(-6deg);
+  }
+  98% {
+    transform: rotate(4deg);
+  }
+}
+
+.task-bell-icon-attention {
+  animation: task-bell-wiggle 10s ease-in-out infinite;
+  transform-origin: 50% 20%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-bell-icon-attention {
+    animation: none;
+  }
+}
+
 @layer base {
   :root {
     --background: 250 30% 97%;
@@ -69,39 +100,17 @@
 
   .conversation-thread-texture {
     background-image:
-      radial-gradient(
-        circle at 12% 18%,
-        hsl(250 12% 38% / 0.045) 0 1.1px,
-        transparent 1.7px
-      ),
-      radial-gradient(
-        circle at 78% 32%,
-        hsl(262 18% 42% / 0.04) 0 1px,
-        transparent 1.6px
-      ),
-      radial-gradient(
-        circle at 34% 76%,
-        hsl(250 10% 40% / 0.038) 0 1.25px,
-        transparent 1.9px
-      ),
+      radial-gradient(circle at 12% 18%, hsl(250 12% 38% / 0.045) 0 1.1px, transparent 1.7px),
+      radial-gradient(circle at 78% 32%, hsl(262 18% 42% / 0.04) 0 1px, transparent 1.6px),
+      radial-gradient(circle at 34% 76%, hsl(250 10% 40% / 0.038) 0 1.25px, transparent 1.9px),
       radial-gradient(
         48px 48px at 88% 68%,
         transparent 58%,
         hsl(262 14% 40% / 0.035) 59% 61%,
         transparent 62%
       ),
-      linear-gradient(
-        148deg,
-        transparent 46%,
-        hsl(250 10% 36% / 0.028) 46.5%,
-        transparent 47.5%
-      ),
-      linear-gradient(
-        -32deg,
-        transparent 62%,
-        hsl(262 12% 38% / 0.022) 62.5%,
-        transparent 63.5%
-      );
+      linear-gradient(148deg, transparent 46%, hsl(250 10% 36% / 0.028) 46.5%, transparent 47.5%),
+      linear-gradient(-32deg, transparent 62%, hsl(262 12% 38% / 0.022) 62.5%, transparent 63.5%);
     background-size:
       112px 112px,
       128px 128px,
@@ -151,16 +160,8 @@
 
   .dark .conversation-thread-texture {
     background-image:
-      radial-gradient(
-        circle at 12% 18%,
-        hsl(var(--foreground) / 0.05) 0 1.1px,
-        transparent 1.7px
-      ),
-      radial-gradient(
-        circle at 78% 32%,
-        hsl(var(--foreground) / 0.04) 0 1px,
-        transparent 1.6px
-      ),
+      radial-gradient(circle at 12% 18%, hsl(var(--foreground) / 0.05) 0 1.1px, transparent 1.7px),
+      radial-gradient(circle at 78% 32%, hsl(var(--foreground) / 0.04) 0 1px, transparent 1.6px),
       radial-gradient(
         circle at 34% 76%,
         hsl(var(--foreground) / 0.045) 0 1.25px,
@@ -196,5 +197,913 @@
 
   .dark .conversation-thread-scroll::-webkit-scrollbar-thumb {
     background-color: hsl(var(--foreground) / 0.28);
+  }
+}
+
+.automation-studio {
+  --automation-canvas: 240 8% 11%;
+  --automation-surface: 240 7% 15%;
+  --automation-surface-2: 240 6% 18%;
+  --automation-elevated: 240 8% 20%;
+  --automation-border: 240 6% 24%;
+  --automation-border-selected: 262 52% 58%;
+  --automation-text: 240 20% 96%;
+  --automation-text-2: 240 8% 70%;
+  --automation-accent: 262 52% 62%;
+  --automation-success: 152 45% 42%;
+  --automation-warning: 38 84% 52%;
+  --automation-error: 0 72% 58%;
+  --automation-grid: 240 6% 22%;
+  --automation-edge-idle: 250 13% 42%;
+  --automation-edge-primary: 262 42% 62%;
+  --automation-edge-secondary: 260 34% 58%;
+  --automation-edge-active: 264 72% 67%;
+  --automation-edge-packet: 270 100% 91%;
+  --automation-edge-success: 152 54% 48%;
+  --automation-edge-warning: 38 88% 58%;
+  --automation-edge-error: 0 72% 62%;
+  --automation-edge-label-bg: 240 8% 13%;
+  --xy-selection-background-color: hsl(var(--automation-accent) / 0.2);
+  --xy-selection-border: 2px solid hsl(var(--automation-accent) / 0.95);
+}
+
+.automation-studio.automation-studio-light {
+  --automation-canvas: 240 20% 97%;
+  --automation-surface: 0 0% 100%;
+  --automation-surface-2: 240 18% 95%;
+  --automation-elevated: 0 0% 100%;
+  --automation-border: 240 12% 84%;
+  --automation-border-selected: 262 55% 54%;
+  --automation-text: 240 15% 13%;
+  --automation-text-2: 240 7% 42%;
+  --automation-accent: 262 58% 54%;
+  --automation-success: 152 50% 36%;
+  --automation-warning: 36 90% 43%;
+  --automation-error: 0 68% 50%;
+  --automation-grid: 240 10% 86%;
+  --automation-edge-idle: 245 12% 68%;
+  --automation-edge-primary: 262 48% 54%;
+  --automation-edge-secondary: 260 32% 58%;
+  --automation-edge-active: 264 66% 55%;
+  --automation-edge-packet: 266 72% 36%;
+  --automation-edge-success: 152 50% 36%;
+  --automation-edge-warning: 36 90% 43%;
+  --automation-edge-error: 0 68% 50%;
+  --automation-edge-label-bg: 0 0% 100%;
+  --xy-selection-background-color: hsl(var(--automation-accent) / 0.12);
+  --xy-selection-border: 2px solid hsl(var(--automation-accent) / 0.85);
+}
+
+.automation-studio,
+.automation-studio * {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--automation-accent) / 0.48) transparent;
+}
+
+.automation-studio *::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.automation-studio *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.automation-studio *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: hsl(var(--automation-accent) / 0.42);
+  background-clip: padding-box;
+}
+
+.automation-studio *::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--automation-accent) / 0.7);
+  background-clip: padding-box;
+}
+
+.automation-studio *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.automation-studio .react-flow__selection {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px hsl(var(--automation-canvas) / 0.5),
+    0 0 20px hsl(var(--automation-accent) / 0.18);
+}
+
+/* Keep the drag-selection marquee visible, but remove the persistent group box.
+ * Selected widgets already communicate the selection with their own accent border. */
+.automation-studio .react-flow__nodesselection-rect {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.automation-studio .organic-flow-edge,
+.automation-studio .organic-connection-preview {
+  --organic-edge-color: hsl(var(--automation-edge-primary));
+  --organic-edge-secondary: hsl(var(--automation-edge-secondary));
+}
+
+.automation-studio .organic-flow-edge[data-tone="success"] {
+  --organic-edge-color: hsl(var(--automation-edge-success));
+  --organic-edge-secondary: hsl(var(--automation-edge-success));
+}
+
+.automation-studio .organic-flow-edge[data-tone="error"] {
+  --organic-edge-color: hsl(var(--automation-edge-error));
+  --organic-edge-secondary: hsl(var(--automation-edge-error));
+}
+
+.automation-studio .organic-flow-edge[data-status="running"] {
+  --organic-edge-color: hsl(var(--automation-edge-active));
+}
+
+.automation-studio .organic-flow-edge[data-status="waiting"] {
+  --organic-edge-color: hsl(var(--automation-edge-warning));
+}
+
+.automation-studio .organic-flow-edge[data-status="success"] {
+  --organic-edge-color: hsl(var(--automation-edge-success));
+}
+
+.automation-studio .organic-flow-edge[data-status="failed"] {
+  --organic-edge-color: hsl(var(--automation-edge-error));
+}
+
+.automation-studio .organic-edge-ambient,
+.automation-studio .organic-edge-fiber,
+.automation-studio .organic-edge-core,
+.automation-studio .organic-edge-packet,
+.automation-studio .organic-edge-hitbox,
+.automation-studio .organic-connection-preview path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.automation-studio .organic-edge-ambient {
+  stroke: var(--organic-edge-color);
+  stroke-width: 8;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.automation-studio .organic-edge-fiber {
+  stroke: var(--organic-edge-secondary);
+  stroke-width: 0.65;
+  opacity: 0.16;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+  animation: organic-fiber-breathe var(--organic-duration, 6s) ease-in-out infinite;
+  animation-delay: var(--organic-phase, 0ms);
+  transition: opacity 180ms ease;
+}
+
+.automation-studio .organic-edge-fiber[data-fiber="2"] {
+  --organic-drift: -0.55px;
+  opacity: 0.12;
+  animation-duration: 6.7s;
+}
+
+.automation-studio .organic-edge-fiber[data-fiber="3"] {
+  --organic-drift: 0.8px;
+  opacity: 0.09;
+  animation-duration: 5.3s;
+}
+
+.automation-studio .organic-edge-fiber[data-fiber="4"] {
+  --organic-drift: -0.7px;
+  opacity: 0.06;
+  animation-duration: 7.4s;
+}
+
+.automation-studio .organic-edge-core {
+  stroke: var(--organic-edge-color);
+  stroke-width: 1.15;
+  opacity: 0.62;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    stroke-width 180ms ease;
+}
+
+.automation-studio .organic-edge-arrow {
+  fill: var(--organic-edge-color);
+}
+
+.automation-studio .organic-edge-packet {
+  stroke-width: 3.2;
+  stroke-dasharray: 24 176;
+  opacity: 0.95;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px hsl(var(--automation-edge-active) / 0.55));
+  animation: organic-energy-packet 1.35s linear infinite;
+}
+
+.automation-studio .organic-edge-junction {
+  fill: var(--organic-edge-color);
+  opacity: 0.55;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--organic-edge-color));
+  transition: opacity 180ms ease;
+}
+
+.automation-studio .organic-edge-junction-core {
+  fill: hsl(var(--automation-edge-packet));
+  opacity: 0.7;
+}
+
+.automation-studio .organic-edge-hitbox {
+  stroke: transparent;
+  stroke-width: 22;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.automation-studio .organic-flow-edge:hover .organic-edge-ambient,
+.automation-studio .organic-flow-edge.is-selected .organic-edge-ambient,
+.automation-studio .organic-flow-edge[data-status="running"] .organic-edge-ambient {
+  opacity: 0.1;
+}
+
+.automation-studio .organic-flow-edge:hover .organic-edge-core,
+.automation-studio .organic-flow-edge.is-selected .organic-edge-core {
+  stroke-width: 1.4;
+  opacity: 0.92;
+}
+
+.automation-studio .organic-flow-edge:hover .organic-edge-fiber,
+.automation-studio .organic-flow-edge.is-selected .organic-edge-fiber {
+  opacity: 0.28;
+}
+
+.automation-studio .organic-flow-edge[data-status="waiting"] .organic-edge-junction-target {
+  animation: organic-junction-wait 2.4s ease-in-out infinite;
+}
+
+.automation-studio .organic-flow-edge[data-status="failed"] .organic-edge-junction-target {
+  opacity: 0.9;
+}
+
+.automation-studio .organic-flow-edge[data-status="skipped"] {
+  opacity: 0.28;
+}
+
+.automation-studio .organic-edge-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: hsl(var(--automation-text-2));
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.automation-studio .organic-edge-label > span,
+.automation-studio .organic-edge-label > button {
+  border: 1px solid hsl(var(--automation-border) / 0.75);
+  background: hsl(var(--automation-edge-label-bg) / 0.9);
+  box-shadow: 0 2px 7px hsl(var(--automation-canvas) / 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.automation-studio .organic-edge-label > span {
+  border-radius: 999px;
+  padding: 2px 5px;
+}
+
+.automation-studio .organic-edge-label > button {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 999px;
+  color: hsl(var(--automation-text-2));
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.2;
+  transition:
+    opacity 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.automation-studio .organic-edge-label > button:hover,
+.automation-studio .organic-edge-label > button:focus-visible {
+  border-color: hsl(var(--automation-border-selected));
+  color: hsl(var(--automation-accent));
+  opacity: 1;
+}
+
+.automation-studio .organic-connection-preview .organic-edge-ambient {
+  opacity: 0.08;
+}
+
+.automation-studio .organic-connection-preview .organic-edge-core {
+  opacity: 0.86;
+}
+
+.automation-studio .automation-receptor {
+  display: grid;
+  place-items: center;
+  position: absolute !important;
+  opacity: 1;
+  z-index: 4;
+}
+
+.automation-studio select {
+  color-scheme: dark;
+}
+
+.automation-studio select option {
+  background: hsl(var(--automation-surface));
+  color: hsl(var(--automation-text));
+}
+
+/* Form controls embedded in automation widgets use the canvas palette instead
+ * of the application's light card defaults. Keep this scoped to executable
+ * nodes so inline editors for notes and frames retain their own appearance. */
+.automation-studio :is(.react-flow__node-automation, aside) input:not([type="checkbox"]):not([type="radio"]),
+.automation-studio :is(.react-flow__node-automation, aside) select,
+.automation-studio :is(.react-flow__node-automation, aside) textarea {
+  border-color: hsl(var(--automation-border));
+  background: hsl(var(--automation-surface));
+  color: hsl(var(--automation-text));
+  box-shadow: inset 0 1px 0 hsl(var(--automation-text) / 0.025);
+  color-scheme: dark;
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input::placeholder,
+.automation-studio :is(.react-flow__node-automation, aside) textarea::placeholder {
+  color: hsl(var(--automation-text-2) / 0.72);
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input:not([type="checkbox"]):not([type="radio"]):hover,
+.automation-studio :is(.react-flow__node-automation, aside) select:hover,
+.automation-studio :is(.react-flow__node-automation, aside) textarea:hover {
+  border-color: hsl(var(--automation-accent) / 0.52);
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+.automation-studio :is(.react-flow__node-automation, aside) select:focus-visible,
+.automation-studio :is(.react-flow__node-automation, aside) textarea:focus-visible {
+  border-color: hsl(var(--automation-accent));
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--automation-accent) / 0.14);
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input:disabled,
+.automation-studio :is(.react-flow__node-automation, aside) select:disabled,
+.automation-studio :is(.react-flow__node-automation, aside) textarea:disabled {
+  border-color: hsl(var(--automation-border) / 0.72);
+  background: hsl(var(--automation-surface-2));
+  color: hsl(var(--automation-text-2));
+  opacity: 0.72;
+}
+
+.automation-studio :is(.react-flow__node-automation, aside) input[type="checkbox"],
+.automation-studio :is(.react-flow__node-automation, aside) input[type="radio"] {
+  accent-color: hsl(var(--automation-accent));
+  color-scheme: dark;
+}
+
+.automation-studio.automation-studio-light :is(.react-flow__node-automation, aside) input,
+.automation-studio.automation-studio-light :is(.react-flow__node-automation, aside) select,
+.automation-studio.automation-studio-light :is(.react-flow__node-automation, aside) textarea {
+  color-scheme: light;
+}
+
+.automation-studio .automation-receptor.react-flow__handle-left {
+  top: 50% !important;
+  right: auto !important;
+  left: -12px !important;
+  transform: translateY(-50%) !important;
+}
+
+.automation-studio .automation-receptor.react-flow__handle-right {
+  top: 50%;
+  right: -12px !important;
+  left: auto !important;
+  transform: translateY(-50%) !important;
+}
+
+.automation-studio .automation-receptor::after {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--automation-edge-idle));
+  box-shadow:
+    0 0 0 1px hsl(var(--automation-surface)),
+    0 0 5px hsl(var(--automation-edge-primary) / 0.3);
+  content: "";
+  transition:
+    width 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.automation-studio .automation-receptor-accent::after {
+  background: hsl(var(--automation-edge-primary));
+}
+
+.automation-studio .automation-receptor-success::after {
+  background: hsl(var(--automation-edge-success));
+}
+
+.automation-studio .automation-receptor-error::after {
+  background: hsl(var(--automation-edge-error));
+}
+
+.automation-studio .automation-receptor:hover::after,
+.automation-studio .automation-receptor.connectingfrom::after,
+.automation-studio .automation-receptor.connectingto::after {
+  width: 10px;
+  box-shadow:
+    0 0 0 1px hsl(var(--automation-surface)),
+    0 0 9px hsl(var(--automation-edge-active) / 0.65);
+}
+
+@keyframes organic-energy-packet {
+  to {
+    stroke-dashoffset: -200;
+  }
+}
+
+@keyframes organic-fiber-breathe {
+  0%,
+  100% {
+    stroke-dashoffset: 0;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.22;
+    stroke-dashoffset: 1.5;
+    transform: translateY(var(--organic-drift, 0.6px));
+  }
+}
+
+@keyframes organic-junction-wait {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.automation-studio .react-flow__background {
+  background: hsl(var(--automation-canvas));
+  z-index: 0;
+  pointer-events: none;
+}
+
+.automation-studio .react-flow__renderer {
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .automation-studio *,
+  .automation-studio *::before,
+  .automation-studio *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/*
+  Tracking visual language — only elements marked for the module.
+  Neutral = content hierarchy.
+  Acid green = Tracking signal.
+  Dark green = readable analytical green.
+  Blue = information.
+  Orange = attention.
+  Red = loss.
+*/
+[data-module-theme="tracking"],
+.tracking-portal {
+  --tracking-bg: #f8f8f8;
+  --tracking-surface: #ffffff;
+  --tracking-surface-soft: #f3f3f3;
+  --tracking-surface-raised: #ffffff;
+  --tracking-border: #e4e4e7;
+  --tracking-border-strong: #d1d1d6;
+  --tracking-fg: #101010;
+  --tracking-fg-muted: #62626b;
+  --tracking-accent: #5dd62c;
+  --tracking-accent-hover: #4cbf22;
+  --tracking-accent-strong: #337418;
+  --tracking-accent-soft: rgba(93, 214, 44, 0.14);
+  --tracking-accent-subtle: rgba(93, 214, 44, 0.07);
+  --tracking-accent-glow: transparent;
+  --tracking-chart-track: #ebebee;
+  --tracking-chart-muted: #8a8a8a;
+  --tracking-chart-grid: rgba(16, 16, 16, 0.07);
+  --tracking-data-green: #5dd62c;
+  --tracking-data-blue: #3478f6;
+  --tracking-data-red: #e63e46;
+  --tracking-data-orange: #f28a20;
+  --tracking-data-pink: #d93a83;
+  --tracking-data-yellow: #f4c542;
+  --tracking-data-yellow-ink: #8a6412;
+  --tracking-data-orange-ink: #a34e08;
+  --tracking-data-charcoal: #3b3f42;
+  --tracking-radius-widget: var(--radius);
+  --tracking-radius-subcard: 12px;
+  --tracking-radius-tooltip: 12px;
+  --tracking-space-sm: 8px;
+  --tracking-space-md: 16px;
+  --tracking-space-lg: 24px;
+  --tracking-baby-weight: 7%;
+  --tracking-data-green-ink: #287615;
+  --tracking-data-blue-ink: #245bc2;
+  --tracking-data-red-ink: #b92734;
+  --tracking-data-pink-ink: #a62563;
+  --tracking-tooltip-shadow: 0 4px 16px rgb(16 16 16 / 8%);
+  --tracking-tooltip-bg: #ffffff;
+  --tracking-tooltip-border: var(--tracking-border);
+  --tracking-negative: hsl(0 72% 51%);
+  --tracking-warning: #ea580c;
+  --tracking-info: #2563eb;
+  --background: 0 0% 97.3%;
+  --foreground: 0 0% 6.3%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 6.3%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 100 3% 44%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 6.3%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 0 0% 96%;
+  --accent-foreground: 0 0% 8%;
+  --ring: 262 83% 58%;
+  color: var(--tracking-fg);
+  color-scheme: light;
+}
+
+.dark [data-module-theme="tracking"],
+.dark .tracking-portal {
+  --tracking-bg: #0f0f0f;
+  --tracking-surface: #171717;
+  --tracking-surface-soft: #202020;
+  --tracking-surface-raised: #242424;
+  --tracking-border: rgba(255, 255, 255, 0.08);
+  --tracking-border-strong: rgba(255, 255, 255, 0.14);
+  --tracking-fg: #f8f8f8;
+  --tracking-fg-muted: #a2a2a2;
+  --tracking-accent: #5dd62c;
+  --tracking-accent-hover: #75ea48;
+  --tracking-accent-strong: #75ea48;
+  --tracking-accent-soft: rgba(93, 214, 44, 0.15);
+  --tracking-accent-subtle: rgba(93, 214, 44, 0.07);
+  --tracking-accent-glow: transparent;
+  --tracking-chart-track: #292929;
+  --tracking-chart-muted: #6a6a6a;
+  --tracking-chart-grid: rgba(248, 248, 248, 0.06);
+  --tracking-data-green: #5dd62c;
+  --tracking-data-blue: #3478f6;
+  --tracking-data-red: #e63e46;
+  --tracking-data-orange: #f28a20;
+  --tracking-data-pink: #d93a83;
+  --tracking-data-yellow: #f4c542;
+  --tracking-data-yellow-ink: #f4c542;
+  --tracking-data-orange-ink: #f28a20;
+  --tracking-data-charcoal: #3b3f42;
+  --tracking-data-green-ink: #8be566;
+  --tracking-data-blue-ink: #80aaff;
+  --tracking-data-red-ink: #ff8288;
+  --tracking-data-pink-ink: #ed81b3;
+  --tracking-baby-weight: 7%;
+  --tracking-tooltip-shadow: 0 4px 16px rgb(0 0 0 / 24%);
+  --tracking-tooltip-bg: #202020;
+  --tracking-tooltip-border: rgba(255, 255, 255, 0.12);
+  --tracking-negative: hsl(0 72% 62%);
+  --tracking-warning: #fb923c;
+  --tracking-info: #60a5fa;
+  --background: 0 0% 6%;
+  --foreground: 0 0% 97.3%;
+  --card: 0 0% 9%;
+  --card-foreground: 0 0% 97.3%;
+  --muted: 0 0% 12.5%;
+  --muted-foreground: 0 0% 64%;
+  --border: 0 0% 16%;
+  --input: 0 0% 16%;
+  --secondary: 0 0% 12.5%;
+  --secondary-foreground: 0 0% 97.3%;
+  --primary: 263 70% 72%;
+  --primary-foreground: 0 0% 6%;
+  --accent: 0 0% 14%;
+  --accent-foreground: 103 67% 62%;
+  --ring: 263 70% 72%;
+  color: var(--tracking-fg);
+  color-scheme: dark;
+}
+
+.tracking-portal {
+  background: var(--tracking-tooltip-bg);
+  color: var(--tracking-fg);
+  border: 1px solid var(--tracking-tooltip-border);
+  box-shadow: 0 10px 28px rgba(16, 16, 16, 0.08);
+}
+
+.dark .tracking-portal {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.46);
+}
+
+[data-module-theme="tracking"] .shadow-card,
+[data-module-theme="tracking"] .shadow-soft,
+.tracking-portal.shadow-soft {
+  box-shadow: 0 1px 2px rgba(16, 16, 16, 0.04), 0 8px 24px rgba(16, 16, 16, 0.04);
+}
+
+.dark [data-module-theme="tracking"] .shadow-card,
+.dark [data-module-theme="tracking"] .shadow-soft {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.dark .tracking-portal.shadow-soft {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 16px 40px rgba(0, 0, 0, 0.46);
+}
+
+[data-module-theme="tracking"] [data-tracking-control="refresh"] {
+  border: 1px solid var(--tracking-border);
+  background: var(--tracking-surface);
+  color: var(--tracking-accent-strong);
+  box-shadow: none;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 220ms ease,
+    border-color 180ms ease;
+}
+
+[data-module-theme="tracking"] [data-tracking-control="refresh"]:hover {
+  border-color: var(--tracking-border-strong);
+  background: var(--tracking-surface-soft);
+  box-shadow: none;
+}
+
+[data-module-theme="tracking"] [data-tracking-control="filter"] {
+  border: 1px solid var(--tracking-border);
+  background: var(--tracking-surface);
+  color: var(--tracking-fg);
+  box-shadow: none;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 220ms ease;
+}
+
+[data-module-theme="tracking"] [data-tracking-control="filter"]:hover {
+  border-color: var(--tracking-border-strong);
+}
+[data-module-theme="tracking"] [data-tracking-control="filter"][aria-expanded="true"],
+[data-module-theme="tracking"] [data-tracking-control="filter"][data-active="true"] {
+  border-color: hsl(var(--primary) / .35);
+  background: hsl(var(--primary) / .06);
+  box-shadow: none;
+}
+
+[data-module-theme="tracking"] [data-tracking-badge="demo"] {
+  background: var(--tracking-accent-soft);
+  color: var(--tracking-accent-strong);
+}
+
+.dark [data-module-theme="tracking"] [data-tracking-badge="demo"] {
+  background: var(--tracking-accent-soft);
+  color: var(--tracking-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-module-theme="tracking"] [data-tracking-control] {
+    transition: none;
+  }
+}
+
+/* Global topbar action colors follow the CRM primary token. */
+header:is([data-testid="beta-header"], [data-testid="global-header"]) [data-header-control="new"] {
+  background: hsl(var(--primary));
+  color: white;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+header:is([data-testid="beta-header"], [data-testid="global-header"]) [data-header-control="new"]:hover,
+header:is([data-testid="beta-header"], [data-testid="global-header"]) [data-header-control="new"][aria-expanded="true"] {
+  background: color-mix(in srgb, hsl(var(--primary)) 90%, black);
+}
+
+header:is([data-testid="beta-header"], [data-testid="global-header"]) [data-header-control="new"]:active {
+  background: color-mix(in srgb, hsl(var(--primary)) 85%, black);
+}
+
+header:is([data-testid="beta-header"], [data-testid="global-header"]) [data-header-control="new"]:focus-visible {
+  --tw-ring-color: hsl(var(--primary) / .55);
+  outline: 2px solid hsl(var(--primary) / .55);
+  outline-offset: 2px;
+}
+
+/* Contextual Tracking skin for the existing top bar. Other modules do not set this attribute. */
+header[data-header-theme="tracking"] {
+  --tracking-bg: #f8f8f8;
+  --tracking-surface: #ffffff;
+  --tracking-surface-soft: #f3f3f3;
+  --tracking-border: #e4e4e7;
+  --tracking-border-strong: #d1d1d6;
+  --tracking-fg: #111315;
+  --tracking-fg-muted: #62626b;
+  --tracking-accent: #5dd62c;
+  --tracking-accent-strong: #337418;
+  --tracking-accent-subtle: rgba(93, 214, 44, 0.07);
+  --tracking-data-charcoal: #3b3f42;
+  background: var(--tracking-bg);
+  border-bottom-color: var(--tracking-border);
+  color: var(--tracking-fg);
+  backdrop-filter: none;
+}
+
+.dark header[data-header-theme="tracking"] {
+  --tracking-bg: #0f0f0f;
+  --tracking-surface: #171717;
+  --tracking-surface-soft: #202020;
+  --tracking-border: rgba(255, 255, 255, 0.08);
+  --tracking-border-strong: rgba(255, 255, 255, 0.14);
+  --tracking-fg: #f8f8f8;
+  --tracking-fg-muted: #a2a2a2;
+  --tracking-accent: #5dd62c;
+  --tracking-accent-strong: #75ea48;
+  --tracking-accent-subtle: rgba(93, 214, 44, 0.12);
+  --tracking-data-charcoal: #3b3f42;
+}
+
+header[data-header-theme="tracking"] [data-header-control="search"] {
+  border-color: var(--tracking-border);
+  background: var(--tracking-surface);
+  color: var(--tracking-fg-muted);
+  box-shadow: none;
+}
+
+header[data-header-theme="tracking"] [data-header-control="search"]:hover {
+  border-color: var(--tracking-border-strong);
+  background: var(--tracking-surface);
+}
+
+header[data-header-theme="tracking"] [data-header-control="search"]:focus-within {
+  border-color: hsl(var(--primary) / .55);
+  box-shadow: 0 0 0 2px hsl(var(--primary) / .16);
+}
+
+header[data-header-theme="tracking"] [data-header-control="search"] input {
+  color: var(--tracking-fg);
+}
+
+header[data-header-theme="tracking"] [data-header-control="search"] input::placeholder {
+  color: var(--tracking-fg-muted);
+}
+
+header[data-header-theme="tracking"] [data-header-control="search"] svg,
+header[data-header-theme="tracking"] [data-header-control="search"] kbd {
+  color: var(--tracking-fg-muted);
+  border-color: var(--tracking-border);
+  background: transparent;
+}
+
+header[data-header-theme="tracking"] [data-header-control="search"]:focus-within svg {
+  color: hsl(var(--primary));
+}
+
+header[data-header-theme="tracking"] [data-header-control="today"],
+header[data-header-theme="tracking"] [data-header-control="notifications"] {
+  border-color: var(--tracking-border);
+  background: var(--tracking-surface);
+  color: var(--tracking-fg);
+  box-shadow: none;
+}
+
+header[data-header-theme="tracking"] [data-header-control="today"]:hover,
+header[data-header-theme="tracking"] [data-header-control="notifications"]:hover {
+  border-color: var(--tracking-border-strong);
+  background: var(--tracking-surface-soft);
+  color: var(--tracking-fg);
+}
+
+header[data-header-theme="tracking"] [data-header-control="today"]:focus-visible,
+header[data-header-theme="tracking"] [data-header-control="notifications"]:focus-visible,
+header[data-header-theme="tracking"] [data-header-control="new"]:focus-visible,
+header[data-header-theme="tracking"] [data-header-control="search"]:focus-within {
+  --tw-ring-color: hsl(var(--primary) / .55);
+}
+
+header[data-header-theme="tracking"] [data-header-control="notifications"]:focus-visible {
+  outline: 2px solid hsl(var(--primary) / .55);
+  outline-offset: 2px;
+}
+
+header[data-header-theme="tracking"] [data-header-notification-dot] {
+  background: hsl(var(--primary));
+}
+
+header[data-header-theme="tracking"] [data-header-control="new"] {
+  border: 1px solid transparent;
+  background: hsl(var(--primary));
+  color: white;
+  box-shadow: none;
+}
+
+header[data-header-theme="tracking"] [data-header-control="new"]:hover,
+header[data-header-theme="tracking"] [data-header-control="new"][aria-expanded="true"] {
+  border-color: transparent;
+  background: color-mix(in srgb, hsl(var(--primary)) 90%, black);
+  color: white;
+}
+
+header[data-header-theme="tracking"] [data-header-popover] {
+  border-color: var(--tracking-border);
+  background: var(--tracking-surface);
+  color: var(--tracking-fg);
+  box-shadow: 0 1px 2px rgba(16, 16, 16, 0.04), 0 8px 24px rgba(16, 16, 16, 0.06);
+}
+
+.dark header[data-header-theme="tracking"] [data-header-popover] {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.46);
+}
+
+header[data-header-theme="tracking"] [data-header-popover] .border-b {
+  border-color: var(--tracking-border);
+}
+
+header[data-header-theme="tracking"] [data-header-popover="new"] [role="menuitem"]:hover,
+header[data-header-theme="tracking"] [data-header-popover="new"] a:hover {
+  background: hsl(var(--primary) / .07);
+  color: var(--tracking-fg);
+}
+
+header[data-header-theme="tracking"] [data-header-popover="new"] svg {
+  color: hsl(var(--primary));
+}
+
+header[data-header-theme="tracking"] [data-header-popover="notifications"] [class*="bg-accent"] {
+  background: var(--tracking-surface-soft);
+}
+
+/* Shared neutral chrome; data marks retain the semantic palette. */
+[data-module-theme="tracking"] [data-tracking-control="refresh"] { color: var(--tracking-fg-muted); }
+.tracking-portal, .tracking-portal.shadow-soft, .dark .tracking-portal, .dark .tracking-portal.shadow-soft {
+  border-radius: var(--tracking-radius-tooltip);
+  box-shadow: var(--tracking-tooltip-shadow);
+}
+[data-module-theme="tracking"] .rounded-2xl { border-radius: var(--tracking-radius-widget); }
+[data-module-theme="tracking"] .text-green-600 { color: var(--tracking-data-green-ink); }
+@media (prefers-reduced-motion: reduce) {
+  [data-module-theme="tracking"] *, .tracking-portal * { animation: none !important; transition: none !important; }
+}
+
+/*
+ * Barra de rolagem da plataforma: 1,5px, roxa, visível só enquanto rola.
+ * `data-scrolling` é posto pelo componente ScrollActivity.
+ * Fica fora de @layer para valer sobre as regras de barra de cada tela.
+ */
+@supports selector(::-webkit-scrollbar) {
+  * {
+    /* No Chrome, scrollbar-width/color diferentes de auto desligam o estilo abaixo. */
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+  }
+  *::-webkit-scrollbar {
+    width: 5px !important;
+    height: 5px !important;
+    background: transparent !important;
+  }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent !important;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: transparent !important;
+    border: 1.75px solid transparent !important;
+    border-radius: 999px !important;
+    background-clip: content-box !important;
+  }
+  [data-scrolling]::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--primary) / 0.85) !important;
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin !important;
+    scrollbar-color: transparent transparent !important;
+  }
+  [data-scrolling] {
+    scrollbar-color: hsl(var(--primary) / 0.85) transparent !important;
   }
 }

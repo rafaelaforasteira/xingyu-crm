@@ -15,7 +15,7 @@ export type ConversationWorkspaceScope =
   | { type: "global" }
   | { type: "pipeline"; pipelineId: string };
 
-type MobileView = "list" | "thread" | "panel";
+type MobileView = "list" | "thread";
 
 export function ConversationWorkspace({
   scope,
@@ -138,11 +138,7 @@ export function ConversationWorkspace({
             }
             onOpenContext={() => {
               if (window.matchMedia("(min-width: 1024px)").matches) return;
-              if (window.matchMedia("(min-width: 768px)").matches) {
-                setPanelDrawerOpen(true);
-                return;
-              }
-              setMobileView("panel");
+              setPanelDrawerOpen(true);
             }}
             showContextButton
           />
@@ -151,12 +147,7 @@ export function ConversationWorkspace({
         <div data-testid="beta-lead-context" className="min-h-0 min-w-0">
           <LeadContextPanel
             conversationId={selectedConversationId ?? undefined}
-            visible={mobileView === "panel"}
-            onBack={
-              selectedConversationId
-                ? () => setMobileView("thread")
-                : undefined
-            }
+            visible={false}
             className="border-l"
           />
         </div>

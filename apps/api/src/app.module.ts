@@ -5,13 +5,15 @@ import {
 } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule, ConfigService } from "@nestjs/config";
-import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { ThrottlerModule } from "@nestjs/throttler";
+import { UserThrottlerGuard } from "./common/guards/user-throttler.guard";
 import { PrismaModule } from "./prisma/prisma.module";
 import { DemoUserMiddleware } from "./common/middleware/demo-user.middleware";
 import { validateEnvironment } from "./common/env.validation";
 import { AuthModule } from "./auth/auth.module";
 import { AuthGuard } from "./auth/guards/auth.guard";
 import { RolesGuard } from "./auth/guards/roles.guard";
+import { PermissionsGuard } from "./auth/guards/permissions.guard";
 import { HealthModule } from "./health/health.module";
 import { ContactsModule } from "./contacts/contacts.module";
 import { CompaniesModule } from "./companies/companies.module";
@@ -34,6 +36,12 @@ import { ActivitiesModule } from "./activities/activities.module";
 import { NotesModule } from "./notes/notes.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { LeadFilesModule } from "./lead-files/lead-files.module";
+import { UsersModule } from "./users/users.module";
+import { FinanceModule } from "./finance/finance.module";
+import { ClientsModule } from "./clients/clients.module";
+import { ConnectionsModule } from "./connections/connections.module";
+import { UploadsModule } from "./common/upload/uploads.module";
 import path from "node:path";
 
 const rootEnvFile = path.resolve(__dirname, "../../../.env");
@@ -50,7 +58,7 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
       useFactory: (config: ConfigService) => [
         {
           ttl: Number(config.get("RATE_LIMIT_TTL") ?? 60) * 1000,
-          limit: Number(config.get("RATE_LIMIT_MAX") ?? 200),
+          limit: Number(config.get("RATE_LIMIT_MAX") ?? 600),
         },
       ],
     }),
@@ -78,11 +86,18 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
     ActivitiesModule,
     NotesModule,
     IntegrationsModule,
+    LeadFilesModule,
+    UsersModule,
+    FinanceModule,
+    ClientsModule,
+    ConnectionsModule,
+    UploadsModule,
   ],
   providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule implements NestModule {

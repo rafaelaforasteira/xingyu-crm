@@ -1,0 +1,35 @@
+name: Performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Load scenario (smoke or baseline only)"
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - baseline
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  load-smoke:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scenario == 'smoke'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Guard production targets
+        run: pnpm test:load:helpers
+      - name: Note
+        run: echo "Heavy load is manual/local only. This workflow verifies target protection, not production traffic."
