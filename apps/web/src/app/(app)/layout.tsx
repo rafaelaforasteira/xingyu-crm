@@ -1,6 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { canAccessCrmRoute, TRACKING_OVERVIEW_PATH } from "@xingyu/config";
+import { canAccessCrmRoute, NON_ADMIN_HOME_PATH } from "@xingyu/config";
 import { AppShell } from "@/components/layout/app-shell";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     } catch {
       /* Client session resolution handles expired tokens and temporary outages. */
     }
-    if (role && !canAccessCrmRoute(role, pathname)) redirect(TRACKING_OVERVIEW_PATH);
+    if (role && !canAccessCrmRoute(role, pathname)) redirect(NON_ADMIN_HOME_PATH);
   }
   return <AppShell>{children}</AppShell>;
 }

@@ -1,2 +1,0 @@
-export const REACTIVATION_DAYS = 180;
-export const FIRST_TO_SECOND_WINDOW_DAYS = 60;

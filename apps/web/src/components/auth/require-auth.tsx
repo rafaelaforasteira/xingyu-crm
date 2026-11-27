@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-provider";
 
 import { canOpenPath } from "@/lib/access-policy";
-import { TRACKING_OVERVIEW_PATH } from "@xingyu/config";
+import { NON_ADMIN_HOME_PATH } from "@xingyu/config";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -18,7 +18,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       const next = `${window.location.pathname}${window.location.search}`;
       router.replace(`/login?next=${encodeURIComponent(next)}`);
     } else if (!isLoading && isAuthenticated && !allowed) {
-      router.replace(TRACKING_OVERVIEW_PATH);
+      router.replace(NON_ADMIN_HOME_PATH);
     }
   }, [isAuthenticated, isLoading, router, allowed]);
 
@@ -41,7 +41,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!allowed)
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Redirecionando para Tracking…
+        Redirecionando para o seu perfil…
       </div>
     );
   return <>{children}</>;

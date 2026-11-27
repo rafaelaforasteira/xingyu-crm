@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronsLeft, ChevronsRight, Settings, X, type LucideIcon } from "lucide-react";
-import { APP_NAME } from "@xingyu/config";
+import { APP_NAME, NON_ADMIN_HOME_PATH } from "@xingyu/config";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, type NavItem } from "@/lib/nav";
 import { isNavActive, extractPipelineIdFromPath } from "@/lib/nav-utils";
@@ -416,7 +416,7 @@ export function Sidebar() {
     return undefined;
   };
 
-  const homeHref = canOpenPath(user, "/pipelines") ? "/pipelines" : "/tracking/vendas";
+  const homeHref = canOpenPath(user, "/pipelines") ? "/pipelines" : NON_ADMIN_HOME_PATH;
 
   const content = (
     <aside

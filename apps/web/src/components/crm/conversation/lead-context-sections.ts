@@ -1,7 +1,6 @@
 export const CONTEXT_SECTION_IDS = [
   "summary",
   "negotiation",
-  "tracking",
   "tasks",
   "orders",
   "notes",

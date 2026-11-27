@@ -41,7 +41,6 @@ import { UsersModule } from "./users/users.module";
 import { FinanceModule } from "./finance/finance.module";
 import { ClientsModule } from "./clients/clients.module";
 import { ConnectionsModule } from "./connections/connections.module";
-import { RecoveryModule } from "./tracking/recovery/recovery.module";
 import { UploadsModule } from "./common/upload/uploads.module";
 import path from "node:path";
 
@@ -92,7 +91,6 @@ const rootEnvFile = path.resolve(__dirname, "../../../.env");
     FinanceModule,
     ClientsModule,
     ConnectionsModule,
-    RecoveryModule,
     UploadsModule,
   ],
   providers: [

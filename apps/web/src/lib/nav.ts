@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   Undo2,
   BadgeDollarSign,
-  Radar,
   type LucideIcon,
 } from "lucide-react";
 
@@ -123,19 +122,6 @@ export const FULL_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: "tracking",
-    label: "Tracking",
-    items: [
-      { href: "/tracking/vendas", label: "Visão Geral", icon: Radar },
-      {
-        href: "/tracking/recuperacao",
-        label: "Recuperação",
-        icon: Undo2,
-        lockedTooltip: "Disponível para administradores",
-      },
-    ],
-  },
-  {
     id: "management",
     label: "Gestão",
     items: [
@@ -230,19 +216,6 @@ export const NAV_GROUPS: NavGroup[] = [
         expandablePipelines: true,
         pipelineSpace: "ATTENDANCE",
         pipelineBasePath: "/after-sales",
-      },
-    ],
-  },
-  {
-    id: "tracking",
-    label: "Tracking",
-    items: [
-      { href: "/tracking/vendas", label: "Visão Geral", icon: Radar },
-      {
-        href: "/tracking/recuperacao",
-        label: "Recuperação",
-        icon: Undo2,
-        lockedTooltip: "Disponível para administradores",
       },
     ],
   },

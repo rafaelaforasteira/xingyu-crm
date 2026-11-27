@@ -68,7 +68,7 @@ test.describe("Scrollable lead context sheet", () => {
     await scroll.evaluate((element) => {
       element.scrollTop = 0;
     });
-    await panel.getByRole("button", { name: /^Rastreamento$/ }).scrollIntoViewIfNeeded();
+    await panel.getByTestId("lead-context-tags").scrollIntoViewIfNeeded();
     await panel.getByRole("button", { name: /Adicionar tag/i }).click();
     await expect(page.getByRole("dialog", { name: "Gerenciar tags do lead" })).toBeVisible();
     await expect(page.getByLabel("Buscar tag")).toBeVisible();

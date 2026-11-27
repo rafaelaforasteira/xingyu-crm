@@ -16,7 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover } from "@/components/ui/popover";
 import { ConversationChannelBadge } from "./conversation-channel-badge";
 import { conversationContactDisplayName, formatLeadCode } from "./conversation-list-utils";
-import { buildLeadTrackingFields } from "./lead-tracking-utils";
 import { LeadTasks } from "./lead-tasks";
 import { LeadOrders } from "./lead-orders";
 import { LeadNotes } from "./lead-notes";
@@ -105,7 +104,7 @@ function LazyOtherDeals({
   );
 }
 
-function LeadTrackingTags({ context }: { context: ConversationContext }) {
+function LeadTags({ context }: { context: ConversationContext }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -433,35 +432,9 @@ function ContextBody({
         ) : (
           <p className="text-xs text-muted-foreground">Sem negociação vinculada.</p>
         )}
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        sectionId="tracking"
-        title="Rastreamento"
-        open={sections.tracking}
-        onToggle={onToggle}
-      >
-        <div className="space-y-2.5" data-testid="lead-context-tracking">
-          {buildLeadTrackingFields({
-            channel: context.channel,
-            tracking: context.tracking,
-          }).map((field) => (
-            <div key={`${field.label}-${field.value}`} className="min-w-0">
-              <p className="text-[11px] text-muted-foreground">{field.label}</p>
-              <p
-                className={
-                  field.truncate
-                    ? "truncate break-all text-xs font-medium"
-                    : "break-words text-xs font-medium"
-                }
-                title={field.truncate ? field.value : undefined}
-                data-testid={field.testId}
-              >
-                {field.value}
-              </p>
-            </div>
-          ))}
-          <LeadTrackingTags context={context} />
+        {/* Etiquetas do lead (antes ficavam junto do rastreamento, removido nesta etapa). */}
+        <div className="mt-3 border-t border-border/60 pt-3" data-testid="lead-context-tags">
+          <LeadTags context={context} />
         </div>
       </CollapsibleSection>
 

@@ -43,8 +43,12 @@ export const TASK_TYPES = [
   "INTERNAL",
 ] as const;
 
-/** Product access policy; roles come from the authenticated session. */
-export const TRACKING_OVERVIEW_PATH = "/tracking/vendas";
+/**
+ * Product access policy; roles come from the authenticated session.
+ * Non-admin users only reach their own profile page (the Tracking area that
+ * used to be their landing page was removed).
+ */
+export const NON_ADMIN_HOME_PATH = "/settings/general";
 export function isCrmAdministrator(role: string | null | undefined): boolean {
   return role === "ADMIN";
 }
@@ -52,7 +56,7 @@ export function canAccessCrmRoute(role: string | null | undefined, href: string)
   if (!role) return false;
   if (isCrmAdministrator(role)) return true;
   const path = href.split(/[?#]/)[0]?.replace(/\/+$/, "") || "/";
-  return path === TRACKING_OVERVIEW_PATH || path === "/settings/general";
+  return path === NON_ADMIN_HOME_PATH;
 }
 export function canAccessCrmApi(
   role: string | null | undefined,

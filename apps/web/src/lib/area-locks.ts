@@ -23,14 +23,14 @@ export type AreaId =
   | "reactivation"
   | "orders"
   | "afterSales"
-  | "tracking"
   | "finance"
   | "reports"
   | "automations"
   | "marketing"
   | "connections"
   | "integrations"
-  | "settings";
+  | "settings"
+  | "profile";
 
 export const AREAS: Record<AreaId, { label: string; paths: readonly string[] }> = {
   pipelines: { label: "Pipelines", paths: ["/pipelines", "/operacao"] },
@@ -44,7 +44,6 @@ export const AREAS: Record<AreaId, { label: string; paths: readonly string[] }> 
   reactivation: { label: "Reativação", paths: ["/reactivation"] },
   orders: { label: "Pedidos", paths: ["/orders"] },
   afterSales: { label: "Atendimento e pós-venda", paths: ["/after-sales"] },
-  tracking: { label: "Tracking", paths: ["/tracking"] },
   finance: { label: "Financeiro", paths: ["/finance"] },
   reports: { label: "Relatórios", paths: ["/reports"] },
   automations: { label: "Automações", paths: ["/automations"] },
@@ -52,10 +51,12 @@ export const AREAS: Record<AreaId, { label: string; paths: readonly string[] }> 
   connections: { label: "Conexões", paths: ["/connections"] },
   integrations: { label: "Integrações", paths: ["/integrations"] },
   settings: { label: "Configurações", paths: ["/settings"] },
+  // Perfil (configurações gerais): página inicial de quem não é administrador.
+  profile: { label: "Meu perfil", paths: ["/settings/general"] },
 };
 
-/** Áreas abertas no momento. Etapa atual: somente Pipelines. */
-export const UNLOCKED_AREAS: readonly AreaId[] = ["pipelines"];
+/** Áreas abertas no momento. Etapa atual: Pipelines (e o perfil, para quem não é administrador). */
+export const UNLOCKED_AREAS: readonly AreaId[] = ["pipelines", "profile"];
 
 export const LOCKED_AREA_TOOLTIP = "Área bloqueada nesta etapa";
 

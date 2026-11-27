@@ -20,7 +20,6 @@ describe("beta navigation", () => {
     expect(NAV_GROUPS.map((group) => group.label)).toEqual([
       "Visão geral",
       "Jornadas",
-      "Tracking",
       "Gestão",
       "Infraestrutura",
     ]);
@@ -30,8 +29,6 @@ describe("beta navigation", () => {
       "/pipelines",
       "/orders",
       "/after-sales",
-      "/tracking/vendas",
-      "/tracking/recuperacao",
       "/finance",
       "/clients",
       "/connections",
@@ -40,9 +37,6 @@ describe("beta navigation", () => {
     ]);
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/orders", label: "Pedidos" }),
-    );
-    expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
-      expect.objectContaining({ href: "/tracking/vendas", label: "Visão Geral" }),
     );
     expect(NAV_GROUPS.flatMap((group) => group.items)).toContainEqual(
       expect.objectContaining({ href: "/finance", label: "Financeiro" }),

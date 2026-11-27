@@ -34,6 +34,12 @@ describe("area locks", () => {
     }
   });
 
+  it("keeps the profile page open (non-admin landing page) while other settings stay locked", () => {
+    expect(isPathUnlocked("/settings/general")).toBe(true);
+    expect(isPathUnlocked("/settings/users")).toBe(false);
+    expect(isPathUnlocked("/settings")).toBe(false);
+  });
+
   it("does not confuse prefixes that only share the beginning", () => {
     expect(findArea("/pipelinesx")).toBeNull();
     expect(isPathUnlocked("/pipelinesx")).toBe(false);
